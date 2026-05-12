@@ -98,7 +98,7 @@ export interface Database {
           id?: string
           funcionario_id: string
           data: string
-          tipo: 'falta' | 'falta_justificada' | 'suspensao' | 'atestado' | 'paternidade' | 'obito_familiar' | 'beneficio' | 'repouso' | 'compensar' | 'ferias' | 'transferencia'
+          tipo: 'presente' | 'falta' | 'falta_justificada' | 'suspensao' | 'atestado' | 'paternidade' | 'obito_familiar' | 'beneficio' | 'repouso' | 'compensar' | 'ferias' | 'transferencia'
           turno?: 'manha' | 'tarde' | 'noite' | 'integral' | null
           observacoes?: string | null
           created_at?: string
