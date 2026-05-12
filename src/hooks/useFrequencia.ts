@@ -88,6 +88,27 @@ export function useUpsertFrequencia() {
   })
 }
 
+export function useBatchUpsertFrequencia() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: FrequenciaInsert[]) => {
+      const { data: result, error } = await supabase
+        .from('frequencia')
+        .upsert(
+          data.map(d => ({ ...d, updated_at: new Date().toISOString() })),
+          { onConflict: 'funcionario_id,data' }
+        )
+        .select()
+      if (error) throw error
+      return result as Frequencia[]
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: FREQUENCIA_KEY })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
 export function useUpdateFrequencia() {
   const qc = useQueryClient()
   return useMutation({

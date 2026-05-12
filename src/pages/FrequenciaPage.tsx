@@ -10,7 +10,7 @@ import { Avatar } from '../components/ui/Avatar'
 import { Loading } from '../components/ui/Loading'
 import { useToast } from '../components/ui/Toast'
 import { useFuncionarios } from '../hooks/useFuncionarios'
-import { useFrequenciaData, useUpsertFrequencia } from '../hooks/useFrequencia'
+import { useFrequenciaData, useUpsertFrequencia, useBatchUpsertFrequencia, useFrequenciaMensal } from '../hooks/useFrequencia'
 import type { Funcionario, FrequenciaStatus, Frequencia } from '../lib/database.types'
 import { frequenciaStatusLabel, frequenciaStatusColor, formatDate, today } from '../lib/utils'
 import { cn } from '../lib/utils'
@@ -41,9 +41,17 @@ export function FrequenciaPage() {
     observacoes: '',
   })
 
-  const { data: funcionarios = [], isLoading: loadingFunc } = useFuncionarios({ status: 'ativo' })
+  const [generateWeekModal, setGenerateWeekModal] = useState(false)
+  const [weekStartDate, setWeekStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+
+  const { data: allFuncionarios = [], isLoading: loadingFunc } = useFuncionarios({ status: 'ativo' })
+  const funcionarios = allFuncionarios.filter(f => f.cargo?.toLowerCase() !== 'encarregado')
   const { data: frequencias = [], isLoading: loadingFreq } = useFrequenciaData(selectedDate)
+  const currentMonthStr = format(parseISO(selectedDate), 'yyyy-MM')
+  const { data: mesFrequencias = [] } = useFrequenciaMensal(currentMonthStr)
+  
   const upsertMutation = useUpsertFrequencia()
+  const batchUpsertMutation = useBatchUpsertFrequencia()
 
   const isLoading = loadingFunc || loadingFreq
 
@@ -102,6 +110,45 @@ export function FrequenciaPage() {
     setSelectedDate(format(addDays(d, 1), 'yyyy-MM-dd'))
   }
 
+  const handleGenerateWeek = async () => {
+    if (!funcionarios.length) return toast('Nenhum funcionário ativo', 'warning')
+    
+    try {
+      const baseDate = parseISO(weekStartDate)
+      const inserts: any[] = []
+      
+      // Gera de segunda a sabado (6 dias)
+      for (let i = 0; i < 6; i++) {
+        const currentDate = format(new Date(baseDate.getTime() + i * 86400000), 'yyyy-MM-dd')
+        
+        funcionarios.forEach(f => {
+          // Verifica se já tem frequencia nesse dia usando os dados do mês atual
+          const exists = mesFrequencias.some(e => e.funcionario_id === f.id && e.data === currentDate)
+          if (!exists) {
+            inserts.push({
+              funcionario_id: f.id,
+              data: currentDate,
+              status: 'presente',
+            })
+          }
+        })
+      }
+
+      if (inserts.length === 0) {
+        toast('Todos os dias dessa semana já estão preenchidos!', 'warning')
+        setGenerateWeekModal(false)
+        return
+      }
+
+      await batchUpsertMutation.mutateAsync(inserts)
+      toast(`Semana gerada! ${inserts.length} registros criados.`, 'success')
+      setGenerateWeekModal(false)
+    } catch (err: any) {
+      console.error(err)
+      toast(`Erro ao gerar: ${err?.message || 'Desconhecido'}`, 'error')
+    }
+  }
+
   const isToday = selectedDate === today()
 
   const countStatus = (status: FrequenciaStatus) =>
@@ -137,6 +184,17 @@ export function FrequenciaPage() {
           >
             <ChevronRight className={cn('w-5 h-5', isToday && 'opacity-30')} />
           </button>
+        </div>
+
+        {/* Action Button */}
+        <div className="mt-3">
+          <Button 
+            onClick={() => setGenerateWeekModal(true)} 
+            className="w-full gap-2 bg-[hsl(var(--primary))] text-white border shadow-sm hover:brightness-110"
+          >
+            <Check className="w-4 h-4" />
+            Preencher Semana Automática
+          </Button>
         </div>
 
         {/* Quick stats */}
@@ -303,6 +361,44 @@ export function FrequenciaPage() {
             value={editForm.observacoes}
             onChange={e => setEditForm(f => ({ ...f, observacoes: e.target.value }))}
           />
+        </div>
+      </Modal>
+
+      {/* Generate Week modal */}
+      <Modal
+        open={generateWeekModal}
+        onClose={() => setGenerateWeekModal(false)}
+        title="Gerar Frequência Semanal"
+        footer={
+          <div className="flex gap-2 w-full">
+            <Button variant="secondary" className="flex-1" onClick={() => setGenerateWeekModal(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1"
+              loading={batchUpsertMutation.isPending}
+              onClick={handleGenerateWeek}
+            >
+              Gerar Frequência
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            Isto irá marcar automaticamente como <strong>Presente</strong> todos os funcionários (exceto Encarregados) da segunda-feira selecionada até o sábado. Dias já marcados não serão sobrescritos.
+          </p>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
+              Data Inicial (Segunda-feira)
+            </label>
+            <input
+              type="date"
+              value={weekStartDate}
+              onChange={e => setWeekStartDate(e.target.value)}
+              className="input-base"
+            />
+          </div>
         </div>
       </Modal>
     </div>

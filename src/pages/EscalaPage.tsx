@@ -57,7 +57,8 @@ export function EscalaPage() {
   const [generateWeekModal, setGenerateWeekModal] = useState(false)
   const [weekStartDate, setWeekStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
 
-  const { data: funcionarios = [] } = useFuncionarios({ status: 'ativo' })
+  const { data: allFuncionarios = [] } = useFuncionarios({ status: 'ativo' })
+  const funcionarios = allFuncionarios.filter(f => f.cargo?.toLowerCase() !== 'encarregado')
   const { data: escalas = [] } = useEscalasMensal(currentMonthStr)
   const createMutation = useCreateEscala()
   const updateMutation = useUpdateEscala()
@@ -217,12 +218,20 @@ export function EscalaPage() {
               Preencher Semana
             </Button>
             <Button 
-              onClick={() => navigate('/escala/imprimir')} 
+              onClick={() => navigate('/escala/imprimir-semanal')} 
               className="w-full gap-2 bg-[hsl(var(--card))] text-[hsl(var(--foreground))] border shadow-sm hover:bg-[hsl(var(--muted))]"
               variant="ghost"
             >
               <Printer className="w-4 h-4 text-blue-600" />
               Mural Semanal
+            </Button>
+            <Button 
+              onClick={() => navigate('/escala/imprimir-mensal')} 
+              className="w-full gap-2 bg-[hsl(var(--card))] text-[hsl(var(--foreground))] border shadow-sm hover:bg-[hsl(var(--muted))]"
+              variant="ghost"
+            >
+              <Printer className="w-4 h-4 text-purple-600" />
+              Mural Mensal
             </Button>
           </div>
 
@@ -316,6 +325,24 @@ export function EscalaPage() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{func.nome}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{func.setor || '-'}</p>
+                    
+                    {/* Input de Ocorrência super rápido */}
+                    {escala && (
+                      <input 
+                        type="text" 
+                        placeholder="Adicionar ocorrência/obs..." 
+                        className="mt-2 w-full text-[11px] bg-transparent border-b border-gray-200 dark:border-slate-700 focus:outline-none focus:border-blue-400 pb-1"
+                        defaultValue={escala.observacoes || ''}
+                        onBlur={(e) => {
+                          if (e.target.value !== (escala.observacoes || '')) {
+                            updateMutation.mutate({
+                              id: escala.id,
+                              data: { observacoes: e.target.value }
+                            })
+                          }
+                        }}
+                      />
+                    )}
                   </div>
                   <Select 
                     className="w-full sm:w-44 text-sm font-medium border-0 bg-slate-50 dark:bg-slate-900/50"

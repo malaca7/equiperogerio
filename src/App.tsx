@@ -11,6 +11,7 @@ import { FuncionariosPage } from './pages/FuncionariosPage'
 import { FrequenciaPage } from './pages/FrequenciaPage'
 import { EscalaPage } from './pages/EscalaPage'
 import { EscalaSemanalPrint } from './pages/EscalaSemanalPrint'
+import { EscalaMensalPrint } from './pages/EscalaMensalPrint'
 import { NotificacoesPage } from './pages/NotificacoesPage'
 import { Loading } from './components/ui/Loading'
 
@@ -47,7 +48,8 @@ function ProtectedLayout() {
           <Route path="/funcionarios"  element={<FuncionariosPage />} />
           <Route path="/frequencia"    element={<FrequenciaPage />} />
           <Route path="/escala"        element={<EscalaPage />} />
-          <Route path="/escala/imprimir" element={<EscalaSemanalPrint />} />
+          <Route path="/escala/imprimir-semanal" element={<EscalaSemanalPrint />} />
+          <Route path="/escala/imprimir-mensal" element={<EscalaMensalPrint />} />
           <Route path="/notificacoes"  element={<NotificacoesPage />} />
         </Routes>
       </main>
