@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escala de Trabalho - Gestão de Equipe</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            background: white;
+            padding: 20mm;
+            box-sizing: border-box;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #1e3a8a;
+            font-size: 24px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .header p {
+            margin: 5px 0 0;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .section {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1d4ed8;
+            border-bottom: 2px solid #bfdbfe;
+            padding-bottom: 8px;
+            margin-top: 0;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-full {
+            grid-column: span 2;
+        }
+
+        .item-group {
+            margin-bottom: 12px;
+            break-inside: avoid;
+        }
+
+        .item-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .item-title {
+            font-weight: 600;
+            font-size: 13px;
+            color: #334155;
+            background: #e2e8f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 5px;
+        }
+
+        .item-list {
+            list-style: none;
+            margin: 0;
+            padding: 0 0 0 10px;
+        }
+
+        .item-list li {
+            font-size: 13px;
+            color: #475569;
+            padding: 3px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .item-list li::before {
+            content: "•";
+            color: #94a3b8;
+            font-weight: bold;
+            display: inline-block; 
+            width: 1em;
+            margin-left: -1em;
+        }
+
+        .status-badge {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 8px;
+            font-weight: 600;
+        }
+
+        .bg-red { background: #fee2e2; color: #dc2626; }
+        .bg-yellow { background: #fef3c7; color: #d97706; }
+        .bg-gray { background: #f1f5f9; color: #64748b; }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 12px;
+            color: #94a3b8;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 15px;
+        }
+
+        .btn-print {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);
+            transition: transform 0.2s;
+        }
+        
+        .btn-print:hover { transform: scale(1.05); }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .a4-page { box-shadow: none; padding: 0; width: 100%; min-height: auto; }
+            .btn-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="a4-page">
+        <div class="header">
+            <h1>Escala de Equipe — Limpeza Urbana</h1>
+            <p id="data-atual">Data: 11 de Maio de 2026</p>
+        </div>
+
+        <div class="grid-container">
+            <!-- COLUNA 1: VARRIÇÃO (Parte 1) -->
+            <div class="section">
+                <h2 class="section-title">🧹 VARRIÇÃO</h2>
+                
+                <div class="item-group">
+                    <div class="item-title">01 - Suape</div>
+                    <ul class="item-list">
+                        <li>Afonso</li>
+                        <li>Tatiana</li>
+                    </ul>
+                </div>
+
+                <div class="item-group">
+                    <div class="item-title">02 - Av. Laura Cavalcante</div>
+                    <ul class="item-list">
+                        <li>Luciana</li>
+                        <li>Suely</li>
+                    </ul>
+                </div>
+
+                <div class="item-group">
+                    <div class="item-title">03 - Enseadas</div>
+                    <ul class="item-list">
+                        <li>Sharlene</li>
+                        <li>Edson</li>
+                    </ul>
+                </div>
+
+                <div class="item-group">
+                    <div class="item-title">04 - Itapuama</div>
+                    <ul class="item-list">
+                        <li>Lene</li>
+                        <li>Marcos Salatiel</li>
+                    </ul>
+                </div>
+
+                <div class="item-group">
+                    <div class="item-title">05 - Estrada Velha</div>
+                    <ul class="item-list">
+                        <li>Ivanildo</li>
+                        <li>Adeilto (Dedeu)</li>
+                    </ul>
+                </div>
+
+                <div class="item-group">
+                    <div class="item-title">06 - Anel Viário</div>
+                    <ul class="item-list">
+                        <li>Adilson Pereira</li>
+                        <li>Angela Maria</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- COLUNA 2: VARRIÇÃO (Parte 2) + ORLA -->
+            <div class="section">
+                <h2 class="section-title">🧹 VARRIÇÃO (Cont.)</h2>
+
+                <div class="item-group">
+                    <div class="item-title">07 - Xaréu</div>
+                    <ul class="item-list">
+                        <li>Paulo</li>
+                        <li>Maria Rocha</li>
+                    </ul>
+                </div>
+
+                <div class="item-group">
+                    <div class="item-title">08 - PE 28 de Gaibu</div>
+                    <ul class="item-list">
+                        <li>Sérgio</li>
+                        <li>Marcos Barbosa (Piti)</li>
+                    </ul>
+                </div>
+
+                <div class="item-group">
+                    <div class="item-title">Banheiros</div>
+                    <ul class="item-list">
+                        <li><strong>Suape:</strong> Flavio Luiz</li>
+                        <li><strong>Itapuama:</strong> Nilson Brandão</li>
+                        <li><strong>Gaibu (Samu):</strong> Altair Justino</li>
+                    </ul>
+                </div>
+
+                <h2 class="section-title" style="margin-top: 25px;">🌊 ORLA</h2>
+
+                <div class="item-group">
+                    <div class="item-title">Orla de Gaibu</div>
+                    <ul class="item-list">
+                        <li>Everaldo (Leque)</li>
+                        <li>José Hilton <span class="status-badge bg-gray">Carro de mão</span></li>
+                        <li>Alexandro Valentino</li>
+                        <li>Luciano</li>
+                    </ul>
+                </div>
+
+                <div class="item-group">
+                    <div class="item-title">Orla de Suape</div>
+                    <ul class="item-list">
+                        <li>José Almir</li>
+                        <li>José Rivaldo</li>
+                        <li>Maximiano</li>
+                    </ul>
+                </div>
+
+                <div class="item-group">
+                    <div class="item-title">Orla de Itapuama</div>
+                    <ul class="item-list">
+                        <li>Clebison</li>
+                        <li>Alexandro Nascimento</li>
+                        <li>Anderson</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- COLUNA INFERIOR: ATESTADOS E FOLGAS -->
+            <div class="section section-full">
+                <h2 class="section-title" style="color: #dc2626; border-bottom-color: #fecaca;">⚠️ ATESTADOS & REPOUSOS</h2>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <div class="item-title">Varrição</div>
+                        <ul class="item-list">
+                            <li>Tatiana <span class="status-badge bg-yellow">Atestado (11/05 a 13/05)</span></li>
+                            <li>Paulina <span class="status-badge bg-red">Repouso</span></li>
+                            <li>Cleonice <span class="status-badge bg-red">Repouso</span></li>
+                            <li>Wanderley <span class="status-badge bg-red">Repouso</span></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <div class="item-title">Orla</div>
+                        <ul class="item-list">
+                            <li>José Severino (Sungado) <span class="status-badge bg-red">Repouso</span></li>
+                            <li>Paulo Silvano <span class="status-badge bg-red">Repouso</span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="footer">
+            Gerado pelo Sistema de Gestão de Equipe — Encarregado Rogerio
+        </div>
+    </div>
+
+    <button class="btn-print" onclick="window.print()">🖨️ Salvar como PDF</button>
+
+    <script>
+        // Atualiza para a data atual formatada
+        const hoje = new Date();
+        const opcoes = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        document.getElementById('data-atual').textContent = 'Data: ' + hoje.toLocaleDateString('pt-BR', opcoes);
+    </script>
+</body>
+</html>

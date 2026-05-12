@@ -1,0 +1,81 @@
+import React from 'react'
+import { NavLink } from 'react-router-dom'
+import {
+  LayoutDashboard,
+  Users,
+  Clock,
+  CalendarDays,
+  Bell,
+} from 'lucide-react'
+import { cn } from '../../lib/utils'
+import { useUnreadCount } from '../../hooks/useNotificacoes'
+
+const navItems = [
+  { to: '/', icon: LayoutDashboard, label: 'Dashboard', exact: true },
+  { to: '/funcionarios', icon: Users, label: 'Equipe' },
+  { to: '/frequencia', icon: Clock, label: 'Frequência' },
+  { to: '/escala', icon: CalendarDays, label: 'Escala' },
+  { to: '/notificacoes', icon: Bell, label: 'Alertas' },
+]
+
+export function BottomNav() {
+  const { data: unread = 0 } = useUnreadCount()
+
+  return (
+    <nav className="bottom-nav print:hidden">
+      <div className="flex items-center justify-around px-2 py-2 safe-bottom">
+        {navItems.map(({ to, icon: Icon, label, exact }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={exact}
+            className={({ isActive }) =>
+              cn(
+                'flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all duration-200 min-w-0 flex-1',
+                isActive
+                  ? 'text-[hsl(var(--primary))]'
+                  : 'text-[hsl(var(--muted-foreground))]'
+              )
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <div className="relative">
+                  <div
+                    className={cn(
+                      'p-2 rounded-xl transition-all duration-200',
+                      isActive
+                        ? 'bg-[hsl(var(--primary)/0.12)]'
+                        : 'bg-transparent'
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        'w-5 h-5 transition-transform duration-200',
+                        isActive && 'scale-110'
+                      )}
+                      strokeWidth={isActive ? 2.5 : 1.75}
+                    />
+                  </div>
+                  {label === 'Alertas' && unread > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                      {unread > 9 ? '9+' : unread}
+                    </span>
+                  )}
+                </div>
+                <span
+                  className={cn(
+                    'text-[10px] font-medium truncate',
+                    isActive ? 'opacity-100' : 'opacity-60'
+                  )}
+                >
+                  {label}
+                </span>
+              </>
+            )}
+          </NavLink>
+        ))}
+      </div>
+    </nav>
+  )
+}
