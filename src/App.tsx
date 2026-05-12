@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -80,9 +80,9 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <ToastProvider>
-            <BrowserRouter>
+            <Router>
               <AppRoutes />
-            </BrowserRouter>
+            </Router>
           </ToastProvider>
         </AuthProvider>
       </ThemeProvider>
