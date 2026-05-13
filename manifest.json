@@ -1,0 +1,14 @@
+{
+  "name": "Gestão de Equipe — Rogerio",
+  "short_name": "Equipe Rogerio",
+  "description": "Sistema de gestão de equipe, escala e frequência",
+  "start_url": "/equiperogerio/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/equiperogerio/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/equiperogerio/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
