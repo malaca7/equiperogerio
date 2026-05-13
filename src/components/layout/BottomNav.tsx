@@ -5,22 +5,19 @@ import {
   Users,
   Clock,
   CalendarDays,
-  Bell,
+  Settings,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
-import { useUnreadCount } from '../../hooks/useNotificacoes'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', exact: true },
   { to: '/funcionarios', icon: Users, label: 'Equipe' },
   { to: '/frequencia', icon: Clock, label: 'Frequência' },
   { to: '/escala', icon: CalendarDays, label: 'Escala' },
-  { to: '/notificacoes', icon: Bell, label: 'Alertas' },
+  { to: '/configuracoes', icon: Settings, label: 'Config' },
 ]
 
 export function BottomNav() {
-  const { data: unread = 0 } = useUnreadCount()
-
   return (
     <nav className="bottom-nav print:hidden">
       <div className="flex items-center justify-around px-2 py-2 safe-bottom">
@@ -57,11 +54,6 @@ export function BottomNav() {
                       strokeWidth={isActive ? 2.5 : 1.75}
                     />
                   </div>
-                  {label === 'Alertas' && unread > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                      {unread > 9 ? '9+' : unread}
-                    </span>
-                  )}
                 </div>
                 <span
                   className={cn(

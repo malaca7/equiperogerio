@@ -88,8 +88,9 @@ export interface Database {
           id: string
           funcionario_id: string
           data: string
-          tipo: 'presente' | 'falta' | 'falta_justificada' | 'suspensao' | 'atestado' | 'paternidade' | 'obito_familiar' | 'beneficio' | 'repouso' | 'compensar' | 'ferias' | 'transferencia'
+          tipo: string
           turno: 'manha' | 'tarde' | 'noite' | 'integral' | null
+          localidade: string | null
           observacoes: string | null
           created_at: string
           updated_at: string
@@ -98,8 +99,9 @@ export interface Database {
           id?: string
           funcionario_id: string
           data: string
-          tipo: 'presente' | 'falta' | 'falta_justificada' | 'suspensao' | 'atestado' | 'paternidade' | 'obito_familiar' | 'beneficio' | 'repouso' | 'compensar' | 'ferias' | 'transferencia'
+          tipo: string
           turno?: 'manha' | 'tarde' | 'noite' | 'integral' | null
+          localidade?: string | null
           observacoes?: string | null
           created_at?: string
           updated_at?: string
@@ -108,8 +110,9 @@ export interface Database {
           id?: string
           funcionario_id?: string
           data?: string
-          tipo?: 'normal' | 'plantao' | 'folga' | 'especial' | 'ferias'
+          tipo?: string
           turno?: 'manha' | 'tarde' | 'noite' | 'integral' | null
+          localidade?: string | null
           observacoes?: string | null
           updated_at?: string
         }

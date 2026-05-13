@@ -10,9 +10,12 @@ import { DashboardPage } from './pages/DashboardPage'
 import { FuncionariosPage } from './pages/FuncionariosPage'
 import { FrequenciaPage } from './pages/FrequenciaPage'
 import { EscalaPage } from './pages/EscalaPage'
+import { EscalaGradePage } from './pages/EscalaGradePage'
+import { EscalaLocalidadePage } from './pages/EscalaLocalidadePage'
 import { EscalaSemanalPrint } from './pages/EscalaSemanalPrint'
 import { EscalaMensalPrint } from './pages/EscalaMensalPrint'
 import { NotificacoesPage } from './pages/NotificacoesPage'
+import { ConfiguracoesPage } from './pages/ConfiguracoesPage'
 import { Loading } from './components/ui/Loading'
 
 const queryClient = new QueryClient({
@@ -47,10 +50,13 @@ function ProtectedLayout() {
           <Route path="/"              element={<DashboardPage />} />
           <Route path="/funcionarios"  element={<FuncionariosPage />} />
           <Route path="/frequencia"    element={<FrequenciaPage />} />
-          <Route path="/escala"        element={<EscalaPage />} />
+          <Route path="/escala"        element={<EscalaGradePage />} />
+          <Route path="/escala/calendario" element={<EscalaPage />} />
+          <Route path="/escala/localidades" element={<EscalaLocalidadePage />} />
           <Route path="/escala/imprimir-semanal" element={<EscalaSemanalPrint />} />
           <Route path="/escala/imprimir-mensal" element={<EscalaMensalPrint />} />
           <Route path="/notificacoes"  element={<NotificacoesPage />} />
+          <Route path="/configuracoes" element={<ConfiguracoesPage />} />
         </Routes>
       </main>
       <BottomNav />
