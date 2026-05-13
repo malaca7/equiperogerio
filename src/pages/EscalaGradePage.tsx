@@ -17,6 +17,12 @@ import { DEFAULT_TIPOS_ESCALA } from './ConfiguracoesPage'
 
 const QUICK_STATUSES = ['presente', 'repouso', 'compensar', 'ferias', 'atestado', 'falta']
 
+interface Localidade {
+  id: string
+  nome: string
+  setor: string
+}
+
 export function EscalaGradePage() {
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -35,6 +41,7 @@ export function EscalaGradePage() {
   const updateMutation = useUpdateEscala()
   const deleteMutation = useDeleteEscala()
 
+  const { data: localidadesConfig = [] } = useConfiguracao<Localidade[]>('localidades', [])
   const { data: tiposEscala = DEFAULT_TIPOS_ESCALA } = useConfiguracao<TipoEscala[]>('tipos_escala', DEFAULT_TIPOS_ESCALA)
   const STATUS_CONFIG: Record<string, TipoEscala> = useMemo(() => {
     return tiposEscala.reduce((acc, t) => {
@@ -80,7 +87,6 @@ export function EscalaGradePage() {
     if (viewMode === 'month') {
       const d = subMonths(currentDate, 1)
       setCurrentDate(d)
-      setCurrentMonthStr(format(d, 'yyyy-MM'))
     } else {
       setCurrentDate(subWeeks(currentDate, 1))
     }
@@ -89,7 +95,6 @@ export function EscalaGradePage() {
     if (viewMode === 'month') {
       const d = addMonths(currentDate, 1)
       setCurrentDate(d)
-      setCurrentMonthStr(format(d, 'yyyy-MM'))
     } else {
       setCurrentDate(addWeeks(currentDate, 1))
     }
@@ -261,7 +266,7 @@ export function EscalaGradePage() {
             const cfg = STATUS_CONFIG[s]
             return (
               <span key={s} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${cfg.bg} ${cfg.text}`}>
-                {cfg.letter} {cfg.label}
+                {cfg.letra} {cfg.nome}
               </span>
             )
           })}

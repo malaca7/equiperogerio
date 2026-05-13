@@ -123,10 +123,17 @@ export function FuncionariosPage() {
   const onSubmit = async (data: FormData) => {
     try {
       if (editing) {
-        await updateMutation.mutateAsync({ id: editing.id, data: { ...data, matricula: data.matricula || '' } })
+        await updateMutation.mutateAsync({ 
+          id: editing.id, 
+          data: { ...data, matricula: data.matricula || '', setor: data.setor || '' } 
+        })
         toast('Funcionário atualizado com sucesso', 'success')
       } else {
-        await createMutation.mutateAsync({ ...data, matricula: data.matricula || '' })
+        await createMutation.mutateAsync({ 
+          ...data, 
+          matricula: data.matricula || '', 
+          setor: data.setor || '' 
+        })
         toast('Funcionário cadastrado com sucesso', 'success')
       }
       setModalOpen(false)

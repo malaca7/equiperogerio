@@ -13,6 +13,12 @@ import { useConfiguracao } from '../hooks/useConfiguracoes'
 import { DEFAULT_TIPOS_ESCALA } from './ConfiguracoesPage'
 import type { TipoEscala } from './ConfiguracoesPage'
 
+interface Localidade {
+  id: string
+  nome: string
+  setor: string
+}
+
 export function EscalaLocalidadePage() {
   const { toast } = useToast()
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -23,7 +29,7 @@ export function EscalaLocalidadePage() {
   const { data: allFuncionarios = [], isLoading: loadF } = useFuncionarios({ status: 'ativo' })
   const { data: escalas = [], isLoading: loadE } = useEscalasMensal(format(currentDate, 'yyyy-MM'))
   const { data: setores = [] } = useConfiguracao<string[]>('setores', [])
-  const { data: localidadesConfig = [] } = useConfiguracao<{id:string;nome:string;setor:string}[]>('localidades', [])
+  const { data: localidadesConfig = [] } = useConfiguracao<Localidade[]>('localidades', [])
   const { data: tiposEscala = DEFAULT_TIPOS_ESCALA } = useConfiguracao<TipoEscala[]>('tipos_escala', DEFAULT_TIPOS_ESCALA)
 
   const batchMutation = useBatchUpsertEscalas()
@@ -134,10 +140,14 @@ export function EscalaLocalidadePage() {
   if (loadF || loadE) return <div className="main-content"><TopHeader title="Equipe por Localidade" /><div className="py-20"><Loading text="Carregando..." /></div></div>
 
   // Ordenar localidades por Setor, depois por nome
-  const locList = localidadesConfig.slice().sort((a, b) => {
-    if (a.setor !== b.setor) return a.setor.localeCompare(b.setor)
-    return a.nome.localeCompare(b.nome)
-  })
+  const locList = useMemo(() => {
+    return [...localidadesConfig].sort((a, b) => {
+      const sA = a.setor || ''
+      const sB = b.setor || ''
+      if (sA !== sB) return sA.localeCompare(sB)
+      return (a.nome || '').localeCompare(b.nome || '')
+    })
+  }, [localidadesConfig])
 
   // Adicionar "Sem Local" no final
   const rowNames = [...locList.map(l => l.nome), 'Sem Local']
