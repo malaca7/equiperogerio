@@ -132,16 +132,24 @@ export function EscalaLocalidadePage() {
 
   // Data for Print View
   const printData = useMemo(() => {
-    const work = setores.map(setor => ({
-      setor,
-      localidades: localidadesConfig
-        .filter(l => l.setor === setor)
-        .map(l => ({
-          nome: l.nome,
-          members: dailyDistribution[l.id] || []
-        }))
-        .filter(l => l.members.length > 0)
-    })).filter(s => s.localidades.length > 0)
+    const getSect = (name: string) => {
+      const s = setores.find(st => st.toLowerCase().includes(name.toLowerCase()))
+      if (!s) return { setor: name, localidades: [] }
+      return {
+        setor: s,
+        localidades: localidadesConfig
+          .filter(l => l.setor === s)
+          .map(l => ({
+            nome: l.nome,
+            members: dailyDistribution[l.id] || []
+          }))
+          .filter(l => l.members.length > 0)
+      }
+    }
+
+    const varricao = getSect('Varrição')
+    const orla = getSect('Orla')
+    const porta = getSect('Porta a Porta')
 
     const off = {
       folga: escalas.filter((e: any) => e.data === dateStr && (e.tipo === 'repouso' || e.tipo === 'compensar')).map((e: any) => funcMap[e.funcionario_id]?.nome).filter(Boolean),
@@ -149,7 +157,7 @@ export function EscalaLocalidadePage() {
       atestado: escalas.filter((e: any) => e.data === dateStr && e.tipo === 'atestado').map((e: any) => funcMap[e.funcionario_id]?.nome).filter(Boolean),
     }
 
-    return { work, off }
+    return { varricao, orla, porta, off }
   }, [setores, localidadesConfig, dailyDistribution, escalas, dateStr, funcMap])
 
   // Actions
@@ -265,83 +273,99 @@ export function EscalaLocalidadePage() {
         }
       />
 
-      {/* PRINT ONLY VIEW - HIDDEN ON SCREEN */}
-      <div className="hidden print:block fixed inset-0 z-[9999] bg-white p-8 overflow-y-auto landscape-print">
+      {/* PRINT ONLY VIEW - 4 COLUMN MURAL */}
+      <div className="hidden print:block fixed inset-0 z-[9999] bg-white p-4 overflow-hidden landscape-print text-slate-900">
         <style dangerouslySetInnerHTML={{ __html: `
           @media print {
-            @page { size: landscape; margin: 1cm; }
+            @page { size: landscape; margin: 0.5cm; }
             body * { visibility: hidden; }
             .landscape-print, .landscape-print * { visibility: visible; }
-            .landscape-print { position: absolute; left: 0; top: 0; width: 100%; height: auto; background: white !important; }
-            .no-print { display: none !important; }
+            .landscape-print { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: white !important; display: block !important; }
           }
         `}} />
         
-        <div className="flex items-center justify-between border-b-4 border-blue-600 pb-4 mb-6">
-          <div>
-            <h1 className="text-3xl font-black text-blue-900 uppercase tracking-tighter">Escala de Localidades</h1>
-            <p className="text-lg font-bold text-slate-500 uppercase">{format(currentDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</p>
+        <div className="flex items-center justify-between border-b border-slate-900 pb-1 mb-3">
+          <h1 className="text-lg font-black uppercase tracking-tighter italic">Escala de Localidades — {format(currentDate, "dd/MM/yyyy")}</h1>
+          <div className="text-right">
+            <p className="text-[9px] font-black uppercase">Encarregado Rogerio</p>
           </div>
         </div>
 
-        {/* Work Table */}
-        <div className="grid grid-cols-3 gap-6 mb-8">
-          {printData.work.map(s => (
-            <div key={s.setor} className="space-y-4">
-              <div className="bg-blue-600 text-white px-4 py-1.5 rounded-lg inline-block font-black uppercase text-sm tracking-widest">
-                Setor: {s.setor}
-              </div>
-              <div className="space-y-4">
-                {s.localidades.map(l => (
-                  <div key={l.nome} className="border-2 border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                    <div className="bg-slate-100 px-4 py-2 border-b-2 border-slate-200 flex justify-between items-center">
-                      <span className="font-black text-slate-800 uppercase text-xs">{l.nome}</span>
-                      <span className="bg-white px-2 py-0.5 rounded-md text-[10px] font-black text-blue-600 border border-blue-100">{l.members.length}</span>
-                    </div>
-                    <div className="p-3">
-                      <div className="grid grid-cols-1 gap-1">
-                        {l.members.map((m: any) => (
-                          <div key={m.id} className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                            {m.nome}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+        <div className="grid grid-cols-4 gap-3 h-[calc(100%-4rem)]">
+          {/* Column 1: Varrição */}
+          <div className="flex flex-col gap-1.5 border-r border-slate-100 pr-2">
+            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[9px] font-black uppercase rounded-sm">1. Varrição</h2>
+            <div className="space-y-2 overflow-hidden">
+              {printData.varricao.localidades.map(l => (
+                <div key={l.nome} className="border-b border-slate-100 pb-1">
+                  <p className="font-black text-[8px] uppercase text-blue-600">{l.nome}</p>
+                  <div className="grid grid-cols-1 gap-0 mt-0.5">
+                    {l.members.map((m: any) => (
+                      <p key={m.id} className="text-[8px] font-bold leading-none py-0.5">• {m.nome}</p>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
 
-        {/* Bottom Sections */}
-        <div className="grid grid-cols-3 gap-6 border-t-2 border-slate-100 pt-6">
-          <div className="bg-emerald-50 rounded-2xl p-5 border-2 border-emerald-100">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-xl">🏖️</span>
-              <h3 className="font-black text-emerald-800 uppercase text-sm tracking-widest">Folga ({printData.off.folga.length})</h3>
-            </div>
-            <div className="grid grid-cols-1 gap-1">
-              {printData.off.folga.map(name => <div key={name} className="text-xs font-bold text-emerald-700">{name}</div>)}
-            </div>
-          </div>
-          <div className="bg-purple-50 rounded-2xl p-5 border-2 border-purple-100">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-xl">✈️</span>
-              <h3 className="font-black text-purple-800 uppercase text-sm tracking-widest">Férias ({printData.off.ferias.length})</h3>
-            </div>
-            <div className="grid grid-cols-1 gap-1">
-              {printData.off.ferias.map(name => <div key={name} className="text-xs font-bold text-purple-700">{name}</div>)}
+          {/* Column 2: Orla */}
+          <div className="flex flex-col gap-1.5 border-r border-slate-100 pr-2">
+            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[9px] font-black uppercase rounded-sm">2. Orla</h2>
+            <div className="space-y-2 overflow-hidden">
+              {printData.orla.localidades.map(l => (
+                <div key={l.nome} className="border-b border-slate-100 pb-1">
+                  <p className="font-black text-[8px] uppercase text-blue-600">{l.nome}</p>
+                  <div className="grid grid-cols-1 gap-0 mt-0.5">
+                    {l.members.map((m: any) => (
+                      <p key={m.id} className="text-[8px] font-bold leading-none py-0.5">• {m.nome}</p>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="bg-red-50 rounded-2xl p-5 border-2 border-red-100">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="text-xl">🏥</span>
-              <h3 className="font-black text-red-800 uppercase text-sm tracking-widest">Atestado ({printData.off.atestado.length})</h3>
+
+          {/* Column 3: Porta a Porta */}
+          <div className="flex flex-col gap-1.5 border-r border-slate-100 pr-2">
+            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[9px] font-black uppercase rounded-sm">3. Porta a Porta</h2>
+            <div className="space-y-2 overflow-hidden">
+              {printData.porta.localidades.map(l => (
+                <div key={l.nome} className="border-b border-slate-100 pb-1">
+                  <p className="font-black text-[8px] uppercase text-blue-600">{l.nome}</p>
+                  <div className="grid grid-cols-1 gap-0 mt-0.5">
+                    {l.members.map((m: any) => (
+                      <p key={m.id} className="text-[8px] font-bold leading-none py-0.5">• {m.nome}</p>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="grid grid-cols-1 gap-1">
-              {printData.off.atestado.map(name => <div key={name} className="text-xs font-bold text-red-700">{name}</div>)}
+          </div>
+
+          {/* Column 4: Ausências */}
+          <div className="flex flex-col gap-1.5 bg-slate-50/50 p-1.5 rounded-sm">
+            <h2 className="bg-slate-600 text-white text-center py-0.5 text-[9px] font-black uppercase rounded-sm">4. Ausências / Folgas</h2>
+            
+            <div className="space-y-2 mt-1">
+              <div>
+                <p className="text-[7px] font-black uppercase text-slate-400 mb-0.5">🏖️ Folga / Repouso</p>
+                <div className="space-y-0.5">
+                  {printData.off.folga.map(name => <p key={name} className="text-[7px] font-bold border-b border-slate-100 leading-none py-0.5">{name}</p>)}
+                </div>
+              </div>
+              <div>
+                <p className="text-[7px] font-black uppercase text-slate-400 mb-0.5">✈️ Férias</p>
+                <div className="space-y-0.5">
+                  {printData.off.ferias.map(name => <p key={name} className="text-[7px] font-bold border-b border-slate-100 leading-none py-0.5">{name}</p>)}
+                </div>
+              </div>
+              <div>
+                <p className="text-[7px] font-black uppercase text-slate-400 mb-0.5">🏥 Atestado</p>
+                <div className="space-y-0.5">
+                  {printData.off.atestado.map(name => <p key={name} className="text-[7px] font-bold border-b border-slate-100 leading-none py-0.5">{name}</p>)}
+                </div>
+              </div>
             </div>
           </div>
         </div>
