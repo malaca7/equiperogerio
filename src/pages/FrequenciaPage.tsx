@@ -107,7 +107,7 @@ export function FrequenciaPage() {
   const absentCount = Object.values(attendanceGroups).flatMap(g => g.members).filter(m => m.tipo === 'falta').length
 
   return (
-    <div className="main-content pb-24 bg-slate-50 dark:bg-slate-950">
+    <div className="main-content pb-24 bg-[hsl(var(--background))]">
       <TopHeader 
         title="Chamada Diária" 
         subtitle={format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })} 

@@ -233,7 +233,7 @@ export function EscalaGradePage() {
                 placeholder="Buscar funcionário..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               />
               {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="w-3.5 h-3.5 text-slate-400" /></button>}
             </div>
@@ -241,7 +241,7 @@ export function EscalaGradePage() {
               <select
                 value={filterSetor}
                 onChange={e => setFilterSetor(e.target.value)}
-                className="px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none"
+                className="px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none"
               >
                 <option value="">Todos</option>
                 {setores.map(s => <option key={s} value={s}>{s}</option>)}
@@ -332,8 +332,8 @@ export function EscalaGradePage() {
                           </td>
                         </tr>
                         {funcsDoSetor.map((func, idx) => (
-                          <tr key={func.id} className={`group ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-800'}`}>
-                            <td className={`sticky left-0 z-10 border-r border-slate-200 dark:border-slate-700 px-2 py-1 font-semibold text-slate-800 dark:text-slate-200 ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-800'}`}>
+                          <tr key={func.id} className={`group ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/30 dark:bg-slate-800'}`}>
+                            <td className={`sticky left-0 z-10 border-r border-slate-200 dark:border-slate-700 px-2 py-1 font-semibold text-slate-800 dark:text-slate-200 ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/30 dark:bg-slate-800'}`}>
                               <div className="flex items-center gap-1.5">
                                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-800 dark:to-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-[9px] shrink-0">
                                   {func.nome.substring(0, 2).toUpperCase()}

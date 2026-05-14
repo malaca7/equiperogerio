@@ -226,7 +226,7 @@ export function EscalaLocalidadePage() {
   if (loadF || loadE) return <div className="main-content"><TopHeader title="Escala por Localidade" /><div className="py-20"><Loading text="Carregando..." /></div></div>
 
   return (
-    <div className="main-content pb-24 bg-slate-50 dark:bg-slate-950">
+    <div className="main-content pb-24 bg-[hsl(var(--background))]">
       <TopHeader 
         title="Gestão de Locais" 
         subtitle={viewMode === 'daily' ? format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR }) : 'Vista Semanal'} 

@@ -45,18 +45,18 @@
 
 /* CSS custom properties for theming */
 :root {
-  --background: 210 20% 97%;
+  --background: 210 40% 99%;
   --foreground: 224 71% 4%;
   --card: 0 0% 100%;
   --card-foreground: 224 71% 4%;
   --primary: 221 83% 53%;
   --primary-foreground: 210 40% 98%;
-  --secondary: 210 20% 95%;
+  --secondary: 210 40% 96%;
   --secondary-foreground: 220 10% 30%;
-  --muted: 210 20% 95%;
-  --muted-foreground: 220 10% 45%;
-  --border: 210 20% 90%;
-  --input: 210 20% 90%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 220 10% 50%;
+  --border: 210 20% 92%;
+  --input: 210 20% 92%;
   --ring: 221 83% 53%;
 }
 
