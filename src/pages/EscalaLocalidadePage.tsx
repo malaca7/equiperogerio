@@ -273,44 +273,62 @@ export function EscalaLocalidadePage() {
         }
       />
 
-      {/* PRINT ONLY VIEW - 4 COLUMN MURAL (EXTREME OPTIMIZATION) */}
-      <div className="hidden print:block fixed inset-0 z-[9999] bg-white p-2 landscape-print text-slate-900">
+      {/* PRINT ONLY VIEW - PROFESSIONAL MURAL DESIGN */}
+      <div className="hidden print:block fixed inset-0 z-[9999] bg-white p-6 landscape-print text-slate-950 font-sans">
         <style dangerouslySetInnerHTML={{ __html: `
           @media print {
-            @page { size: landscape; margin: 0.2cm; }
+            @page { size: landscape; margin: 0 !important; }
+            body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
             body * { visibility: hidden; }
             .landscape-print, .landscape-print * { visibility: visible; }
             .landscape-print { 
-              position: absolute; 
+              position: fixed; 
               left: 0; 
               top: 0; 
-              width: 100%; 
-              height: 100%; 
+              width: 100vw; 
+              height: 100vh; 
+              padding: 1cm;
               background: white !important; 
-              display: block !important; 
-              font-size: 8px;
+              display: flex !important;
+              flex-direction: column;
             }
           }
         `}} />
         
-        <div className="flex items-center justify-between border-b border-slate-900 pb-0.5 mb-2">
-          <h1 className="text-sm font-black uppercase tracking-tighter italic">Escala de Localidades — {format(currentDate, "dd/MM/yyyy")}</h1>
+        {/* Header: Official Document Look */}
+        <div className="flex items-end justify-between border-b-2 border-slate-950 pb-2 mb-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-slate-950 flex items-center justify-center rounded-lg text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-8 h-8"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
+            </div>
+            <div>
+              <h1 className="text-2xl font-black uppercase leading-none tracking-tight">Escala Diária de Trabalho</h1>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">Gestão de Equipes — Encarregado Rogerio</p>
+            </div>
+          </div>
           <div className="text-right">
-            <p className="text-[7px] font-black uppercase">Rogerio</p>
+            <div className="bg-slate-100 px-4 py-1 rounded-full border border-slate-200">
+              <span className="text-sm font-black uppercase text-slate-900">{format(currentDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 h-[calc(100%-2rem)]">
+        <div className="grid grid-cols-4 gap-4 flex-1 min-h-0">
           {/* Column 1: Varrição */}
-          <div className="flex flex-col gap-1 border-r border-slate-100 pr-1">
-            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[8px] font-black uppercase rounded-sm">1. Varrição</h2>
-            <div className="space-y-1.5 overflow-hidden">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 border-l-4 border-slate-950 pl-2 py-1 bg-slate-50">
+              <span className="font-black text-xs uppercase tracking-tighter">01. Varrição</span>
+            </div>
+            <div className="space-y-3 overflow-hidden">
               {printData.varricao.localidades.map(l => (
-                <div key={l.nome} className="border-b border-slate-50 pb-0.5">
-                  <p className="font-black text-[7px] uppercase text-blue-600">{l.nome}</p>
-                  <div className="grid grid-cols-1 gap-0 mt-0">
+                <div key={l.nome} className="group">
+                  <p className="font-black text-[10px] uppercase text-blue-800 mb-1 flex items-center justify-between">
+                    <span>{l.nome}</span>
+                    <span className="text-[8px] text-slate-400">[{l.members.length}]</span>
+                  </p>
+                  <div className="grid grid-cols-1 gap-0.5 border-l border-slate-200 pl-2">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[7px] font-bold leading-none py-0.5">• {m.nome}</p>
+                      <p key={m.id} className="text-[9px] font-medium leading-none py-0.5 text-slate-700">{m.nome}</p>
                     ))}
                   </div>
                 </div>
@@ -319,15 +337,20 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 2: Orla */}
-          <div className="flex flex-col gap-1 border-r border-slate-100 pr-1">
-            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[8px] font-black uppercase rounded-sm">2. Orla</h2>
-            <div className="space-y-1.5 overflow-hidden">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 border-l-4 border-slate-950 pl-2 py-1 bg-slate-50">
+              <span className="font-black text-xs uppercase tracking-tighter">02. Orla</span>
+            </div>
+            <div className="space-y-3 overflow-hidden">
               {printData.orla.localidades.map(l => (
-                <div key={l.nome} className="border-b border-slate-50 pb-0.5">
-                  <p className="font-black text-[7px] uppercase text-blue-600">{l.nome}</p>
-                  <div className="grid grid-cols-1 gap-0 mt-0">
+                <div key={l.nome} className="group">
+                  <p className="font-black text-[10px] uppercase text-blue-800 mb-1 flex items-center justify-between">
+                    <span>{l.nome}</span>
+                    <span className="text-[8px] text-slate-400">[{l.members.length}]</span>
+                  </p>
+                  <div className="grid grid-cols-1 gap-0.5 border-l border-slate-200 pl-2">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[7px] font-bold leading-none py-0.5">• {m.nome}</p>
+                      <p key={m.id} className="text-[9px] font-medium leading-none py-0.5 text-slate-700">{m.nome}</p>
                     ))}
                   </div>
                 </div>
@@ -336,15 +359,20 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 3: Porta a Porta */}
-          <div className="flex flex-col gap-1 border-r border-slate-100 pr-1">
-            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[8px] font-black uppercase rounded-sm">3. Porta a Porta</h2>
-            <div className="space-y-1.5 overflow-hidden">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 border-l-4 border-slate-950 pl-2 py-1 bg-slate-50">
+              <span className="font-black text-xs uppercase tracking-tighter">03. Porta a Porta</span>
+            </div>
+            <div className="space-y-3 overflow-hidden">
               {printData.porta.localidades.map(l => (
-                <div key={l.nome} className="border-b border-slate-50 pb-0.5">
-                  <p className="font-black text-[7px] uppercase text-blue-600">{l.nome}</p>
-                  <div className="grid grid-cols-1 gap-0 mt-0">
+                <div key={l.nome} className="group">
+                  <p className="font-black text-[10px] uppercase text-blue-800 mb-1 flex items-center justify-between">
+                    <span>{l.nome}</span>
+                    <span className="text-[8px] text-slate-400">[{l.members.length}]</span>
+                  </p>
+                  <div className="grid grid-cols-1 gap-0.5 border-l border-slate-200 pl-2">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[7px] font-bold leading-none py-0.5">• {m.nome}</p>
+                      <p key={m.id} className="text-[9px] font-medium leading-none py-0.5 text-slate-700">{m.nome}</p>
                     ))}
                   </div>
                 </div>
@@ -353,30 +381,45 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 4: Ausências */}
-          <div className="flex flex-col gap-1.5 bg-slate-50/50 p-1.5 rounded-sm">
-            <h2 className="bg-slate-600 text-white text-center py-0.5 text-[9px] font-black uppercase rounded-sm">4. Ausências / Folgas</h2>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 border-l-4 border-slate-400 pl-2 py-1 bg-slate-100">
+              <span className="font-black text-xs uppercase tracking-tighter text-slate-600">04. Ausências / Folgas</span>
+            </div>
             
-            <div className="space-y-2 mt-1">
-              <div>
-                <p className="text-[7px] font-black uppercase text-slate-400 mb-0.5">🏖️ Folga / Repouso</p>
-                <div className="space-y-0.5">
-                  {printData.off.folga.map(name => <p key={name} className="text-[7px] font-bold border-b border-slate-100 leading-none py-0.5">{name}</p>)}
+            <div className="space-y-4">
+              {printData.off.folga.length > 0 && (
+                <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                  <p className="text-[9px] font-black uppercase text-emerald-700 mb-1 flex items-center gap-1">🏖️ Folga / Repouso</p>
+                  <div className="grid grid-cols-1 gap-0.5">
+                    {printData.off.folga.map(name => <p key={name} className="text-[9px] font-bold text-slate-700 border-b border-white leading-tight">{name}</p>)}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <p className="text-[7px] font-black uppercase text-slate-400 mb-0.5">✈️ Férias</p>
-                <div className="space-y-0.5">
-                  {printData.off.ferias.map(name => <p key={name} className="text-[7px] font-bold border-b border-slate-100 leading-none py-0.5">{name}</p>)}
+              )}
+
+              {printData.off.ferias.length > 0 && (
+                <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                  <p className="text-[9px] font-black uppercase text-purple-700 mb-1 flex items-center gap-1">✈️ Férias</p>
+                  <div className="grid grid-cols-1 gap-0.5">
+                    {printData.off.ferias.map(name => <p key={name} className="text-[9px] font-bold text-slate-700 border-b border-white leading-tight">{name}</p>)}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <p className="text-[7px] font-black uppercase text-slate-400 mb-0.5">🏥 Atestado</p>
-                <div className="space-y-0.5">
-                  {printData.off.atestado.map(name => <p key={name} className="text-[7px] font-bold border-b border-slate-100 leading-none py-0.5">{name}</p>)}
+              )}
+
+              {printData.off.atestado.length > 0 && (
+                <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                  <p className="text-[9px] font-black uppercase text-red-700 mb-1 flex items-center gap-1">🏥 Atestado</p>
+                  <div className="grid grid-cols-1 gap-0.5">
+                    {printData.off.atestado.map(name => <p key={name} className="text-[9px] font-bold text-slate-700 border-b border-white leading-tight">{name}</p>)}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
+        </div>
+
+        <div className="mt-auto pt-4 flex items-center justify-between border-t border-slate-100 italic">
+          <p className="text-[8px] text-slate-400 uppercase tracking-widest font-bold">Documento de Controle Interno — Rogerio</p>
+          <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">Emissão: {format(new Date(), "dd/MM/yyyy HH:mm")}</p>
         </div>
       </div>
 
