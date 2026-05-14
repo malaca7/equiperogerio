@@ -323,7 +323,7 @@ export function EscalaGradePage() {
                       <React.Fragment key={setor}>
                         {/* Sector Header Row */}
                         <tr>
-                          <td colSpan={days.length + 1} className="sticky left-0 z-20 bg-slate-100 dark:bg-slate-800 px-3 py-2 border-b border-t border-slate-200 dark:border-slate-700 text-left">
+                          <td colSpan={days.length + 1} className="sticky left-0 z-20 bg-white dark:bg-slate-800 px-3 py-2 border-b border-t border-slate-200 dark:border-slate-700 text-left">
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full bg-blue-500" />
                               <span className="text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider">{setor || 'Geral'}</span>
@@ -422,7 +422,7 @@ export function EscalaGradePage() {
                   {filteredFuncionarios.filter(f => !f.setor || !setores.includes(f.setor)).length > 0 && (
                     <>
                       <tr>
-                        <td colSpan={days.length + 1} className="sticky left-0 z-10 bg-slate-100 dark:bg-slate-800 px-3 py-2 border-b border-t border-slate-200 dark:border-slate-700">
+                        <td colSpan={days.length + 1} className="sticky left-0 z-10 bg-white dark:bg-slate-800 px-3 py-2 border-b border-t border-slate-200 dark:border-slate-700">
                           <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">Sem Setor</span>
                         </td>
                       </tr>

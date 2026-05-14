@@ -116,14 +116,14 @@ export function FrequenciaPage() {
       {/* Date Navigator & Stats */}
       <div className="sticky top-14 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-4">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={prevDay} className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center hover:scale-110 transition-all"><ChevronLeft className="w-5 h-5" /></button>
+          <button onClick={prevDay} className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center hover:scale-110 transition-all shadow-sm"><ChevronLeft className="w-5 h-5" /></button>
           <div className="text-center">
             <p className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight">
               {isToday(currentDate) ? 'Hoje' : format(currentDate, 'dd/MM/yyyy')}
             </p>
             <p className="text-[10px] font-bold text-blue-600 uppercase">{format(currentDate, 'EEEE', { locale: ptBR })}</p>
           </div>
-          <button onClick={nextDay} className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center hover:scale-110 transition-all"><ChevronRight className="w-5 h-5" /></button>
+          <button onClick={nextDay} className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center hover:scale-110 transition-all shadow-sm"><ChevronRight className="w-5 h-5" /></button>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -165,7 +165,7 @@ export function FrequenciaPage() {
                       "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg transition-all",
                       member.tipo === 'presente' ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30" : 
                       member.tipo === 'falta' ? "bg-red-100 text-red-600 dark:bg-red-900/30" :
-                      "bg-slate-100 text-slate-400 dark:bg-slate-800"
+                      "bg-white text-slate-400 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm"
                     )}>
                       {member.nome.substring(0, 1)}
                     </div>
