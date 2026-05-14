@@ -62,6 +62,7 @@ export function EscalaGradePage() {
 
   const setores = useMemo(() => Array.from(new Set(funcionarios.map(f => f.setor).filter(Boolean))).sort(), [funcionarios])
 
+
   const filteredFuncionarios = useMemo(() => {
     let list = funcionarios
     if (searchTerm) {
