@@ -525,8 +525,8 @@ export function EscalaLocalidadePage() {
                     {locs.map(loc => {
                       const members = dailyDistribution[loc.id] || []
                       return (
-                        <div key={loc.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
-                          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
+                        <div key={loc.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+                          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-800/30">
                             <div className="flex items-center gap-2">
                               <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
                                 <MapPin className="w-4 h-4 text-blue-600" />
@@ -594,8 +594,8 @@ export function EscalaLocalidadePage() {
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800">
-                  <th className="sticky left-0 z-20 bg-slate-50 dark:bg-slate-800 border-b border-r border-slate-200 dark:border-slate-700 p-4 text-left min-w-[160px]">
+                <tr className="bg-white dark:bg-slate-800">
+                  <th className="sticky left-0 z-20 bg-white dark:bg-slate-800 border-b border-r border-slate-200 dark:border-slate-700 p-4 text-left min-w-[160px]">
                     <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Localidade</span>
                   </th>
                   {weekDays.map(day => (
@@ -614,7 +614,7 @@ export function EscalaLocalidadePage() {
                   if (locs.length === 0) return null
                   return (
                     <React.Fragment key={setor}>
-                      <tr className="bg-slate-50/50 dark:bg-slate-800/50">
+                      <tr className="bg-blue-50/30 dark:bg-slate-800/50">
                         <td colSpan={8} className="sticky left-0 z-20 px-4 py-2 border-b border-slate-200 dark:border-slate-700">
                           <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">{setor}</span>
                         </td>
@@ -635,7 +635,7 @@ export function EscalaLocalidadePage() {
                               <td 
                                 key={dStr} 
                                 onClick={() => setAssignModal({ locId: loc.id, locName: loc.nome, dateStr: dStr, setor: loc.setor })}
-                                className="p-2 align-top cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                                className="p-2 align-top cursor-pointer hover:bg-blue-50/50 dark:hover:bg-slate-800 transition-colors"
                               >
                                 <div className="space-y-1">
                                   {assigned.length === 0 ? (
@@ -686,7 +686,7 @@ export function EscalaLocalidadePage() {
               <input 
                 type="text" 
                 placeholder="Buscar funcionário disponível..." 
-                className="w-full pl-9 pr-3 py-3 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl text-sm"
+                className="w-full pl-9 pr-3 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm shadow-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
                 value={modalSearchTerm}
                 onChange={e => setModalSearchTerm(e.target.value)}
               />

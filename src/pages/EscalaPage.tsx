@@ -318,7 +318,7 @@ export function EscalaPage() {
               const escala = escalas.find(e => e.funcionario_id === func.id && e.data === selectedDate)
               
               return (
-                <div key={func.id} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center p-3 bg-white dark:bg-slate-800/50 rounded-xl border border-gray-100 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
+                <div key={func.id} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center p-3 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
                   <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-700 dark:text-blue-400 font-bold text-sm shrink-0">
                     {func.nome.substring(0, 2).toUpperCase()}
                   </div>
@@ -331,7 +331,7 @@ export function EscalaPage() {
                       <input 
                         type="text" 
                         placeholder="Adicionar ocorrência/obs..." 
-                        className="mt-2 w-full text-[11px] bg-transparent border-b border-gray-200 dark:border-slate-700 focus:outline-none focus:border-blue-400 pb-1"
+                        className="mt-2 w-full text-[11px] bg-transparent border-b border-slate-100 dark:border-slate-700 focus:outline-none focus:border-blue-400 pb-1"
                         defaultValue={escala.observacoes || ''}
                         onBlur={(e) => {
                           if (e.target.value !== (escala.observacoes || '')) {
@@ -345,7 +345,7 @@ export function EscalaPage() {
                     )}
                   </div>
                   <Select 
-                    className="w-full sm:w-44 text-sm font-medium border-0 bg-slate-50 dark:bg-slate-900/50"
+                    className="w-full sm:w-44 text-sm font-medium border border-slate-100 bg-white dark:bg-slate-900/50"
                     value={escala?.tipo || ''}
                     onChange={(e) => {
                       const novoTipo = e.target.value

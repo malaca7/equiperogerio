@@ -209,8 +209,8 @@ export function FrequenciaPage() {
                       <button 
                         onClick={() => handleStatus(member.escalaId, 'falta')}
                         className={cn(
-                          "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90",
-                          member.tipo === 'falta' ? "bg-red-600 text-white shadow-lg shadow-red-500/30" : "bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500"
+                          "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-slate-100 dark:border-slate-800",
+                          member.tipo === 'falta' ? "bg-red-600 text-white border-red-600 shadow-lg shadow-red-500/30" : "bg-white dark:bg-slate-800 text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500"
                         )}
                       >
                         <X className="w-5 h-5" />
@@ -218,8 +218,8 @@ export function FrequenciaPage() {
                       <button 
                         onClick={() => handleStatus(member.escalaId, 'presente')}
                         className={cn(
-                          "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90",
-                          member.tipo === 'presente' || member.tipo === 'hora_extra' ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30" : "bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-500"
+                          "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-slate-100 dark:border-slate-800",
+                          member.tipo === 'presente' || member.tipo === 'hora_extra' ? "bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/30" : "bg-white dark:bg-slate-800 text-slate-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-500"
                         )}
                       >
                         <Check className="w-5 h-5" />
@@ -236,7 +236,7 @@ export function FrequenciaPage() {
         {totalOut > 0 && (
           <div className="space-y-6 pt-4 border-t border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500">
+              <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center text-slate-500 border border-slate-100 dark:border-slate-700 shadow-sm">
                 <XCircle className="w-5 h-5" />
               </div>
               <h2 className="text-sm font-black uppercase text-slate-500 tracking-tighter">Ausentes / Fora de Escala</h2>
