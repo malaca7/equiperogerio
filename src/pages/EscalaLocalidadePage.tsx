@@ -1,7 +1,36 @@
-import React, { useState, useMemo } from 'react'
-import { format, startOfWeek, endOfWeek, eachDayOfInterval as eachDay, addWeeks, subWeeks, isToday as checkIsToday, isSunday, parseISO } from 'date-fns'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import { 
+  format, 
+  startOfWeek, 
+  endOfWeek, 
+  eachDayOfInterval, 
+  addWeeks, 
+  subWeeks, 
+  isToday, 
+  isSunday, 
+  parseISO, 
+  addDays, 
+  subDays,
+  startOfDay
+} from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Search, MapPin, Plus, UserPlus } from 'lucide-react'
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Search, 
+  MapPin, 
+  Plus, 
+  UserPlus, 
+  Calendar as CalendarIcon,
+  Copy,
+  Trash2,
+  Users,
+  LayoutGrid,
+  List,
+  CheckCircle2,
+  Clock,
+  ArrowRightLeft
+} from 'lucide-react'
 import { TopHeader } from '../components/layout/TopHeader'
 import { Loading } from '../components/ui/Loading'
 import { Modal } from '../components/ui/Modal'
@@ -10,8 +39,8 @@ import { useToast } from '../components/ui/Toast'
 import { useFuncionarios } from '../hooks/useFuncionarios'
 import { useEscalasMensal, useBatchUpsertEscalas, useUpdateEscala } from '../hooks/useEscalas'
 import { useConfiguracao } from '../hooks/useConfiguracoes'
-import { DEFAULT_TIPOS_ESCALA } from './ConfiguracoesPage'
-import type { TipoEscala } from './ConfiguracoesPage'
+import { DEFAULT_TIPOS_ESCALA, type TipoEscala } from './ConfiguracoesPage'
+import type { Funcionario } from '../lib/database.types'
 
 interface Localidade {
   id: string
@@ -19,13 +48,17 @@ interface Localidade {
   setor: string
 }
 
+type ViewMode = 'daily' | 'weekly'
+
 export function EscalaLocalidadePage() {
   const { toast } = useToast()
-  const [currentDate, setCurrentDate] = useState(new Date())
+  const [currentDate, setCurrentDate] = useState(startOfDay(new Date()))
+  const [viewMode, setViewMode] = useState<ViewMode>('daily')
   const [searchTerm, setSearchTerm] = useState('')
   const [filterSetor, setFilterSetor] = useState('')
-  const [assignCell, setAssignCell] = useState<{ locName: string; dateStr: string; setor: string } | null>(null)
+  const [assignModal, setAssignModal] = useState<{ locName: string; dateStr: string; setor: string } | null>(null)
 
+  // Data fetching
   const { data: allFuncionarios = [], isLoading: loadF } = useFuncionarios({ status: 'ativo' })
   const { data: escalas = [], isLoading: loadE } = useEscalasMensal(format(currentDate, 'yyyy-MM'))
   const { data: setores = [] } = useConfiguracao<string[]>('setores', [])
@@ -35,334 +68,421 @@ export function EscalaLocalidadePage() {
   const batchMutation = useBatchUpsertEscalas()
   const updateMutation = useUpdateEscala()
 
-  const days = useMemo(() => {
-    return eachDay({ start: startOfWeek(currentDate, { weekStartsOn: 1 }), end: endOfWeek(currentDate, { weekStartsOn: 1 }) })
+  // Helpers
+  const dateStr = format(currentDate, 'yyyy-MM-dd')
+  const weekDays = useMemo(() => {
+    return eachDayOfInterval({ 
+      start: startOfWeek(currentDate, { weekStartsOn: 1 }), 
+      end: endOfWeek(currentDate, { weekStartsOn: 1 }) 
+    })
   }, [currentDate])
 
-  const navigate_prev = () => setCurrentDate(subWeeks(currentDate, 1))
-  const navigate_next = () => setCurrentDate(addWeeks(currentDate, 1))
-
-  // Funcionario lookup
   const funcMap = useMemo(() => {
-    const map: Record<string, any> = {}
+    const map: Record<string, Funcionario> = {}
     allFuncionarios.forEach(f => {
-      if (f.cargo?.toLowerCase() !== 'encarregado') {
-        map[f.id] = f
-      }
+      if (f.cargo?.toLowerCase() !== 'encarregado') map[f.id] = f
     })
     return map
   }, [allFuncionarios])
 
-  // Identificar quais tipos contam como "trabalho" (geralmente T, ou tipos que não sejam repouso/folga/falta)
-  // Para simplificar, assumimos que se tem 'localidade' definida ou se não é repouso/folga/falta, está trabalhando.
-  // Mas o ideal é filtrar pelo id. Vamos assumir que 'presente' é o principal.
-  
-  const agrupamentoLocalidade = useMemo(() => {
-    // loc -> date -> Funcionario[]
-    const agrupado: Record<string, Record<string, any[]>> = {}
+  const ausenciasIds = ['repouso', 'compensar', 'ferias', 'atestado', 'falta', 'falta_justificada', 'suspensao']
+
+  // Logic for daily view: locality -> employees
+  const dailyDistribution = useMemo(() => {
+    const dist: Record<string, { id: string; nome: string; setor: string; escalaId: string }[]> = {}
     
-    // Iniciar com todas as localidades da config
-    localidadesConfig.forEach(lc => {
-      agrupado[lc.nome] = {}
-      days.forEach(d => agrupado[lc.nome][format(d, 'yyyy-MM-dd')] = [])
-    })
-    agrupado['Sem Local'] = {}
-    days.forEach(d => agrupado['Sem Local'][format(d, 'yyyy-MM-dd')] = [])
+    // Initialize with all localities
+    localidadesConfig.forEach(l => dist[l.nome] = [])
+    dist['Sem Local'] = []
 
     escalas.forEach((e: any) => {
+      if (e.data !== dateStr) return
       const f = funcMap[e.funcionario_id]
       if (!f) return
-      
-      // Aplicar filtros de busca
-      if (searchTerm && !f.nome.toLowerCase().includes(searchTerm.toLowerCase())) return
-      if (filterSetor && f.setor !== filterSetor) return
+      if (ausenciasIds.includes(e.tipo)) return // Skip if absent
 
-      // Somente considera quem está "trabalhando" (não é repouso, folga, ferias, falta, etc)
-      // Tipos padrão que são "ausências": repouso, compensar, ferias, atestado, falta, falta_justificada, suspensao, etc
-      const ausencias = ['repouso', 'compensar', 'ferias', 'atestado', 'falta', 'falta_justificada', 'suspensao', 'obito_familiar', 'paternidade']
-      if (ausencias.includes(e.tipo)) return // não está trabalhando
-
-      const locName = e.localidade || 'Sem Local'
-      const dateStr = e.data
-      
-      if (!agrupado[locName]) {
-        agrupado[locName] = {}
-        days.forEach(d => agrupado[locName][format(d, 'yyyy-MM-dd')] = [])
-      }
-      
-      if (agrupado[locName][dateStr]) {
-        agrupado[locName][dateStr].push(f)
-      }
+      const loc = e.localidade || 'Sem Local'
+      if (!dist[loc]) dist[loc] = []
+      dist[loc].push({ id: f.id, nome: f.nome, setor: f.setor || '', escalaId: e.id })
     })
-    
-    return agrupado
-  }, [escalas, funcMap, localidadesConfig, days, searchTerm, filterSetor])
 
-  const handleAssignFuncionario = async (funcId: string) => {
-    if (!assignCell) return
+    return dist
+  }, [escalas, dateStr, funcMap, localidadesConfig])
+
+  // Logic for available employees (not assigned to any locality today)
+  const availableFuncs = useMemo(() => {
+    const assignedIds = new Set(
+      escalas
+        .filter((e: any) => e.data === dateStr && !ausenciasIds.includes(e.tipo) && e.localidade)
+        .map((e: any) => e.funcionario_id)
+    )
+    
+    const absentIds = new Set(
+      escalas
+        .filter((e: any) => e.data === dateStr && ausenciasIds.includes(e.tipo))
+        .map((e: any) => e.funcionario_id)
+    )
+
+    return allFuncionarios.filter(f => 
+      f.cargo?.toLowerCase() !== 'encarregado' && 
+      !assignedIds.has(f.id) && 
+      !absentIds.has(f.id)
+    )
+  }, [allFuncionarios, escalas, dateStr])
+
+  // Actions
+  const handleAssign = async (funcId: string) => {
+    if (!assignModal) return
     try {
-      // Find existing escala for this func and date
-      const existing = escalas.find((e: any) => e.funcionario_id === funcId && e.data === assignCell.dateStr)
-      if (existing) {
-        await updateMutation.mutateAsync({
-          id: existing.id,
-          data: { localidade: assignCell.locName === 'Sem Local' ? null : assignCell.locName, tipo: 'presente' }
-        })
-      } else {
-        await batchMutation.mutateAsync([{
-          funcionario_id: funcId,
-          data: assignCell.dateStr,
-          tipo: 'presente',
-          localidade: assignCell.locName === 'Sem Local' ? null : assignCell.locName,
-          turno: 'integral'
-        }])
+      const existing = escalas.find((e: any) => e.funcionario_id === funcId && e.data === assignModal.dateStr)
+      const payload = {
+        funcionario_id: funcId,
+        data: assignModal.dateStr,
+        tipo: 'presente',
+        localidade: assignModal.locName === 'Sem Local' ? null : assignModal.locName,
+        turno: 'integral' as const
       }
-      toast('Funcionário alocado com sucesso!', 'success')
-      setAssignCell(null)
-    } catch (e: any) {
-      toast('Erro ao alocar: ' + e.message, 'error')
+
+      if (existing) {
+        await updateMutation.mutateAsync({ id: existing.id, data: { localidade: payload.localidade, tipo: 'presente' } })
+      } else {
+        await batchMutation.mutateAsync([payload])
+      }
+      toast('Funcionário alocado!', 'success')
+    } catch (err: any) {
+      toast('Erro: ' + err.message, 'error')
     }
   }
 
-  const handleRemoveFromLocal = async (e: React.MouseEvent, escalaId: string) => {
-    e.stopPropagation()
+  const handleRemove = async (escalaId: string) => {
     try {
-      await updateMutation.mutateAsync({
-        id: escalaId,
-        data: { localidade: null }
-      })
-      toast('Funcionário removido do local', 'success')
+      await updateMutation.mutateAsync({ id: escalaId, data: { localidade: null } })
+      toast('Removido da localidade', 'success')
     } catch (err: any) {
       toast('Erro ao remover', 'error')
     }
   }
 
-  if (loadF || loadE) return <div className="main-content"><TopHeader title="Equipe por Localidade" /><div className="py-20"><Loading text="Carregando..." /></div></div>
+  const handleCopyYesterday = async () => {
+    const yesterday = format(subDays(currentDate, 1), 'yyyy-MM-dd')
+    const yesterdayEscalas = escalas.filter((e: any) => e.data === yesterday && e.localidade)
+    
+    if (yesterdayEscalas.length === 0) return toast('Nenhuma escala encontrada ontem', 'info')
 
-  // Ordenar localidades por Setor, depois por nome
-  const locList = useMemo(() => {
-    return [...localidadesConfig].sort((a, b) => {
-      const sA = a.setor || ''
-      const sB = b.setor || ''
-      if (sA !== sB) return sA.localeCompare(sB)
-      return (a.nome || '').localeCompare(b.nome || '')
-    })
-  }, [localidadesConfig])
+    try {
+      const inserts = yesterdayEscalas.map((e: any) => ({
+        funcionario_id: e.funcionario_id,
+        data: dateStr,
+        tipo: 'presente',
+        localidade: e.localidade,
+        turno: 'integral' as const
+      }))
+      await batchMutation.mutateAsync(inserts)
+      toast('Escala de ontem copiada!', 'success')
+    } catch (err: any) {
+      toast('Erro ao copiar: ' + err.message, 'error')
+    }
+  }
 
-  // Adicionar "Sem Local" no final
-  const rowNames = [...locList.map(l => l.nome), 'Sem Local']
+  if (loadF || loadE) return <div className="main-content"><TopHeader title="Escala por Localidade" /><div className="py-20"><Loading text="Carregando..." /></div></div>
 
   return (
-    <div className="main-content pb-24">
-      <TopHeader title="Equipe por Localidade" />
-      
-      {/* Tools */}
-      <div className="sticky top-14 z-30 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-3 shadow-sm">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <button onClick={navigate_prev} className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 transition">
-              <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-            </button>
-            <div className="text-center flex-1">
-              <p className="text-sm font-black text-slate-800 dark:text-slate-100 capitalize">
-                {format(days[0], "dd 'de' MMM", { locale: ptBR })} — {format(days[6], "dd 'de' MMM", { locale: ptBR })}
-              </p>
+    <div className="main-content pb-24 bg-slate-50 dark:bg-slate-950">
+      <TopHeader 
+        title="Gestão de Locais" 
+        subtitle={viewMode === 'daily' ? format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR }) : 'Vista Semanal'} 
+      />
+
+      {/* Control Bar */}
+      <div className="sticky top-14 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-3 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-4">
+          {/* Date Picker */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-2xl p-1 shadow-inner">
+            <button onClick={() => setCurrentDate(subDays(currentDate, 1))} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all active:scale-90"><ChevronLeft className="w-5 h-5" /></button>
+            <div className="px-4 flex flex-col items-center min-w-[120px]">
+              <span className="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 leading-none mb-1">
+                {isToday(currentDate) ? 'Hoje' : format(currentDate, 'EEE', { locale: ptBR })}
+              </span>
+              <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{format(currentDate, 'dd/MM/yyyy')}</span>
             </div>
-            <button onClick={navigate_next} className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 active:scale-95 transition">
-              <ChevronRight className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-            </button>
+            <button onClick={() => setCurrentDate(addDays(currentDate, 1))} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all active:scale-90"><ChevronRight className="w-5 h-5" /></button>
           </div>
 
-          <div className="flex gap-2">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Buscar funcionário..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
-            </div>
-            <select value={filterSetor} onChange={e => setFilterSetor(e.target.value)} className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/40">
-              <option value="">Todos os Setores</option>
-              {setores.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+          {/* Mode Selector */}
+          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-2xl p-1 shadow-inner shrink-0">
+            <button 
+              onClick={() => setViewMode('daily')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}
+            >
+              <LayoutGrid className="w-4 h-4" /> Diário
+            </button>
+            <button 
+              onClick={() => setViewMode('weekly')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${viewMode === 'weekly' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}
+            >
+              <List className="w-4 h-4" /> Semanal
+            </button>
           </div>
+        </div>
+
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Buscar..." 
+              value={searchTerm} 
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2.5 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl text-sm focus:ring-2 focus:ring-blue-500/30"
+            />
+          </div>
+          <button 
+            onClick={handleCopyYesterday}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl text-xs font-bold hover:bg-blue-100 transition-colors shrink-0"
+          >
+            <Copy className="w-4 h-4" /> Copiar Ontem
+          </button>
         </div>
       </div>
 
-      <div className="p-3">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="sticky left-0 z-20 bg-slate-100 dark:bg-slate-800 border-b border-r border-slate-200 dark:border-slate-700 px-3 py-2 text-left min-w-[140px] max-w-[160px]">
-                  <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Localidade</span>
-                </th>
-                {days.map(day => (
-                  <th key={day.toISOString()} className={`px-2 py-2 border-b border-slate-200 dark:border-slate-700 min-w-[140px] ${checkIsToday(day) ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-slate-50 dark:bg-slate-800/50'}`}>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase">{format(day, 'EEE', { locale: ptBR })}</span>
-                      <span className={`text-[13px] font-black ${checkIsToday(day) ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-200'}`}>
-                        {format(day, 'dd')}
-                      </span>
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {/* Renderizar agrupado por setor (opcional, mas fica mais bonito) */}
-              {setores.filter(s => !filterSetor || s === filterSetor).map(setor => {
-                const locsDoSetor = locList.filter(l => l.setor === setor)
-                if (locsDoSetor.length === 0) return null
+      {/* Dashboard Summary */}
+      <div className="grid grid-cols-2 gap-3 p-4">
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-3xl p-4 text-white shadow-lg">
+          <div className="flex items-center justify-between mb-1">
+            <CheckCircle2 className="w-5 h-5 opacity-80" />
+            <span className="text-2xl font-black">{allFuncionarios.length - availableFuncs.length}</span>
+          </div>
+          <p className="text-[10px] font-bold uppercase opacity-80">Alocados Hoje</p>
+        </div>
+        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-3xl p-4 text-white shadow-lg">
+          <div className="flex items-center justify-between mb-1">
+            <Clock className="w-5 h-5 opacity-80" />
+            <span className="text-2xl font-black">{availableFuncs.length}</span>
+          </div>
+          <p className="text-[10px] font-bold uppercase opacity-80">A Disponibilizar</p>
+        </div>
+      </div>
 
-                // Verificar se há alguém escalado neste setor inteiro na semana
-                const temAlguem = locsDoSetor.some(loc => {
-                  return days.some(d => agrupamentoLocalidade[loc.nome]?.[format(d, 'yyyy-MM-dd')]?.length > 0)
-                })
-
-                if (!temAlguem) return null // Esconde setores vazios
-
-                return (
-                  <React.Fragment key={setor}>
-                    <tr>
-                      <td colSpan={8} className="sticky left-0 z-20 bg-slate-100/80 dark:bg-slate-800/80 backdrop-blur px-3 py-1.5 border-b border-t border-slate-200 dark:border-slate-700 text-left">
-                        <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-wider">{setor}</span>
-                      </td>
-                    </tr>
-                    {locsDoSetor.map((loc, idx) => {
-                      const rowData = agrupamentoLocalidade[loc.nome]
-                      if (!rowData) return null
-                      // Se a localidade não tem ninguem a semana toda, podemos pular, ou mostrar vazia. Mostrar vazia ajuda a ver onde falta gente.
+      {/* Main Content Area */}
+      <div className="px-4 pb-12">
+        {viewMode === 'daily' ? (
+          <div className="space-y-6">
+            {setores.map(setor => {
+              const locs = localidadesConfig.filter(l => l.setor === setor)
+              if (locs.length === 0) return null
+              return (
+                <div key={setor} className="space-y-3">
+                  <div className="flex items-center gap-2 px-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                    <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{setor}</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {locs.map(loc => {
+                      const members = dailyDistribution[loc.nome] || []
                       return (
-                        <tr key={loc.id} className="group border-b border-slate-100 dark:border-slate-800/50">
-                          <td className={`sticky left-0 z-10 border-r border-slate-200 dark:border-slate-700 px-3 py-2 font-semibold text-slate-800 dark:text-slate-200 ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-800'}`}>
-                            <div className="flex items-center gap-1.5">
-                              <MapPin className="w-3 h-3 text-slate-400" />
-                              <span className="text-xs font-bold leading-tight">{loc.nome}</span>
+                        <div key={loc.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+                          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
+                                <MapPin className="w-4 h-4 text-blue-600" />
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-black text-slate-800 dark:text-slate-100">{loc.nome}</h4>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase">{members.length} membros</p>
+                              </div>
                             </div>
+                            <button 
+                              onClick={() => setAssignModal({ locName: loc.nome, dateStr, setor: loc.setor })}
+                              className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-lg"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="p-2 min-h-[60px] flex flex-wrap gap-1.5">
+                            {members.length === 0 ? (
+                              <div className="w-full py-4 flex flex-col items-center opacity-30">
+                                <Users className="w-5 h-5 mb-1" />
+                                <span className="text-[10px] font-bold">Vazio</span>
+                              </div>
+                            ) : (
+                              members.map(m => (
+                                <div key={m.id} className="flex items-center gap-2 pl-2 pr-1 py-1 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 group animate-scale-in">
+                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{m.nome}</span>
+                                  <button 
+                                    onClick={() => handleRemove(m.escalaId)}
+                                    className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Unassigned List */}
+            {availableFuncs.length > 0 && (
+              <div className="mt-8 space-y-3">
+                <div className="flex items-center gap-2 px-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Disponíveis no Setor</h3>
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-amber-200 dark:border-amber-900/30 p-4">
+                  <div className="flex flex-wrap gap-2">
+                    {availableFuncs.map(f => (
+                      <div key={f.id} className="px-3 py-1.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20 rounded-2xl text-[11px] font-black text-amber-700 dark:text-amber-400">
+                        {f.nome}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Weekly View (Grid - Improved) */
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800">
+                  <th className="sticky left-0 z-20 bg-slate-50 dark:bg-slate-800 border-b border-r border-slate-200 dark:border-slate-700 p-4 text-left min-w-[160px]">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Localidade</span>
+                  </th>
+                  {weekDays.map(day => (
+                    <th key={day.toISOString()} className={`p-4 border-b border-slate-200 dark:border-slate-700 min-w-[150px] ${isToday(day) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[9px] font-black text-slate-400 uppercase">{format(day, 'EEE', { locale: ptBR })}</span>
+                        <span className={`text-sm font-black ${isToday(day) ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-200'}`}>{format(day, 'dd')}</span>
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {setores.map(setor => {
+                  const locs = localidadesConfig.filter(l => l.setor === setor)
+                  if (locs.length === 0) return null
+                  return (
+                    <React.Fragment key={setor}>
+                      <tr className="bg-slate-50/50 dark:bg-slate-800/50">
+                        <td colSpan={8} className="sticky left-0 z-20 px-4 py-2 border-b border-slate-200 dark:border-slate-700">
+                          <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">{setor}</span>
+                        </td>
+                      </tr>
+                      {locs.map(loc => (
+                        <tr key={loc.id} className="border-b border-slate-100 dark:border-slate-800">
+                          <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 px-4 py-3 font-bold text-xs text-slate-700 dark:text-slate-200">
+                            {loc.nome}
                           </td>
-                          {days.map(day => {
-                            const dateStr = format(day, 'yyyy-MM-dd')
-                            const funcs = rowData[dateStr] || []
-                            const isToday = checkIsToday(day)
-                            const isSun = isSunday(day)
-                            
+                          {weekDays.map(day => {
+                            const dStr = format(day, 'yyyy-MM-dd')
+                            const assigned = escalas.filter((e: any) => e.data === dStr && e.localidade === loc.nome)
                             return (
                               <td 
-                                key={dateStr} 
-                                onClick={() => setAssignCell({ locName: loc.nome, dateStr, setor: loc.setor })}
-                                className={`px-2 py-1.5 align-top border-r border-slate-100 dark:border-slate-800 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors ${isToday ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''} ${isSun ? 'bg-red-50/20 dark:bg-red-900/5' : ''}`}
+                                key={dStr} 
+                                onClick={() => setAssignModal({ locName: loc.nome, dateStr: dStr, setor: loc.setor })}
+                                className="p-2 align-top cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                               >
-                                <div className="flex flex-col gap-1 min-h-[32px]">
-                                  {funcs.length === 0 ? (
-                                    <span className="text-[10px] text-slate-300 dark:text-slate-600 italic block mt-1 text-center">-</span>
+                                <div className="space-y-1">
+                                  {assigned.length === 0 ? (
+                                    <div className="h-6 border border-dashed border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center opacity-30">
+                                      <span className="text-[8px] font-bold">Vazio</span>
+                                    </div>
                                   ) : (
-                                    funcs.map(f => {
-                                      const esc = escalas.find((e: any) => e.funcionario_id === f.id && e.data === dateStr)
-                                      return (
-                                        <div key={f.id} className="text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-1 rounded shadow-sm flex items-center gap-1 group/item">
-                                          <div className="w-1 h-3 bg-blue-500 rounded-full shrink-0"></div>
-                                          <span className="truncate flex-1 text-slate-700 dark:text-slate-300 font-medium">{f.nome.split(' ')[0]} {f.nome.split(' ')[1]?.[0] ? f.nome.split(' ')[1][0] + '.' : ''}</span>
-                                          {esc && (
-                                            <button 
-                                              onClick={(e) => handleRemoveFromLocal(e, esc.id)}
-                                              className="opacity-0 group-hover/item:opacity-100 text-slate-400 hover:text-red-500 p-0.5 rounded-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
-                                              title="Remover do Local"
-                                            >
-                                              <UserPlus className="w-3 h-3 rotate-45" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      )
-                                    })
+                                    assigned.map(e => (
+                                      <div key={e.id} className="px-1.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[9px] font-bold text-slate-600 dark:text-slate-300 shadow-sm truncate">
+                                        {funcMap[e.funcionario_id]?.nome.split(' ')[0]}
+                                      </div>
+                                    ))
                                   )}
                                 </div>
                               </td>
                             )
                           })}
                         </tr>
-                      )
-                    })}
-                  </React.Fragment>
-                )
-              })}
-
-              {/* Linha "Sem Local" (opcional: apenas se tiver alguem sem local escalado trabalhando) */}
-              {(() => {
-                const rowData = agrupamentoLocalidade['Sem Local']
-                const temAlguem = days.some(d => rowData?.[format(d, 'yyyy-MM-dd')]?.length > 0)
-                if (!temAlguem) return null
-
-                return (
-                  <>
-                    <tr>
-                      <td colSpan={8} className="sticky left-0 z-20 bg-slate-100/80 dark:bg-slate-800/80 backdrop-blur px-3 py-1.5 border-b border-t border-slate-200 dark:border-slate-700 text-left">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">A Definir / Sem Local</span>
-                      </td>
-                    </tr>
-                    <tr className="border-b border-slate-100 dark:border-slate-800/50">
-                      <td className="sticky left-0 z-10 border-r border-slate-200 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-900">
-                        <span className="text-xs font-bold text-slate-500 italic">Sem Local</span>
-                      </td>
-                      {days.map(day => {
-                        const dateStr = format(day, 'yyyy-MM-dd')
-                        const funcs = rowData[dateStr] || []
-                        return (
-                          <td key={dateStr} className="px-2 py-1.5 align-top border-r border-slate-100 dark:border-slate-800">
-                            <div className="flex flex-col gap-1">
-                              {funcs.map(f => (
-                                <div key={f.id} className="text-[10px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-1 rounded shadow-sm flex items-center gap-1">
-                                  <div className="w-1 h-3 bg-slate-400 rounded-full shrink-0"></div>
-                                  <span className="truncate flex-1 text-slate-600 dark:text-slate-400">{f.nome.split(' ')[0]} {f.nome.split(' ')[1]?.[0]}.</span>
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  </>
-                )
-              })()}
-            </tbody>
-          </table>
-        </div>
+                      ))}
+                    </React.Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      <Modal open={!!assignCell} onClose={() => setAssignCell(null)} title="Adicionar à Localidade">
-        {assignCell && (
-          <div className="space-y-3">
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800/30">
-              <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold uppercase tracking-wider">{assignCell.setor}</p>
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5 mt-1">
-                <MapPin className="w-4 h-4 text-blue-500" /> {assignCell.locName}
-              </p>
-              <p className="text-xs text-slate-500 mt-0.5">Data: {format(parseISO(assignCell.dateStr), "dd/MM/yyyy")}</p>
+      {/* Assign Modal - Improved */}
+      <Modal 
+        open={!!assignModal} 
+        onClose={() => setAssignModal(null)} 
+        title="Alocar na Localidade"
+      >
+        {assignModal && (
+          <div className="space-y-4">
+            <div className="p-4 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-3xl text-white shadow-lg">
+              <div className="flex items-center gap-2 opacity-80 mb-1">
+                <MapPin className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-wider">{assignModal.setor}</span>
+              </div>
+              <h4 className="text-lg font-black">{assignModal.locName}</h4>
+              <p className="text-xs opacity-80 mt-1">{format(parseISO(assignModal.dateStr), "EEEE, dd 'de' MMMM", { locale: ptBR })}</p>
             </div>
-            
-            <div className="max-h-[50vh] overflow-y-auto space-y-1.5 pr-1">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Funcionários ({assignCell.setor})</p>
-              {allFuncionarios
-                .filter(f => f.setor === assignCell.setor && f.cargo?.toLowerCase() !== 'encarregado')
-                .map(f => {
-                  const isAlreadyHere = agrupamentoLocalidade[assignCell.locName]?.[assignCell.dateStr]?.some(x => x.id === f.id)
-                  return (
-                    <button
-                      key={f.id}
-                      disabled={isAlreadyHere}
-                      onClick={() => handleAssignFuncionario(f.id)}
-                      className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-left transition-all
-                        ${isAlreadyHere 
-                          ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-50 cursor-not-allowed' 
-                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-blue-300 hover:shadow-sm'
-                        }`}
-                    >
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{f.nome}</span>
-                      {isAlreadyHere ? (
-                        <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-500 px-2 py-0.5 rounded-full font-bold">Já adicionado</span>
-                      ) : (
-                        <Plus className="w-4 h-4 text-slate-400 group-hover:text-blue-500" />
-                      )}
-                    </button>
-                  )
-              })}
+
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Buscar funcionário disponível..." 
+                className="w-full pl-9 pr-3 py-3 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl text-sm"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className="max-h-[45vh] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              {availableFuncs
+                .filter(f => f.setor === assignModal.setor)
+                .filter(f => f.nome.toLowerCase().includes(searchTerm.toLowerCase()))
+                .length === 0 ? (
+                  <div className="py-12 text-center opacity-30">
+                    <Users className="w-10 h-10 mx-auto mb-2" />
+                    <p className="text-sm font-bold">Nenhum funcionário disponível</p>
+                    <p className="text-xs">Todos deste setor já estão alocados ou de folga.</p>
+                  </div>
+                ) : (
+                  availableFuncs
+                    .filter(f => f.setor === assignModal.setor)
+                    .filter(f => f.nome.toLowerCase().includes(searchTerm.toLowerCase()))
+                    .map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => { handleAssign(f.id); setAssignModal(null); }}
+                        className="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl hover:border-blue-400 hover:shadow-md transition-all active:scale-[0.98]"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-black text-blue-600">
+                            {f.nome.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div className="text-left">
+                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{f.nome}</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase">{f.cargo}</p>
+                          </div>
+                        </div>
+                        <UserPlus className="w-5 h-5 text-slate-300" />
+                      </button>
+                    ))
+                )
+              }
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Apenas funcionários do setor</span>
+              <Button variant="ghost" size="sm" onClick={() => setAssignModal(null)}>Fechar</Button>
             </div>
           </div>
         )}
