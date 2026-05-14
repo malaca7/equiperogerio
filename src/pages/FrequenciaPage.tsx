@@ -128,7 +128,7 @@ export function FrequenciaPage() {
 
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-white dark:bg-slate-800 rounded-2xl p-2 border border-slate-100 dark:border-slate-700 text-center">
-            <p className="text-[10px] font-black text-slate-400 uppercase">Equipe</p>
+            <p className="text-[10px] font-black text-slate-500 uppercase">Equipe</p>
             <p className="text-lg font-black text-slate-700 dark:text-slate-200">{totalMembers}</p>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-2 border border-emerald-100 dark:border-emerald-900/30 text-center">
@@ -150,9 +150,9 @@ export function FrequenciaPage() {
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-500" />
-                <h3 className="text-xs font-black uppercase text-slate-500 tracking-widest">{group.nome}</h3>
+                <h3 className="text-xs font-black uppercase text-slate-600 tracking-widest">{group.nome}</h3>
               </div>
-              <span className="text-[10px] font-bold text-slate-400">{group.members.length} colaboradores</span>
+              <span className="text-[10px] font-bold text-slate-500">{group.members.length} colaboradores</span>
             </div>
 
             <div className="space-y-2">
@@ -171,7 +171,7 @@ export function FrequenciaPage() {
                     </div>
                     <div>
                       <p className="text-sm font-black text-slate-800 dark:text-slate-100 leading-tight">{member.nome}</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">{member.cargo}</p>
+                      <p className="text-[10px] font-bold text-slate-500 uppercase">{member.cargo}</p>
                     </div>
                   </div>
 

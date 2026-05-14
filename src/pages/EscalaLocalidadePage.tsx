@@ -319,7 +319,7 @@ export function EscalaLocalidadePage() {
                 <div key={setor} className="space-y-3">
                   <div className="flex items-center gap-2 px-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                    <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{setor}</h3>
+                    <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{setor}</h3>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {locs.map(loc => {
@@ -380,7 +380,7 @@ export function EscalaLocalidadePage() {
               <div className="mt-8 space-y-3">
                 <div className="flex items-center gap-2 px-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Disponíveis no Setor</h3>
+                  <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Disponíveis no Setor</h3>
                 </div>
                 <div className="bg-white dark:bg-slate-900 rounded-3xl border border-amber-200 dark:border-amber-900/30 p-4">
                   <div className="flex flex-wrap gap-2">
@@ -401,12 +401,12 @@ export function EscalaLocalidadePage() {
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-800">
                   <th className="sticky left-0 z-20 bg-slate-50 dark:bg-slate-800 border-b border-r border-slate-200 dark:border-slate-700 p-4 text-left min-w-[160px]">
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Localidade</span>
+                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Localidade</span>
                   </th>
                   {weekDays.map(day => (
                     <th key={day.toISOString()} className={`p-4 border-b border-slate-200 dark:border-slate-700 min-w-[150px] ${isToday(day) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                       <div className="flex flex-col items-center">
-                        <span className="text-[9px] font-black text-slate-400 uppercase">{format(day, 'EEE', { locale: ptBR })}</span>
+                        <span className="text-[9px] font-black text-slate-500 uppercase">{format(day, 'EEE', { locale: ptBR })}</span>
                         <span className={`text-sm font-black ${isToday(day) ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-200'}`}>{format(day, 'dd')}</span>
                       </div>
                     </th>
