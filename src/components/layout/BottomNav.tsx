@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
   Users,
-  Clock,
   CalendarDays,
   Settings,
   MapPin,
@@ -15,7 +14,6 @@ const navItems = [
   { to: '/funcionarios', icon: Users, label: 'Equipe' },
   { to: '/escala', icon: CalendarDays, label: 'Escala' },
   { to: '/escala/localidades', icon: MapPin, label: 'Locais' },
-  { to: '/frequencia', icon: Clock, label: 'Frequência' },
   { to: '/configuracoes', icon: Settings, label: 'Config' },
 ]
 

@@ -55,6 +55,7 @@ export function EscalaLocalidadePage() {
   const [currentDate, setCurrentDate] = useState(startOfDay(new Date()))
   const [viewMode, setViewMode] = useState<ViewMode>('daily')
   const [searchTerm, setSearchTerm] = useState('')
+  const [modalSearchTerm, setModalSearchTerm] = useState('')
   const [filterSetor, setFilterSetor] = useState('')
   const [assignModal, setAssignModal] = useState<{ locId: string; locName: string; dateStr: string; setor: string } | null>(null)
 
@@ -103,7 +104,6 @@ export function EscalaLocalidadePage() {
       if (!f) return
       if (ausenciasIds.includes(e.tipo)) return
 
-      // Como não temos localidade_id no banco, usamos o nome para agrupar, 
       // mas filtramos para garantir que o setor do funcionário bata com o da localidade
       const loc = localidadesConfig.find(l => l.nome === e.localidade && l.setor === f.setor)
       const locKey = loc ? loc.id : 'sem_local'
@@ -117,23 +117,13 @@ export function EscalaLocalidadePage() {
 
   // Logic for available employees (not assigned to any locality today)
   const availableFuncs = useMemo(() => {
-    const assignedIds = new Set(
-      escalas
-        .filter((e: any) => e.data === dateStr && !ausenciasIds.includes(e.tipo) && e.localidade)
-        .map((e: any) => e.funcionario_id)
-    )
-    
-    const absentIds = new Set(
-      escalas
-        .filter((e: any) => e.data === dateStr && ausenciasIds.includes(e.tipo))
-        .map((e: any) => e.funcionario_id)
-    )
-
-    return allFuncionarios.filter(f => 
-      f.cargo?.toLowerCase() !== 'encarregado' && 
-      !assignedIds.has(f.id) && 
-      !absentIds.has(f.id)
-    )
+    return allFuncionarios.filter(f => {
+      if (f.cargo?.toLowerCase() === 'encarregado') return false
+      
+      const e = escalas.find((esc: any) => esc.funcionario_id === f.id && esc.data === dateStr)
+      // SÓ pode estar disponível se tiver status 'presente' E não tiver localidade definida
+      return e && e.tipo === 'presente' && !e.localidade
+    })
   }, [allFuncionarios, escalas, dateStr])
 
   // Actions
@@ -441,7 +431,11 @@ export function EscalaLocalidadePage() {
                           </td>
                           {weekDays.map(day => {
                             const dStr = format(day, 'yyyy-MM-dd')
-                            const assigned = escalas.filter((e: any) => e.data === dStr && e.localidade_id === loc.id)
+                            const assigned = escalas.filter((e: any) => {
+                              if (e.data !== dStr || e.localidade !== loc.nome) return false
+                              const f = funcMap[e.funcionario_id]
+                              return f && f.setor === loc.setor
+                            })
                             return (
                               <td 
                                 key={dStr} 
@@ -478,7 +472,7 @@ export function EscalaLocalidadePage() {
       {/* Assign Modal - Improved */}
       <Modal 
         open={!!assignModal} 
-        onClose={() => setAssignModal(null)} 
+        onClose={() => { setAssignModal(null); setModalSearchTerm(''); }} 
         title="Alocar na Localidade"
       >
         {assignModal && (
@@ -498,8 +492,8 @@ export function EscalaLocalidadePage() {
                 type="text" 
                 placeholder="Buscar funcionário disponível..." 
                 className="w-full pl-9 pr-3 py-3 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl text-sm"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                value={modalSearchTerm}
+                onChange={e => setModalSearchTerm(e.target.value)}
               />
             </div>
 
@@ -507,7 +501,7 @@ export function EscalaLocalidadePage() {
               {(() => {
                 const list = availableFuncs
                   .filter(f => f.setor === assignModal.setor)
-                  .filter(f => f.nome.toLowerCase().includes(searchTerm.toLowerCase()))
+                  .filter(f => f.nome.toLowerCase().includes(modalSearchTerm.toLowerCase()))
                 
                 if (list.length === 0) {
                   return (
@@ -552,7 +546,7 @@ export function EscalaLocalidadePage() {
 
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <span className="text-[10px] font-bold text-slate-400 uppercase">Apenas funcionários do setor</span>
-              <Button variant="ghost" size="sm" onClick={() => setAssignModal(null)}>Fechar</Button>
+              <Button variant="ghost" size="sm" onClick={() => { setAssignModal(null); setModalSearchTerm(''); }}>Fechar</Button>
             </div>
           </div>
         )}
