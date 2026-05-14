@@ -273,35 +273,44 @@ export function EscalaLocalidadePage() {
         }
       />
 
-      {/* PRINT ONLY VIEW - 4 COLUMN MURAL */}
-      <div className="hidden print:block fixed inset-0 z-[9999] bg-white p-4 overflow-hidden landscape-print text-slate-900">
+      {/* PRINT ONLY VIEW - 4 COLUMN MURAL (EXTREME OPTIMIZATION) */}
+      <div className="hidden print:block fixed inset-0 z-[9999] bg-white p-2 landscape-print text-slate-900">
         <style dangerouslySetInnerHTML={{ __html: `
           @media print {
-            @page { size: landscape; margin: 0.5cm; }
+            @page { size: landscape; margin: 0.2cm; }
             body * { visibility: hidden; }
             .landscape-print, .landscape-print * { visibility: visible; }
-            .landscape-print { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: white !important; display: block !important; }
+            .landscape-print { 
+              position: absolute; 
+              left: 0; 
+              top: 0; 
+              width: 100%; 
+              height: 100%; 
+              background: white !important; 
+              display: block !important; 
+              font-size: 8px;
+            }
           }
         `}} />
         
-        <div className="flex items-center justify-between border-b border-slate-900 pb-1 mb-3">
-          <h1 className="text-lg font-black uppercase tracking-tighter italic">Escala de Localidades — {format(currentDate, "dd/MM/yyyy")}</h1>
+        <div className="flex items-center justify-between border-b border-slate-900 pb-0.5 mb-2">
+          <h1 className="text-sm font-black uppercase tracking-tighter italic">Escala de Localidades — {format(currentDate, "dd/MM/yyyy")}</h1>
           <div className="text-right">
-            <p className="text-[9px] font-black uppercase">Encarregado Rogerio</p>
+            <p className="text-[7px] font-black uppercase">Rogerio</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-3 h-[calc(100%-4rem)]">
+        <div className="grid grid-cols-4 gap-2 h-[calc(100%-2rem)]">
           {/* Column 1: Varrição */}
-          <div className="flex flex-col gap-1.5 border-r border-slate-100 pr-2">
-            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[9px] font-black uppercase rounded-sm">1. Varrição</h2>
-            <div className="space-y-2 overflow-hidden">
+          <div className="flex flex-col gap-1 border-r border-slate-100 pr-1">
+            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[8px] font-black uppercase rounded-sm">1. Varrição</h2>
+            <div className="space-y-1.5 overflow-hidden">
               {printData.varricao.localidades.map(l => (
-                <div key={l.nome} className="border-b border-slate-100 pb-1">
-                  <p className="font-black text-[8px] uppercase text-blue-600">{l.nome}</p>
-                  <div className="grid grid-cols-1 gap-0 mt-0.5">
+                <div key={l.nome} className="border-b border-slate-50 pb-0.5">
+                  <p className="font-black text-[7px] uppercase text-blue-600">{l.nome}</p>
+                  <div className="grid grid-cols-1 gap-0 mt-0">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[8px] font-bold leading-none py-0.5">• {m.nome}</p>
+                      <p key={m.id} className="text-[7px] font-bold leading-none py-0.5">• {m.nome}</p>
                     ))}
                   </div>
                 </div>
@@ -310,15 +319,15 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 2: Orla */}
-          <div className="flex flex-col gap-1.5 border-r border-slate-100 pr-2">
-            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[9px] font-black uppercase rounded-sm">2. Orla</h2>
-            <div className="space-y-2 overflow-hidden">
+          <div className="flex flex-col gap-1 border-r border-slate-100 pr-1">
+            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[8px] font-black uppercase rounded-sm">2. Orla</h2>
+            <div className="space-y-1.5 overflow-hidden">
               {printData.orla.localidades.map(l => (
-                <div key={l.nome} className="border-b border-slate-100 pb-1">
-                  <p className="font-black text-[8px] uppercase text-blue-600">{l.nome}</p>
-                  <div className="grid grid-cols-1 gap-0 mt-0.5">
+                <div key={l.nome} className="border-b border-slate-50 pb-0.5">
+                  <p className="font-black text-[7px] uppercase text-blue-600">{l.nome}</p>
+                  <div className="grid grid-cols-1 gap-0 mt-0">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[8px] font-bold leading-none py-0.5">• {m.nome}</p>
+                      <p key={m.id} className="text-[7px] font-bold leading-none py-0.5">• {m.nome}</p>
                     ))}
                   </div>
                 </div>
@@ -327,15 +336,15 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 3: Porta a Porta */}
-          <div className="flex flex-col gap-1.5 border-r border-slate-100 pr-2">
-            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[9px] font-black uppercase rounded-sm">3. Porta a Porta</h2>
-            <div className="space-y-2 overflow-hidden">
+          <div className="flex flex-col gap-1 border-r border-slate-100 pr-1">
+            <h2 className="bg-slate-900 text-white text-center py-0.5 text-[8px] font-black uppercase rounded-sm">3. Porta a Porta</h2>
+            <div className="space-y-1.5 overflow-hidden">
               {printData.porta.localidades.map(l => (
-                <div key={l.nome} className="border-b border-slate-100 pb-1">
-                  <p className="font-black text-[8px] uppercase text-blue-600">{l.nome}</p>
-                  <div className="grid grid-cols-1 gap-0 mt-0.5">
+                <div key={l.nome} className="border-b border-slate-50 pb-0.5">
+                  <p className="font-black text-[7px] uppercase text-blue-600">{l.nome}</p>
+                  <div className="grid grid-cols-1 gap-0 mt-0">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[8px] font-bold leading-none py-0.5">• {m.nome}</p>
+                      <p key={m.id} className="text-[7px] font-bold leading-none py-0.5">• {m.nome}</p>
                     ))}
                   </div>
                 </div>
