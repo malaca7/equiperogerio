@@ -263,7 +263,17 @@ export function FrequenciaPage() {
                             <p className="text-[9px] text-slate-400 uppercase font-black">{member.tipo}</p>
                           </div>
                         </div>
-                        <Badge variant="outline" className="text-[9px] uppercase">{member.tipo}</Badge>
+                        <Badge 
+                          variant={
+                            member.tipo === 'ferias' ? 'vacation' : 
+                            member.tipo === 'atestado' ? 'medical' : 
+                            (member.tipo === 'repouso' || member.tipo === 'compensar') ? 'off' : 
+                            'default'
+                          } 
+                          className="text-[9px] uppercase"
+                        >
+                          {member.tipo}
+                        </Badge>
                       </div>
                     ))}
                   </div>
