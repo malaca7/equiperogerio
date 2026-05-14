@@ -400,13 +400,13 @@ export function EscalaGradePage() {
                                         Nenhum
                                       </button>
                                       {localidadesConfig.filter(lc => !func.setor || lc.setor === func.setor).map(lc => (
-                                          <button
-                                            key={lc.id}
-                                            onClick={() => handleSetLocalidade(func.id, dateStr, lc.id, lc.nome)}
-                                            className={`w-full text-left px-2 py-1.5 text-[11px] rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 font-medium ${escala?.localidade_id === lc.id ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'text-slate-700 dark:text-slate-200'}`}
-                                          >
-                                            📍 {lc.nome}
-                                          </button>
+                                            <button
+                                              key={lc.id}
+                                              onClick={() => handleSetLocalidade(func.id, dateStr, lc.id, lc.nome)}
+                                              className={`w-full text-left px-2 py-1.5 text-[11px] rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 font-medium ${escala?.localidade === lc.nome ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'text-slate-700 dark:text-slate-200'}`}
+                                            >
+                                              📍 {lc.nome}
+                                            </button>
                                       ))}
                                     </div>
                                   )}

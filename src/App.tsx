@@ -8,6 +8,7 @@ import { BottomNav } from './components/layout/BottomNav'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { FuncionariosPage } from './pages/FuncionariosPage'
+import { FrequenciaPage } from './pages/FrequenciaPage'
 import { EscalaPage } from './pages/EscalaPage'
 import { EscalaGradePage } from './pages/EscalaGradePage'
 import { EscalaLocalidadePage } from './pages/EscalaLocalidadePage'
@@ -48,6 +49,7 @@ function ProtectedLayout() {
         <Routes>
           <Route path="/"              element={<DashboardPage />} />
           <Route path="/funcionarios"  element={<FuncionariosPage />} />
+          <Route path="/frequencia"    element={<FrequenciaPage />} />
           <Route path="/escala"        element={<EscalaGradePage />} />
           <Route path="/escala/calendario" element={<EscalaPage />} />
           <Route path="/escala/localidades" element={<EscalaLocalidadePage />} />

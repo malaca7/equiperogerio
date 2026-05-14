@@ -1,405 +1,233 @@
-import React, { useState } from 'react'
-import { ChevronLeft, ChevronRight, Clock, Check, X, FileText, Umbrella, Star, Edit2 } from 'lucide-react'
-import { format, addDays, subDays, parseISO } from 'date-fns'
+import React, { useState, useMemo } from 'react'
+import { 
+  format, 
+  isToday, 
+  parseISO, 
+  addDays, 
+  subDays,
+  startOfDay
+} from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Check, 
+  X, 
+  MapPin, 
+  Users,
+  Search,
+  CheckCircle2,
+  XCircle,
+  Clock
+} from 'lucide-react'
 import { TopHeader } from '../components/layout/TopHeader'
-import { Modal } from '../components/ui/Modal'
-import { Button } from '../components/ui/Button'
-import { Input, Select, Textarea } from '../components/ui/Input'
-import { Avatar } from '../components/ui/Avatar'
 import { Loading } from '../components/ui/Loading'
 import { useToast } from '../components/ui/Toast'
 import { useFuncionarios } from '../hooks/useFuncionarios'
-import { useFrequenciaData, useUpsertFrequencia, useBatchUpsertFrequencia, useFrequenciaMensal } from '../hooks/useFrequencia'
-import type { Funcionario, FrequenciaStatus, Frequencia } from '../lib/database.types'
-import { frequenciaStatusLabel, frequenciaStatusColor, formatDate, today } from '../lib/utils'
+import { useEscalasMensal, useUpdateEscala, useBatchUpsertEscalas } from '../hooks/useEscalas'
+import { useConfiguracao } from '../hooks/useConfiguracoes'
 import { cn } from '../lib/utils'
 
-const statusButtons: { status: FrequenciaStatus; icon: React.ElementType; label: string; color: string }[] = [
-  { status: 'presente', icon: Check, label: 'Presente', color: 'bg-green-500 text-white' },
-  { status: 'falta', icon: X, label: 'Falta', color: 'bg-red-500 text-white' },
-  { status: 'atestado', icon: FileText, label: 'Atestado', color: 'bg-amber-500 text-white' },
-  { status: 'folga', icon: Umbrella, label: 'Folga', color: 'bg-blue-500 text-white' },
-  { status: 'hora_extra', icon: Star, label: 'H. Extra', color: 'bg-purple-500 text-white' },
-  { status: 'ferias', icon: Clock, label: 'Férias', color: 'bg-teal-500 text-white' },
-]
-
-interface QuickEditModal {
-  funcionario: Funcionario
-  frequencia?: Frequencia
+interface Localidade {
+  id: string
+  nome: string
+  setor: string
 }
 
 export function FrequenciaPage() {
   const { toast } = useToast()
-  const [selectedDate, setSelectedDate] = useState(today())
-  const [editModal, setEditModal] = useState<QuickEditModal | null>(null)
-  const [editForm, setEditForm] = useState({
-    status: 'presente' as FrequenciaStatus,
-    entrada: '',
-    saida: '',
-    hora_extra: '',
-    observacoes: '',
-  })
+  const [currentDate, setCurrentDate] = useState(startOfDay(new Date()))
+  const [searchTerm, setSearchTerm] = useState('')
 
-  const [generateWeekModal, setGenerateWeekModal] = useState(false)
-  const [weekStartDate, setWeekStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  // Data fetching
+  const { data: allFuncionarios = [], isLoading: loadF } = useFuncionarios({ status: 'ativo' })
+  const { data: escalas = [], isLoading: loadE } = useEscalasMensal(format(currentDate, 'yyyy-MM'))
+  const { data: localidadesConfig = [] } = useConfiguracao<Localidade[]>('localidades', [])
 
-  const { data: allFuncionarios = [], isLoading: loadingFunc } = useFuncionarios({ status: 'ativo' })
-  const funcionarios = allFuncionarios.filter(f => f.cargo?.toLowerCase() !== 'encarregado')
-  const { data: frequencias = [], isLoading: loadingFreq } = useFrequenciaData(selectedDate)
-  const currentMonthStr = format(parseISO(selectedDate), 'yyyy-MM')
-  const { data: mesFrequencias = [] } = useFrequenciaMensal(currentMonthStr)
-  
-  const upsertMutation = useUpsertFrequencia()
-  const batchUpsertMutation = useBatchUpsertFrequencia()
+  const updateMutation = useUpdateEscala()
+  const batchMutation = useBatchUpsertEscalas()
 
-  const isLoading = loadingFunc || loadingFreq
+  const dateStr = format(currentDate, 'yyyy-MM-dd')
 
-  const getFrequencia = (funcId: string) =>
-    frequencias.find((f: any) => f.funcionario_id === funcId)
-
-  const handleQuickStatus = async (func: Funcionario, status: FrequenciaStatus) => {
-    try {
-      await upsertMutation.mutateAsync({
-        funcionario_id: func.id,
-        data: selectedDate,
-        status,
-      })
-    } catch {
-      toast('Erro ao registrar frequência', 'error')
-    }
-  }
-
-  const openEdit = (func: Funcionario) => {
-    const freq = getFrequencia(func.id) as Frequencia | undefined
-    setEditForm({
-      status: freq?.status ?? 'presente',
-      entrada: freq?.entrada ?? '',
-      saida: freq?.saida ?? '',
-      hora_extra: freq?.hora_extra?.toString() ?? '',
-      observacoes: freq?.observacoes ?? '',
+  const funcMap = useMemo(() => {
+    const map: Record<string, any> = {}
+    allFuncionarios.forEach(f => {
+      if (f.cargo?.toLowerCase() !== 'encarregado') map[f.id] = f
     })
-    setEditModal({ funcionario: func, frequencia: freq })
-  }
+    return map
+  }, [allFuncionarios])
 
-  const handleSaveEdit = async () => {
-    if (!editModal) return
-    try {
-      await upsertMutation.mutateAsync({
-        funcionario_id: editModal.funcionario.id,
-        data: selectedDate,
-        status: editForm.status,
-        entrada: editForm.entrada || null,
-        saida: editForm.saida || null,
-        hora_extra: editForm.hora_extra ? parseFloat(editForm.hora_extra) : null,
-        observacoes: editForm.observacoes || null,
-      })
-      toast('Frequência salva com sucesso', 'success')
-      setEditModal(null)
-    } catch {
-      toast('Erro ao salvar frequência', 'error')
-    }
-  }
-
-  const prevDay = () => {
-    const d = parseISO(selectedDate)
-    setSelectedDate(format(subDays(d, 1), 'yyyy-MM-dd'))
-  }
-  const nextDay = () => {
-    const d = parseISO(selectedDate)
-    setSelectedDate(format(addDays(d, 1), 'yyyy-MM-dd'))
-  }
-
-  const handleGenerateWeek = async () => {
-    if (!funcionarios.length) return toast('Nenhum funcionário ativo', 'warning')
+  // Grouping by locality for the "Chamada"
+  const attendanceGroups = useMemo(() => {
+    const groups: Record<string, { id: string; nome: string; setor: string; members: any[] }> = {}
     
-    try {
-      const baseDate = parseISO(weekStartDate)
-      const inserts: any[] = []
+    // Initialize groups with localities
+    localidadesConfig.forEach(l => {
+      groups[l.id] = { ...l, members: [] }
+    })
+    groups['sem_local'] = { id: 'sem_local', nome: 'Sem Localidade', setor: 'Geral', members: [] }
+
+    escalas.forEach((e: any) => {
+      if (e.data !== dateStr) return
+      const f = funcMap[e.funcionario_id]
+      if (!f) return
+
+      // Find which locality card this employee belongs to
+      const loc = localidadesConfig.find(l => l.nome === e.localidade && l.setor === f.setor)
+      const locKey = loc ? loc.id : 'sem_local'
       
-      // Gera de segunda a sabado (6 dias)
-      for (let i = 0; i < 6; i++) {
-        const currentDate = format(new Date(baseDate.getTime() + i * 86400000), 'yyyy-MM-dd')
-        
-        funcionarios.forEach(f => {
-          // Verifica se já tem frequencia nesse dia usando os dados do mês atual
-          const exists = mesFrequencias.some(e => e.funcionario_id === f.id && e.data === currentDate)
-          if (!exists) {
-            inserts.push({
-              funcionario_id: f.id,
-              data: currentDate,
-              status: 'presente',
-            })
-          }
-        })
-      }
+      groups[locKey].members.push({
+        ...f,
+        escalaId: e.id,
+        tipo: e.tipo,
+        localidade: e.localidade
+      })
+    })
 
-      if (inserts.length === 0) {
-        toast('Todos os dias dessa semana já estão preenchidos!', 'warning')
-        setGenerateWeekModal(false)
-        return
-      }
+    return groups
+  }, [escalas, dateStr, funcMap, localidadesConfig])
 
-      await batchUpsertMutation.mutateAsync(inserts)
-      toast(`Semana gerada! ${inserts.length} registros criados.`, 'success')
-      setGenerateWeekModal(false)
+  // Actions
+  const handleStatus = async (escalaId: string, tipo: string) => {
+    try {
+      await updateMutation.mutateAsync({ id: escalaId, data: { tipo } })
+      // Toast opcional para não poluir muito
     } catch (err: any) {
-      console.error(err)
-      toast(`Erro ao gerar: ${err?.message || 'Desconhecido'}`, 'error')
+      toast('Erro ao atualizar: ' + err.message, 'error')
     }
   }
 
-  const isToday = selectedDate === today()
+  const prevDay = () => setCurrentDate(subDays(currentDate, 1))
+  const nextDay = () => setCurrentDate(addDays(currentDate, 1))
 
-  const countStatus = (status: FrequenciaStatus) =>
-    frequencias.filter((f: any) => f.status === status).length
+  if (loadF || loadE) return <div className="main-content"><TopHeader title="Chamada Diária" /><div className="py-20"><Loading text="Carregando..." /></div></div>
+
+  const totalMembers = Object.values(attendanceGroups).reduce((acc, g) => acc + g.members.length, 0)
+  const presentCount = Object.values(attendanceGroups).flatMap(g => g.members).filter(m => m.tipo === 'presente').length
+  const absentCount = Object.values(attendanceGroups).flatMap(g => g.members).filter(m => m.tipo === 'falta').length
 
   return (
-    <div className="main-content">
-      <TopHeader title="Frequência" />
+    <div className="main-content pb-24 bg-slate-50 dark:bg-slate-950">
+      <TopHeader 
+        title="Chamada Diária" 
+        subtitle={format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })} 
+      />
 
-      {/* Date navigator */}
-      <div className="sticky top-14 z-30 bg-[hsl(var(--background))]/95 backdrop-blur-sm border-b border-[hsl(var(--border))] px-4 py-3">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={prevDay}
-            className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-[hsl(var(--muted))] active:scale-90 transition-all"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
+      {/* Date Navigator & Stats */}
+      <div className="sticky top-14 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={prevDay} className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center hover:scale-110 transition-all"><ChevronLeft className="w-5 h-5" /></button>
           <div className="text-center">
-            <p className="text-sm font-bold text-[hsl(var(--foreground))] capitalize">
-              {format(parseISO(selectedDate), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+            <p className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight">
+              {isToday(currentDate) ? 'Hoje' : format(currentDate, 'dd/MM/yyyy')}
             </p>
-            {isToday && (
-              <span className="text-[10px] font-semibold text-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.1)] px-2 py-0.5 rounded-full">
-                HOJE
-              </span>
-            )}
+            <p className="text-[10px] font-bold text-blue-600 uppercase">{format(currentDate, 'EEEE', { locale: ptBR })}</p>
           </div>
-          <button
-            onClick={nextDay}
-            className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-[hsl(var(--muted))] active:scale-90 transition-all"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
+          <button onClick={nextDay} className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center hover:scale-110 transition-all"><ChevronRight className="w-5 h-5" /></button>
         </div>
 
-        {/* Action Button */}
-        <div className="mt-3">
-          <Button 
-            onClick={() => setGenerateWeekModal(true)} 
-            className="w-full gap-2 bg-[hsl(var(--primary))] text-white border shadow-sm hover:brightness-110"
-          >
-            <Check className="w-4 h-4" />
-            Preencher Semana Automática
-          </Button>
-        </div>
-
-        {/* Quick stats */}
-        <div className="flex gap-3 mt-2 overflow-x-auto pb-0.5 scrollbar-none">
-          {[
-            { status: 'presente' as FrequenciaStatus, label: 'Pres.', color: 'text-green-600' },
-            { status: 'falta' as FrequenciaStatus, label: 'Falta', color: 'text-red-600' },
-            { status: 'atestado' as FrequenciaStatus, label: 'Ates.', color: 'text-amber-600' },
-            { status: 'folga' as FrequenciaStatus, label: 'Folga', color: 'text-blue-600' },
-          ].map(({ status, label, color }) => (
-            <div key={status} className="flex items-center gap-1 flex-shrink-0">
-              <span className={cn('text-sm font-bold', color)}>{countStatus(status)}</span>
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">{label}</span>
-            </div>
-          ))}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-2 border border-slate-100 dark:border-slate-700 text-center">
+            <p className="text-[10px] font-black text-slate-400 uppercase">Equipe</p>
+            <p className="text-lg font-black text-slate-700 dark:text-slate-200">{totalMembers}</p>
+          </div>
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-2 border border-emerald-100 dark:border-emerald-900/30 text-center">
+            <p className="text-[10px] font-black text-emerald-600 uppercase">Presentes</p>
+            <p className="text-lg font-black text-emerald-700 dark:text-emerald-400">{presentCount}</p>
+          </div>
+          <div className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-2 border border-red-100 dark:border-red-900/30 text-center">
+            <p className="text-[10px] font-black text-red-600 uppercase">Faltas</p>
+            <p className="text-lg font-black text-red-700 dark:text-red-400">{absentCount}</p>
+          </div>
         </div>
       </div>
 
-      <div className="px-4 pt-3 pb-4 space-y-2">
-        {isLoading ? (
-          <Loading text="Carregando frequência..." />
-        ) : funcionarios.length === 0 ? (
-          <div className="flex flex-col items-center py-16 gap-2">
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              Nenhum funcionário ativo. Cadastre funcionários na aba Equipe.
-            </p>
-          </div>
-        ) : (
-          funcionarios.map(func => {
-            const freq = getFrequencia(func.id) as Frequencia | undefined
-            const hasRecord = !!freq
-            const statusClass = freq ? frequenciaStatusColor[freq.status] : ''
-
-            return (
-              <div key={func.id} className="card p-3">
-                {/* Top row: avatar + name + edit */}
-                <div className="flex items-center gap-2 mb-2">
-                  <Avatar name={func.nome} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">{func.nome}</p>
-                    <p className="text-[10px] text-[hsl(var(--muted-foreground))]">{func.cargo} · {func.setor}</p>
-                  </div>
-                  {hasRecord && (
-                    <span className={cn('badge text-[10px]', statusClass)}>
-                      {frequenciaStatusLabel[freq!.status]}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => openEdit(func)}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] active:scale-90 transition-all"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Status quick buttons */}
-                <div className="grid grid-cols-6 gap-1">
-                  {statusButtons.map(({ status, icon: Icon, label, color }) => {
-                    const isSelected = freq?.status === status
-                    const isPending = upsertMutation.isPending
-                    return (
-                      <button
-                        key={status}
-                        onClick={() => handleQuickStatus(func, status)}
-                        disabled={isPending}
-                        className={cn(
-                          'flex flex-col items-center gap-0.5 p-1.5 rounded-lg text-[9px] font-semibold transition-all active:scale-90',
-                          isSelected
-                            ? color
-                            : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
-                        )}
-                      >
-                        <Icon className="w-3.5 h-3.5" />
-                        <span className="leading-none">{label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {/* Times if present */}
-                {freq && (freq.entrada || freq.saida) && (
-                  <div className="flex gap-3 mt-2 pt-2 border-t border-[hsl(var(--border))]">
-                    {freq.entrada && (
-                      <span className="text-[10px] text-[hsl(var(--muted-foreground))]">
-                        Entrada: <strong>{freq.entrada.substring(0, 5)}</strong>
-                      </span>
-                    )}
-                    {freq.saida && (
-                      <span className="text-[10px] text-[hsl(var(--muted-foreground))]">
-                        Saída: <strong>{freq.saida.substring(0, 5)}</strong>
-                      </span>
-                    )}
-                    {freq.hora_extra && (
-                      <span className="text-[10px] text-purple-600 font-semibold">
-                        +{freq.hora_extra}h extra
-                      </span>
-                    )}
-                  </div>
-                )}
+      <div className="px-4 py-6 space-y-8">
+        {Object.values(attendanceGroups)
+          .filter(g => g.members.length > 0)
+          .map(group => (
+          <div key={group.id} className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                <h3 className="text-xs font-black uppercase text-slate-500 tracking-widest">{group.nome}</h3>
               </div>
-            )
-          })
+              <span className="text-[10px] font-bold text-slate-400">{group.members.length} colaboradores</span>
+            </div>
+
+            <div className="space-y-2">
+              {group.members
+                .filter(m => m.nome.toLowerCase().includes(searchTerm.toLowerCase()))
+                .map(member => (
+                <div key={member.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-3 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg transition-all",
+                      member.tipo === 'presente' ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30" : 
+                      member.tipo === 'falta' ? "bg-red-100 text-red-600 dark:bg-red-900/30" :
+                      "bg-slate-100 text-slate-400 dark:bg-slate-800"
+                    )}>
+                      {member.nome.substring(0, 1)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-800 dark:text-slate-100 leading-tight">{member.nome}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">{member.cargo}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button 
+                      onClick={() => handleStatus(member.escalaId, 'falta')}
+                      className={cn(
+                        "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90",
+                        member.tipo === 'falta' ? "bg-red-600 text-white shadow-lg shadow-red-500/30" : "bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500"
+                      )}
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                    <button 
+                      onClick={() => handleStatus(member.escalaId, 'presente')}
+                      className={cn(
+                        "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90",
+                        member.tipo === 'presente' ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30" : "bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-500"
+                      )}
+                    >
+                      <Check className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {totalMembers === 0 && (
+          <div className="py-20 text-center opacity-30">
+            <Clock className="w-16 h-16 mx-auto mb-4" />
+            <p className="text-lg font-black uppercase">Ninguém Escalado</p>
+            <p className="text-sm">Preencha a escala de localidades para hoje.</p>
+          </div>
         )}
       </div>
 
-      {/* Edit Modal */}
-      <Modal
-        open={!!editModal}
-        onClose={() => setEditModal(null)}
-        title={editModal ? `Editar — ${editModal.funcionario.nome}` : ''}
-        footer={
-          <div className="flex gap-2">
-            <Button variant="secondary" className="flex-1" onClick={() => setEditModal(null)}>
-              Cancelar
-            </Button>
-            <Button
-              className="flex-1"
-              loading={upsertMutation.isPending}
-              onClick={handleSaveEdit}
-            >
-              Salvar
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <Select
-            id="edit-status"
-            label="Status"
-            value={editForm.status}
-            onChange={e => setEditForm(f => ({ ...f, status: e.target.value as FrequenciaStatus }))}
-            options={statusButtons.map(s => ({ value: s.status, label: s.label }))}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              id="edit-entrada"
-              label="Entrada"
-              type="time"
-              value={editForm.entrada}
-              onChange={e => setEditForm(f => ({ ...f, entrada: e.target.value }))}
-            />
-            <Input
-              id="edit-saida"
-              label="Saída"
-              type="time"
-              value={editForm.saida}
-              onChange={e => setEditForm(f => ({ ...f, saida: e.target.value }))}
-            />
-          </div>
-          <Input
-            id="edit-hora-extra"
-            label="Horas extras"
-            type="number"
-            min="0"
-            step="0.5"
-            placeholder="Ex: 2"
-            value={editForm.hora_extra}
-            onChange={e => setEditForm(f => ({ ...f, hora_extra: e.target.value }))}
-          />
-          <Textarea
-            id="edit-obs"
-            label="Observações"
-            placeholder="Observações opcionais..."
-            value={editForm.observacoes}
-            onChange={e => setEditForm(f => ({ ...f, observacoes: e.target.value }))}
-          />
-        </div>
-      </Modal>
-
-      {/* Generate Week modal */}
-      <Modal
-        open={generateWeekModal}
-        onClose={() => setGenerateWeekModal(false)}
-        title="Gerar Frequência Semanal"
-        footer={
-          <div className="flex gap-2 w-full">
-            <Button variant="secondary" className="flex-1" onClick={() => setGenerateWeekModal(false)}>
-              Cancelar
-            </Button>
-            <Button
-              className="flex-1"
-              loading={batchUpsertMutation.isPending}
-              onClick={handleGenerateWeek}
-            >
-              Gerar Frequência
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            Isto irá marcar automaticamente como <strong>Presente</strong> todos os funcionários (exceto Encarregados) da segunda-feira selecionada até o sábado. Dias já marcados não serão sobrescritos.
-          </p>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
-              Data Inicial (Segunda-feira)
-            </label>
-            <input
-              type="date"
-              value={weekStartDate}
-              onChange={e => setWeekStartDate(e.target.value)}
-              className="input-base"
+      {/* Floating Search */}
+      <div className="fixed bottom-24 left-4 right-4 z-40">
+        <div className="relative group">
+          <div className="absolute inset-0 bg-blue-600 rounded-3xl blur opacity-20 group-focus-within:opacity-40 transition-opacity" />
+          <div className="relative flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-1 shadow-2xl">
+            <div className="w-10 h-10 flex items-center justify-center text-slate-400">
+              <Search className="w-5 h-5" />
+            </div>
+            <input 
+              type="text" 
+              placeholder="Buscar na chamada..." 
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-700 dark:text-slate-200 px-2"
             />
           </div>
         </div>
-      </Modal>
+      </div>
     </div>
   )
 }
