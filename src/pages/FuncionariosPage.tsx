@@ -346,9 +346,14 @@ export function FuncionariosPage() {
           <Input
             id="func-nome"
             label="Nome completo *"
-            placeholder="Ex: João da Silva"
+            placeholder="Ex: JOÃO DA SILVA"
+            className="uppercase"
             error={errors.nome?.message}
-            {...register('nome')}
+            {...register('nome', {
+              onChange: (e) => {
+                e.target.value = e.target.value.toUpperCase()
+              }
+            })}
           />
           <div className="grid grid-cols-1 gap-3">
             <Input
