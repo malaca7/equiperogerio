@@ -56,7 +56,7 @@ export function EscalaLocalidadePage() {
   const [viewMode, setViewMode] = useState<ViewMode>('daily')
   const [searchTerm, setSearchTerm] = useState('')
   const [filterSetor, setFilterSetor] = useState('')
-  const [assignModal, setAssignModal] = useState<{ locName: string; dateStr: string; setor: string } | null>(null)
+  const [assignModal, setAssignModal] = useState<{ locId: string; locName: string; dateStr: string; setor: string } | null>(null)
 
   // Data fetching
   const { data: allFuncionarios = [], isLoading: loadF } = useFuncionarios({ status: 'ativo' })
@@ -89,11 +89,9 @@ export function EscalaLocalidadePage() {
 
   // Logic for daily view: locality -> employees
   const dailyDistribution = useMemo(() => {
-    const dist: Record<string, { id: string; nome: string; setor: string; escalaId: string }[]> = {}
-    
-    // Initialize with all localities
-    localidadesConfig.forEach(l => dist[l.nome] = [])
-    dist['Sem Local'] = []
+    // Initialize with all localities using ID as key
+    localidadesConfig.forEach(l => dist[l.id] = [])
+    dist['sem_local'] = []
 
     escalas.forEach((e: any) => {
       if (e.data !== dateStr) return
@@ -101,9 +99,9 @@ export function EscalaLocalidadePage() {
       if (!f) return
       if (ausenciasIds.includes(e.tipo)) return // Skip if absent
 
-      const loc = e.localidade || 'Sem Local'
-      if (!dist[loc]) dist[loc] = []
-      dist[loc].push({ id: f.id, nome: f.nome, setor: f.setor || '', escalaId: e.id })
+      const locKey = e.localidade_id || 'sem_local'
+      if (!dist[locKey]) dist[locKey] = []
+      dist[locKey].push({ id: f.id, nome: f.nome, setor: f.setor || '', escalaId: e.id })
     })
 
     return dist
@@ -139,12 +137,13 @@ export function EscalaLocalidadePage() {
         funcionario_id: funcId,
         data: assignModal.dateStr,
         tipo: 'presente',
+        localidade_id: assignModal.locId === 'sem_local' ? null : assignModal.locId,
         localidade: assignModal.locName === 'Sem Local' ? null : assignModal.locName,
         turno: 'integral' as const
       }
 
       if (existing) {
-        await updateMutation.mutateAsync({ id: existing.id, data: { localidade: payload.localidade, tipo: 'presente' } })
+        await updateMutation.mutateAsync({ id: existing.id, data: { localidade_id: payload.localidade_id, localidade: payload.localidade, tipo: 'presente' } })
       } else {
         await batchMutation.mutateAsync([payload])
       }
@@ -156,7 +155,7 @@ export function EscalaLocalidadePage() {
 
   const handleRemove = async (escalaId: string) => {
     try {
-      await updateMutation.mutateAsync({ id: escalaId, data: { localidade: null } })
+      await updateMutation.mutateAsync({ id: escalaId, data: { localidade_id: null, localidade: null } })
       toast('Removido da localidade', 'success')
     } catch (err: any) {
       toast('Erro ao remover', 'error')
@@ -181,6 +180,50 @@ export function EscalaLocalidadePage() {
       toast('Escala de ontem copiada!', 'success')
     } catch (err: any) {
       toast('Erro ao copiar: ' + err.message, 'error')
+    }
+  }
+
+  const handleGenerateWeek = async () => {
+    const monday = format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+    const mondayEscalas = escalas.filter((e: any) => e.data === monday && e.localidade_id)
+
+    if (mondayEscalas.length === 0) {
+      return toast('Preencha a segunda-feira antes de gerar a semana!', 'warning')
+    }
+
+    try {
+      const inserts: any[] = []
+      const targets = weekDays.slice(1, 6) // Terça a Sábado
+
+      targets.forEach(day => {
+        const dStr = format(day, 'yyyy-MM-dd')
+        mondayEscalas.forEach((e: any) => {
+          const hasAbsence = escalas.find((esc: any) => 
+            esc.funcionario_id === e.funcionario_id && 
+            esc.data === dStr && 
+            ausenciasIds.includes(esc.tipo)
+          )
+          if (!hasAbsence) {
+            inserts.push({
+              funcionario_id: e.funcionario_id,
+              data: dStr,
+              tipo: 'presente',
+              localidade_id: e.localidade_id,
+              localidade: e.localidade,
+              turno: 'integral' as const
+            })
+          }
+        })
+      })
+
+      if (inserts.length > 0) {
+        await batchMutation.mutateAsync(inserts)
+        toast(`Semana preenchida com sucesso!`, 'success')
+      } else {
+        toast('Nenhuma alocação nova necessária.', 'info')
+      }
+    } catch (err: any) {
+      toast('Erro ao gerar semana: ' + err.message, 'error')
     }
   }
 
@@ -238,9 +281,15 @@ export function EscalaLocalidadePage() {
           </div>
           <button 
             onClick={handleCopyYesterday}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl text-xs font-bold hover:bg-blue-100 transition-colors shrink-0"
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl text-[10px] font-black hover:bg-slate-200 transition-colors"
           >
-            <Copy className="w-4 h-4" /> Copiar Ontem
+            <Copy className="w-3.5 h-3.5" /> Ontem
+          </button>
+          <button 
+            onClick={handleGenerateWeek}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-2xl text-[10px] font-black hover:bg-blue-700 shadow-md transition-all active:scale-95"
+          >
+            <CalendarIcon className="w-3.5 h-3.5" /> Gerar Semana
           </button>
         </div>
       </div>
@@ -292,20 +341,24 @@ export function EscalaLocalidadePage() {
                               </div>
                             </div>
                             <button 
-                              onClick={() => setAssignModal({ locName: loc.nome, dateStr, setor: loc.setor })}
+                              onClick={() => setAssignModal({ locId: loc.id, locName: loc.nome, dateStr, setor: loc.setor })}
                               className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-lg"
                             >
                               <Plus className="w-4 h-4" />
                             </button>
                           </div>
                           <div className="p-2 min-h-[60px] flex flex-wrap gap-1.5">
-                            {members.length === 0 ? (
-                              <div className="w-full py-4 flex flex-col items-center opacity-30">
-                                <Users className="w-5 h-5 mb-1" />
-                                <span className="text-[10px] font-bold">Vazio</span>
-                              </div>
-                            ) : (
-                              members.map(m => (
+                            {(() => {
+                              const members = dailyDistribution[loc.id] || []
+                              if (members.length === 0) {
+                                return (
+                                  <div className="w-full py-4 flex flex-col items-center opacity-30">
+                                    <Users className="w-5 h-5 mb-1" />
+                                    <span className="text-[10px] font-bold">Vazio</span>
+                                  </div>
+                                )
+                              }
+                              return members.map(m => (
                                 <div key={m.id} className="flex items-center gap-2 pl-2 pr-1 py-1 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 group animate-scale-in">
                                   <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{m.nome}</span>
                                   <button 
@@ -316,7 +369,7 @@ export function EscalaLocalidadePage() {
                                   </button>
                                 </div>
                               ))
-                            )}
+                            })()}
                           </div>
                         </div>
                       )
@@ -382,11 +435,11 @@ export function EscalaLocalidadePage() {
                           </td>
                           {weekDays.map(day => {
                             const dStr = format(day, 'yyyy-MM-dd')
-                            const assigned = escalas.filter((e: any) => e.data === dStr && e.localidade === loc.nome)
+                            const assigned = escalas.filter((e: any) => e.data === dStr && e.localidade_id === loc.id)
                             return (
                               <td 
                                 key={dStr} 
-                                onClick={() => setAssignModal({ locName: loc.nome, dateStr: dStr, setor: loc.setor })}
+                                onClick={() => setAssignModal({ locId: loc.id, locName: loc.nome, dateStr: dStr, setor: loc.setor })}
                                 className="p-2 align-top cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                               >
                                 <div className="space-y-1">
@@ -445,39 +498,50 @@ export function EscalaLocalidadePage() {
             </div>
 
             <div className="max-h-[45vh] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-              {availableFuncs
-                .filter(f => f.setor === assignModal.setor)
-                .filter(f => f.nome.toLowerCase().includes(searchTerm.toLowerCase()))
-                .length === 0 ? (
-                  <div className="py-12 text-center opacity-30">
-                    <Users className="w-10 h-10 mx-auto mb-2" />
-                    <p className="text-sm font-bold">Nenhum funcionário disponível</p>
-                    <p className="text-xs">Todos deste setor já estão alocados ou de folga.</p>
-                  </div>
-                ) : (
-                  availableFuncs
-                    .filter(f => f.setor === assignModal.setor)
-                    .filter(f => f.nome.toLowerCase().includes(searchTerm.toLowerCase()))
-                    .map(f => (
-                      <button
-                        key={f.id}
-                        onClick={() => { handleAssign(f.id); setAssignModal(null); }}
-                        className="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl hover:border-blue-400 hover:shadow-md transition-all active:scale-[0.98]"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-black text-blue-600">
-                            {f.nome.substring(0, 2).toUpperCase()}
-                          </div>
-                          <div className="text-left">
-                            <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{f.nome}</p>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase">{f.cargo}</p>
-                          </div>
+              {(() => {
+                const list = availableFuncs
+                  .filter(f => f.setor === assignModal.setor)
+                  .filter(f => f.nome.toLowerCase().includes(searchTerm.toLowerCase()))
+                
+                if (list.length === 0) {
+                  return (
+                    <div className="py-12 text-center opacity-30">
+                      <Users className="w-10 h-10 mx-auto mb-2" />
+                      <p className="text-sm font-bold">Nenhum funcionário disponível</p>
+                      <p className="text-xs">Todos deste setor já estão alocados ou de folga.</p>
+                    </div>
+                  )
+                }
+
+                return list.map(f => {
+                  const isAlreadyHere = (dailyDistribution[assignModal.locId] || []).some(x => x.id === f.id)
+                  return (
+                    <button
+                      key={f.id}
+                      disabled={isAlreadyHere}
+                      onClick={() => { handleAssign(f.id); }}
+                      className={`w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl hover:border-blue-400 hover:shadow-md transition-all active:scale-[0.98]
+                        ${isAlreadyHere ? 'opacity-50 cursor-not-allowed grayscale' : ''}
+                      `}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-black text-blue-600">
+                          {f.nome.substring(0, 2).toUpperCase()}
                         </div>
+                        <div className="text-left">
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{f.nome}</p>
+                          <p className="text-[10px] text-slate-500 font-bold uppercase">{f.cargo}</p>
+                        </div>
+                      </div>
+                      {isAlreadyHere ? (
+                        <span className="text-[9px] font-black uppercase text-slate-400">Já Alocado</span>
+                      ) : (
                         <UserPlus className="w-5 h-5 text-slate-300" />
-                      </button>
-                    ))
-                )
-              }
+                      )}
+                    </button>
+                  )
+                })
+              })()}
             </div>
 
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">

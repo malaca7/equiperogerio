@@ -6,14 +6,16 @@ import {
   Clock,
   CalendarDays,
   Settings,
+  MapPin,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', exact: true },
+  { to: '/', icon: LayoutDashboard, label: 'Painel', exact: true },
   { to: '/funcionarios', icon: Users, label: 'Equipe' },
-  { to: '/frequencia', icon: Clock, label: 'Frequência' },
   { to: '/escala', icon: CalendarDays, label: 'Escala' },
+  { to: '/escala/localidades', icon: MapPin, label: 'Locais' },
+  { to: '/frequencia', icon: Clock, label: 'Frequência' },
   { to: '/configuracoes', icon: Settings, label: 'Config' },
 ]
 
@@ -28,7 +30,7 @@ export function BottomNav() {
             end={exact}
             className={({ isActive }) =>
               cn(
-                'flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all duration-200 min-w-0 flex-1',
+                'flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-all duration-200 min-w-0 flex-1',
                 isActive
                   ? 'text-[hsl(var(--primary))]'
                   : 'text-[hsl(var(--muted-foreground))]'

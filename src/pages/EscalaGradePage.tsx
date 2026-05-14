@@ -76,9 +76,15 @@ export function EscalaGradePage() {
   }, [funcionarios, searchTerm, filterSetor])
 
   const escalaMap = useMemo(() => {
-    const map: Record<string, { id: string; tipo: string; observacoes: string | null; localidade: string | null }> = {}
+    const map: Record<string, { id: string; tipo: string; observacoes: string | null; localidade: string | null; localidade_id: string | null }> = {}
     escalas.forEach((e: any) => {
-      map[`${e.funcionario_id}_${e.data}`] = { id: e.id, tipo: e.tipo, observacoes: e.observacoes, localidade: e.localidade || null }
+      map[`${e.funcionario_id}_${e.data}`] = { 
+        id: e.id, 
+        tipo: e.tipo, 
+        observacoes: e.observacoes, 
+        localidade: e.localidade || null,
+        localidade_id: e.localidade_id || null
+      }
     })
     return map
   }, [escalas])
@@ -121,12 +127,12 @@ export function EscalaGradePage() {
     setActiveCell(null)
   }, [escalaMap, batchMutation, deleteMutation, toast])
 
-  const handleSetLocalidade = useCallback(async (funcId: string, date: string, localidade: string) => {
+  const handleSetLocalidade = useCallback(async (funcId: string, date: string, locId: string | null, locNome: string | null) => {
     const key = `${funcId}_${date}`
     const existing = escalaMap[key]
     if (!existing) return
     try {
-      await updateMutation.mutateAsync({ id: existing.id, data: { localidade: localidade || null } })
+      await updateMutation.mutateAsync({ id: existing.id, data: { localidade_id: locId, localidade: locNome } })
     } catch {
       toast('Erro ao definir localidade', 'error')
     }
@@ -365,25 +371,6 @@ export function EscalaGradePage() {
                                         ·
                                       </div>
                                     )}
-                                    {/* Localidade indicator */}
-                                    {escala && locName && (
-                                      <button
-                                        onClick={e => { e.stopPropagation(); setLocPickerCell({ funcId: func.id, date: dateStr }) }}
-                                        className="text-[8px] leading-none text-blue-500 font-bold truncate max-w-[28px] hover:underline bg-blue-50 dark:bg-blue-900/30 px-0.5 rounded"
-                                        title={locName}
-                                      >
-                                        {locName.substring(0, 3)}
-                                      </button>
-                                    )}
-                                    {escala && !locName && (
-                                      <button
-                                        onClick={e => { e.stopPropagation(); setLocPickerCell({ funcId: func.id, date: dateStr }) }}
-                                        className="text-[7px] leading-none text-slate-300 dark:text-slate-600 hover:text-blue-400"
-                                        title="Definir local"
-                                      >
-                                        📍
-                                      </button>
-                                    )}
                                   </div>
 
                                   {/* Status popup */}
@@ -410,17 +397,17 @@ export function EscalaGradePage() {
                                   {isLocPicker && (
                                     <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-2 min-w-[140px] max-h-[200px] overflow-y-auto" onClick={e => e.stopPropagation()}>
                                       <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Local de trabalho</p>
-                                      <button onClick={() => handleSetLocalidade(func.id, dateStr, '')} className="w-full text-left px-2 py-1.5 text-[11px] rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
+                                      <button onClick={() => handleSetLocalidade(func.id, dateStr, null, null)} className="w-full text-left px-2 py-1.5 text-[11px] rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
                                         Nenhum
                                       </button>
                                       {localidadesConfig.filter(lc => !func.setor || lc.setor === func.setor).map(lc => (
-                                        <button
-                                          key={lc.id}
-                                          onClick={() => handleSetLocalidade(func.id, dateStr, lc.nome)}
-                                          className={`w-full text-left px-2 py-1.5 text-[11px] rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 font-medium ${escala?.localidade === lc.nome ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'text-slate-700 dark:text-slate-200'}`}
-                                        >
-                                          📍 {lc.nome}
-                                        </button>
+                                          <button
+                                            key={lc.id}
+                                            onClick={() => handleSetLocalidade(func.id, dateStr, lc.id, lc.nome)}
+                                            className={`w-full text-left px-2 py-1.5 text-[11px] rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 font-medium ${escala?.localidade_id === lc.id ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'text-slate-700 dark:text-slate-200'}`}
+                                          >
+                                            📍 {lc.nome}
+                                          </button>
                                       ))}
                                     </div>
                                   )}
