@@ -27,6 +27,7 @@ import { useFuncionarios } from '../hooks/useFuncionarios'
 import { useEscalasMensal, useUpdateEscala, useBatchUpsertEscalas } from '../hooks/useEscalas'
 import { useConfiguracao } from '../hooks/useConfiguracoes'
 import { cn } from '../lib/utils'
+import { Badge } from '../components/ui/Badge'
 
 interface Localidade {
   id: string
