@@ -148,15 +148,15 @@ export function FrequenciaPage() {
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-2 border border-slate-100 dark:border-slate-700 text-center">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-2 border border-slate-100 dark:border-slate-700 text-center shadow-sm">
             <p className="text-[10px] font-black text-slate-500 uppercase">Trabalhando</p>
             <p className="text-lg font-black text-slate-700 dark:text-slate-200">{totalInWork}</p>
           </div>
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-2 border border-emerald-100 dark:border-emerald-900/30 text-center">
+          <div className="bg-white dark:bg-emerald-900/20 rounded-2xl p-2 border border-emerald-100 dark:border-emerald-900/30 text-center shadow-sm">
             <p className="text-[10px] font-black text-emerald-600 uppercase">Presentes</p>
             <p className="text-lg font-black text-emerald-700 dark:text-emerald-400">{presentCount}</p>
           </div>
-          <div className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-2 border border-red-100 dark:border-red-900/30 text-center">
+          <div className="bg-white dark:bg-red-900/20 rounded-2xl p-2 border border-red-100 dark:border-red-900/30 text-center shadow-sm">
             <p className="text-[10px] font-black text-red-600 uppercase">Faltas</p>
             <p className="text-lg font-black text-red-700 dark:text-red-400">{absentCount}</p>
           </div>
@@ -193,8 +193,8 @@ export function FrequenciaPage() {
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg transition-all",
-                        member.tipo === 'presente' || member.tipo === 'hora_extra' ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30" : 
-                        member.tipo === 'falta' ? "bg-red-100 text-red-600 dark:bg-red-900/30" :
+                        member.tipo === 'presente' || member.tipo === 'hora_extra' ? "bg-white text-emerald-600 border-2 border-emerald-100 dark:bg-emerald-900/30" : 
+                        member.tipo === 'falta' ? "bg-white text-red-600 border-2 border-red-100 dark:bg-red-900/30" :
                         "bg-white text-slate-400 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm"
                       )}>
                         {member.nome.substring(0, 1)}
@@ -253,9 +253,9 @@ export function FrequenciaPage() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {group.members.filter(filteredSearch).map(member => (
-                      <div key={member.id} className="bg-slate-50/50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 p-3 flex items-center justify-between">
+                      <div key={member.id} className="bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 p-3 flex items-center justify-between shadow-sm">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-500 text-xs font-bold">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-slate-800 flex items-center justify-center text-blue-600 text-xs font-bold border border-blue-100">
                             {member.nome.substring(0, 1)}
                           </div>
                           <div>

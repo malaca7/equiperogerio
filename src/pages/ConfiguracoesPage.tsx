@@ -144,7 +144,7 @@ export function ConfiguracoesPage() {
           { id: 'escala', icon: CalendarDays, title: 'Tipos de Escala', desc: `${tipos.length} status`, color: 'from-purple-500 to-purple-600' },
           { id: 'aparencia', icon: Palette, title: 'Aparência', desc: `Tema ${theme === 'dark' ? 'Escuro' : 'Claro'}`, color: 'from-amber-500 to-amber-600' },
         ].map(s => (
-          <button key={s.id} onClick={() => setActiveSection(s.id)} className="w-full flex items-center gap-4 p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-all active:scale-[0.98]">
+          <button key={s.id} onClick={() => setActiveSection(s.id)} className="w-full flex items-center gap-4 p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-all active:scale-[0.98]">
             <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center shadow-lg`}><s.icon className="w-5 h-5 text-white" /></div>
             <div className="flex-1 text-left"><h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">{s.title}</h3><p className="text-xs text-slate-500">{s.desc}</p></div>
             <ChevronRight className="w-4 h-4 text-slate-400" />
@@ -164,7 +164,7 @@ export function ConfiguracoesPage() {
             const locs = localidades.filter(l => l.setor === setor)
             if (!locs.length) return null
             return (<div key={setor}><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">{setor}</h4><div className="space-y-1">{locs.map(l => (
-              <div key={l.id} className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl group">
+              <div key={l.id} className="flex items-center gap-2 p-2 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 group shadow-sm">
                 {editingLoc?.id === l.id ? (<>
                   <input type="text" value={editingLoc.nome} onChange={e => setEditingLoc({ ...editingLoc, nome: e.target.value })} className={`${inp} flex-1 !py-1.5 text-xs`} />
                   <select value={editingLoc.setor} onChange={e => setEditingLoc({ ...editingLoc, setor: e.target.value })} className={`${sel} !py-1.5 text-xs`}>{setores.map(s => <option key={s} value={s}>{s}</option>)}</select>
@@ -189,7 +189,7 @@ export function ConfiguracoesPage() {
             <button onClick={addSetor} className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center"><Plus className="w-4 h-4" /></button>
           </div>
           <div className="space-y-2">{setores.map((setor, idx) => (
-            <div key={setor} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl group">
+            <div key={setor} className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 group shadow-sm">
               {editingSetor?.idx === idx ? (<>
                 <input type="text" value={editingSetor.value} onChange={e => setEditingSetor({ ...editingSetor, value: e.target.value })} className={`${inp} flex-1 !py-1.5`} onKeyDown={e => e.key === 'Enter' && saveEditSetor()} />
                 <button onClick={saveEditSetor} className="text-green-600 p-1.5"><Save className="w-4 h-4" /></button>
@@ -220,7 +220,7 @@ export function ConfiguracoesPage() {
 
           <div className="space-y-2">
             {tipos.map(t => (
-              <div key={t.id} className="flex items-center gap-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+              <div key={t.id} className="flex items-center gap-2 p-2 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 shadow-sm">
                 {editingTipo?.id === t.id ? (
                   <>
                     <input type="text" value={editingTipo.letra} onChange={e => setEditingTipo({ ...editingTipo, letra: e.target.value.substring(0, 3).toUpperCase() })} className={`${inp} w-12 text-center uppercase !py-1.5 text-xs`} />
@@ -243,7 +243,7 @@ export function ConfiguracoesPage() {
       </Modal>
 
       <Modal open={activeSection === 'aparencia'} onClose={() => setActiveSection(null)} title="Aparência">
-        <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl">
+        <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex items-center gap-3">
             {theme === 'dark' ? <Moon className="w-5 h-5 text-blue-400" /> : <Sun className="w-5 h-5 text-amber-500" />}
             <div><p className="text-sm font-bold text-slate-800 dark:text-slate-100">Tema {theme === 'dark' ? 'Escuro' : 'Claro'}</p></div>

@@ -210,15 +210,15 @@ export function EscalaGradePage() {
           {/* Nav + View Toggle */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <button onClick={navigate_prev} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition"><ChevronLeft className="w-4 h-4" /></button>
+              <button onClick={navigate_prev} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-blue-50 dark:hover:bg-slate-800 transition"><ChevronLeft className="w-4 h-4" /></button>
               <h2 className="text-sm font-bold capitalize min-w-[140px] text-center">{title}</h2>
-              <button onClick={navigate_next} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition"><ChevronRight className="w-4 h-4" /></button>
+              <button onClick={navigate_next} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-blue-50 dark:hover:bg-slate-800 transition"><ChevronRight className="w-4 h-4" /></button>
             </div>
-            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
-              <button onClick={() => setViewMode('month')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${viewMode === 'month' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}`}>
+            <div className="flex bg-blue-50 dark:bg-slate-800 rounded-lg p-0.5">
+              <button onClick={() => setViewMode('month')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${viewMode === 'month' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white border border-blue-100' : 'text-slate-500'}`}>
                 <Calendar className="w-3.5 h-3.5 inline mr-1" />Mês
               </button>
-              <button onClick={() => setViewMode('week')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${viewMode === 'week' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}`}>
+              <button onClick={() => setViewMode('week')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${viewMode === 'week' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white border border-blue-100' : 'text-slate-500'}`}>
                 <CalendarDays className="w-3.5 h-3.5 inline mr-1" />Semana
               </button>
             </div>
@@ -282,8 +282,8 @@ export function EscalaGradePage() {
         <div className="relative overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-900">
           <table className="w-full border-collapse text-[11px]">
             <thead className="sticky top-0 z-20">
-              <tr className="bg-slate-50 dark:bg-slate-800">
-                <th className="sticky left-0 z-30 bg-slate-50 dark:bg-slate-800 border-b border-r border-slate-200 dark:border-slate-700 px-3 py-2.5 text-left font-bold text-slate-600 dark:text-slate-300 min-w-[160px]">
+              <tr className="bg-white dark:bg-slate-800">
+                <th className="sticky left-0 z-30 bg-white dark:bg-slate-800 border-b border-r border-slate-200 dark:border-slate-700 px-3 py-2.5 text-left font-bold text-slate-600 dark:text-slate-300 min-w-[160px]">
                   Funcionário
                 </th>
                 {days.map(day => {
@@ -382,7 +382,7 @@ export function EscalaGradePage() {
                                           <button
                                             key={s}
                                             onClick={e => { e.stopPropagation(); handleSetStatus(func.id, dateStr, s) }}
-                                            className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black transition-all active:scale-95 ${isSelected ? `${sc.bg} ${sc.text} ring-2 ${sc.ring}` : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}
+                                            className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black transition-all active:scale-95 ${isSelected ? `${sc.bg} ${sc.text} ring-2 ${sc.ring}` : 'bg-blue-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}
                                             title={sc.nome}
                                           >
                                             {sc.letra}

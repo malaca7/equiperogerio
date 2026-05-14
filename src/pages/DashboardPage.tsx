@@ -139,49 +139,49 @@ export function DashboardPage() {
               value={stats.presentes}
               icon={UserCheck}
               color="text-green-600"
-              bgColor="bg-green-100 dark:bg-green-900/30"
+              bgColor="bg-white dark:bg-green-900/30 border border-green-100 shadow-sm"
             />
             <StatCard
               label="Faltas"
               value={stats.faltas}
               icon={UserX}
               color="text-red-600"
-              bgColor="bg-red-100 dark:bg-red-900/30"
+              bgColor="bg-white dark:bg-red-900/30 border border-red-100 shadow-sm"
             />
             <StatCard
               label="Atestados"
               value={stats.atestados}
               icon={FileText}
               color="text-amber-600"
-              bgColor="bg-amber-100 dark:bg-amber-900/30"
+              bgColor="bg-white dark:bg-amber-900/30 border border-amber-100 shadow-sm"
             />
             <StatCard
               label="Folgas"
               value={stats.folgas}
               icon={Umbrella}
               color="text-blue-600"
-              bgColor="bg-blue-100 dark:bg-blue-900/30"
+              bgColor="bg-white dark:bg-blue-900/30 border border-blue-100 shadow-sm"
             />
             <StatCard
               label="Horas Extra"
               value={`${stats.horasExtras}h`}
               icon={Clock}
               color="text-purple-600"
-              bgColor="bg-purple-100 dark:bg-purple-900/30"
+              bgColor="bg-white dark:bg-purple-900/30 border border-purple-100 shadow-sm"
             />
             <StatCard
               label="Total Ativos"
               value={stats.totalAtivos}
               icon={Users}
               color="text-indigo-600"
-              bgColor="bg-indigo-100 dark:bg-indigo-900/30"
+              bgColor="bg-white dark:bg-indigo-900/30 border border-indigo-100 shadow-sm"
             />
           </div>
         ) : null}
 
         {/* Alert: sem registros */}
         {stats && stats.totalRegistros === 0 && (
-          <div className="card p-4 border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-900/10 flex items-center gap-3">
+          <div className="card p-4 border-l-4 border-amber-400 bg-white dark:bg-amber-900/10 flex items-center gap-3 shadow-md">
             <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
             <div>
               <p className="text-sm font-semibold text-amber-800 dark:text-amber-400">
@@ -270,16 +270,16 @@ export function DashboardPage() {
 
         {/* Quick links */}
         <div className="grid grid-cols-2 gap-3">
-          <a href="/frequencia" className="card p-4 flex flex-col items-center gap-2 text-center active:scale-95 transition-transform">
-            <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-              <Clock className="w-5 h-5 text-green-600" />
+          <a href="/frequencia" className="card p-4 bg-white dark:bg-slate-900 flex flex-col items-center gap-2 text-center active:scale-95 transition-transform shadow-sm">
+            <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+              <Clock className="w-5 h-5 text-blue-600" />
             </div>
             <span className="text-xs font-semibold text-[hsl(var(--foreground))]">Marcar Frequência</span>
             <span className="text-[10px] text-[hsl(var(--muted-foreground))]">Registro rápido</span>
           </a>
-          <a href="/escala" className="card p-4 flex flex-col items-center gap-2 text-center active:scale-95 transition-transform">
-            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-blue-600" />
+          <a href="/escala" className="card p-4 bg-white dark:bg-slate-900 flex flex-col items-center gap-2 text-center active:scale-95 transition-transform shadow-sm">
+            <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
+              <Calendar className="w-5 h-5 text-indigo-600" />
             </div>
             <span className="text-xs font-semibold text-[hsl(var(--foreground))]">Ver Escala</span>
             <span className="text-[10px] text-[hsl(var(--muted-foreground))]">Calendário mensal</span>
