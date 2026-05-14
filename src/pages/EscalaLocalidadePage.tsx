@@ -291,9 +291,9 @@ export function EscalaLocalidadePage() {
               position: fixed !important; 
               left: 0 !important; 
               top: 0 !important; 
-              width: 100vw !important; 
-              height: 100vh !important; 
-              padding: 0.8cm !important;
+              width: 297mm !important; 
+              height: 210mm !important; 
+              padding: 5mm !important;
               background: white !important; 
               display: flex !important;
               flex-direction: column !important;
@@ -324,9 +324,9 @@ export function EscalaLocalidadePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-4 flex-1 min-h-0">
+        <div className="grid grid-cols-4 gap-6 flex-1 min-h-0 w-full h-full">
           {/* Column 1: Varrição */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 w-full h-full border-r border-slate-100 pr-2">
             <div className="flex items-center gap-2 border-l-4 border-slate-950 pl-2 py-1 bg-slate-50">
               <span className="font-black text-xs uppercase tracking-tighter">01. Varrição</span>
             </div>
@@ -348,7 +348,7 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 2: Orla */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 h-full border-r border-slate-100 pr-2">
             <div className="flex items-center gap-2 border-l-4 border-slate-950 pl-2 py-1 bg-slate-50">
               <span className="font-black text-xs uppercase tracking-tighter">02. Orla</span>
             </div>
@@ -370,7 +370,7 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 3: Porta a Porta */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 h-full border-r border-slate-100 pr-2">
             <div className="flex items-center gap-2 border-l-4 border-slate-950 pl-2 py-1 bg-slate-50">
               <span className="font-black text-xs uppercase tracking-tighter">03. Porta a Porta</span>
             </div>
