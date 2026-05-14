@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Plus, Search, Phone, Briefcase, Filter, Edit2, Trash2, ChevronRight } from 'lucide-react'
+import { Plus, Search, Phone, Briefcase, Filter, Edit2, Trash2, ChevronRight, Calendar, Stethoscope, Plane } from 'lucide-react'
+import { format, eachDayOfInterval, parseISO } from 'date-fns'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -17,6 +17,9 @@ import {
   useUpdateFuncionario,
   useDeleteFuncionario,
 } from '../hooks/useFuncionarios'
+import { useBatchUpsertEscalas } from '../hooks/useEscalas'
+import { useConfiguracao } from '../hooks/useConfiguracoes'
+import { DEFAULT_TIPOS_ESCALA, type TipoEscala } from './ConfiguracoesPage'
 import type { Funcionario } from '../lib/database.types'
 import { formatPhone } from '../lib/utils'
 
@@ -67,6 +70,9 @@ export function FuncionariosPage() {
   const [detailModal, setDetailModal] = useState<Funcionario | null>(null)
   const [editing, setEditing] = useState<Funcionario | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Funcionario | null>(null)
+  const [absenceModal, setAbsenceModal] = useState<Funcionario | null>(null)
+
+  const { data: tiposEscala = DEFAULT_TIPOS_ESCALA } = useConfiguracao<TipoEscala[]>('tipos_escala', DEFAULT_TIPOS_ESCALA)
 
   const { data: funcionarios = [], isLoading } = useFuncionarios({
     search,
@@ -77,6 +83,7 @@ export function FuncionariosPage() {
   const createMutation = useCreateFuncionario()
   const updateMutation = useUpdateFuncionario()
   const deleteMutation = useDeleteFuncionario()
+  const batchEscalaMutation = useBatchUpsertEscalas()
 
   const {
     register,
@@ -150,6 +157,29 @@ export function FuncionariosPage() {
       setDetailModal(null)
     } catch {
       toast('Erro ao remover funcionário', 'error')
+    }
+  }
+
+  const handleLancarAusencia = async (data: { tipo: string; inicio: string; fim: string }) => {
+    if (!absenceModal) return
+    try {
+      const days = eachDayOfInterval({
+        start: parseISO(data.inicio),
+        end: parseISO(data.fim)
+      })
+
+      const inserts = days.map(day => ({
+        funcionario_id: absenceModal.id,
+        data: format(day, 'yyyy-MM-dd'),
+        tipo: data.tipo,
+        turno: 'integral' as const
+      }))
+
+      await batchEscalaMutation.mutateAsync(inserts)
+      toast(`${inserts.length} dias de ${data.tipo} lançados com sucesso!`, 'success')
+      setAbsenceModal(null)
+    } catch (err: any) {
+      toast('Erro ao lançar ausência: ' + err.message, 'error')
     }
   }
 
@@ -300,23 +330,33 @@ export function FuncionariosPage() {
               )}
             </div>
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex flex-col gap-2 pt-2">
               <Button
-                variant="secondary"
-                className="flex-1"
-                onClick={() => openEdit(detailModal)}
+                variant="primary"
+                className="w-full bg-blue-600 hover:bg-blue-700"
+                onClick={() => { setAbsenceModal(detailModal); setDetailModal(null) }}
               >
-                <Edit2 className="w-4 h-4" />
-                Editar
+                <Calendar className="w-4 h-4" />
+                Lançar Férias / Atestado
               </Button>
-              <Button
-                variant="destructive"
-                className="flex-1"
-                onClick={() => setConfirmDelete(detailModal)}
-              >
-                <Trash2 className="w-4 h-4" />
-                Remover
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => openEdit(detailModal)}
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Editar
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={() => setConfirmDelete(detailModal)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Remover
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -419,6 +459,84 @@ export function FuncionariosPage() {
           Essa ação pode ser desfeita reativando o funcionário.
         </p>
       </Modal>
+
+      {/* Absence Modal */}
+      <AbsenceModal
+        open={!!absenceModal}
+        onClose={() => setAbsenceModal(null)}
+        funcionarioNome={absenceModal?.nome || ''}
+        tiposEscala={tiposEscala}
+        onSave={handleLancarAusencia}
+        loading={batchEscalaMutation.isPending}
+      />
     </div>
+  )
+}
+
+function AbsenceModal({ open, onClose, funcionarioNome, tiposEscala, onSave, loading }: { 
+  open: boolean, 
+  onClose: () => void, 
+  funcionarioNome: string,
+  tiposEscala: TipoEscala[],
+  onSave: (data: { tipo: string; inicio: string; fim: string }) => void,
+  loading: boolean
+}) {
+  const [tipo, setTipo] = useState('ferias')
+  const [inicio, setInicio] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [fim, setFim] = useState(format(new Date(), 'yyyy-MM-dd'))
+
+  const options = tiposEscala
+    .filter(t => ['ferias', 'atestado', 'compensar', 'repouso', 'falta'].includes(t.id))
+    .map(t => ({ value: t.id, label: t.nome }))
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Lançar Período de Ausência"
+      footer={
+        <div className="flex gap-2 w-full">
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Cancelar</Button>
+          <Button className="flex-1" onClick={() => onSave({ tipo, inicio, fim })} loading={loading}>Salvar</Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+          <p className="text-xs text-blue-600 dark:text-blue-400 font-bold uppercase mb-1">Funcionário</p>
+          <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{funcionarioNome}</p>
+        </div>
+
+        <Select
+          label="Tipo de Ausência"
+          value={tipo}
+          onChange={e => setTipo(e.target.value)}
+          options={options.length > 0 ? options : [
+            { value: 'ferias', label: 'Férias' },
+            { value: 'atestado', label: 'Atestado' },
+            { value: 'compensar', label: 'Folga/Compensação' }
+          ]}
+        />
+
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            type="date"
+            label="Início"
+            value={inicio}
+            onChange={e => setInicio(e.target.value)}
+          />
+          <Input
+            type="date"
+            label="Término"
+            value={fim}
+            onChange={e => setFim(e.target.value)}
+          />
+        </div>
+
+        <p className="text-[10px] text-slate-400 italic">
+          * Isso irá preencher automaticamente a escala do funcionário no período selecionado.
+        </p>
+      </div>
+    </Modal>
   )
 }
