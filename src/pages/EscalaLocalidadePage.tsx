@@ -89,17 +89,25 @@ export function EscalaLocalidadePage() {
 
   // Logic for daily view: locality -> employees
   const dailyDistribution = useMemo(() => {
+    const dist: Record<string, { id: string; nome: string; setor: string; escalaId: string }[]> = {}
+    
     // Initialize with all localities using ID as key
-    localidadesConfig.forEach(l => dist[l.id] = [])
+    localidadesConfig.forEach(l => {
+      dist[l.id] = []
+    })
     dist['sem_local'] = []
 
     escalas.forEach((e: any) => {
       if (e.data !== dateStr) return
       const f = funcMap[e.funcionario_id]
       if (!f) return
-      if (ausenciasIds.includes(e.tipo)) return // Skip if absent
+      if (ausenciasIds.includes(e.tipo)) return
 
-      const locKey = e.localidade_id || 'sem_local'
+      // Como não temos localidade_id no banco, usamos o nome para agrupar, 
+      // mas filtramos para garantir que o setor do funcionário bata com o da localidade
+      const loc = localidadesConfig.find(l => l.nome === e.localidade && l.setor === f.setor)
+      const locKey = loc ? loc.id : 'sem_local'
+      
       if (!dist[locKey]) dist[locKey] = []
       dist[locKey].push({ id: f.id, nome: f.nome, setor: f.setor || '', escalaId: e.id })
     })
@@ -137,13 +145,12 @@ export function EscalaLocalidadePage() {
         funcionario_id: funcId,
         data: assignModal.dateStr,
         tipo: 'presente',
-        localidade_id: assignModal.locId === 'sem_local' ? null : assignModal.locId,
         localidade: assignModal.locName === 'Sem Local' ? null : assignModal.locName,
         turno: 'integral' as const
       }
 
       if (existing) {
-        await updateMutation.mutateAsync({ id: existing.id, data: { localidade_id: payload.localidade_id, localidade: payload.localidade, tipo: 'presente' } })
+        await updateMutation.mutateAsync({ id: existing.id, data: { localidade: payload.localidade, tipo: 'presente' } })
       } else {
         await batchMutation.mutateAsync([payload])
       }
@@ -155,7 +162,7 @@ export function EscalaLocalidadePage() {
 
   const handleRemove = async (escalaId: string) => {
     try {
-      await updateMutation.mutateAsync({ id: escalaId, data: { localidade_id: null, localidade: null } })
+      await updateMutation.mutateAsync({ id: escalaId, data: { localidade: null } })
       toast('Removido da localidade', 'success')
     } catch (err: any) {
       toast('Erro ao remover', 'error')
@@ -208,7 +215,6 @@ export function EscalaLocalidadePage() {
               funcionario_id: e.funcionario_id,
               data: dStr,
               tipo: 'presente',
-              localidade_id: e.localidade_id,
               localidade: e.localidade,
               turno: 'integral' as const
             })
@@ -358,7 +364,7 @@ export function EscalaLocalidadePage() {
                                   </div>
                                 )
                               }
-                              return members.map(m => (
+                              return members.map((m: any) => (
                                 <div key={m.id} className="flex items-center gap-2 pl-2 pr-1 py-1 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 group animate-scale-in">
                                   <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{m.nome}</span>
                                   <button 
@@ -514,7 +520,7 @@ export function EscalaLocalidadePage() {
                 }
 
                 return list.map(f => {
-                  const isAlreadyHere = (dailyDistribution[assignModal.locId] || []).some(x => x.id === f.id)
+                  const isAlreadyHere = (dailyDistribution[assignModal.locId] || []).some((x: any) => x.id === f.id)
                   return (
                     <button
                       key={f.id}

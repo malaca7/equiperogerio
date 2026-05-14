@@ -76,14 +76,13 @@ export function EscalaGradePage() {
   }, [funcionarios, searchTerm, filterSetor])
 
   const escalaMap = useMemo(() => {
-    const map: Record<string, { id: string; tipo: string; observacoes: string | null; localidade: string | null; localidade_id: string | null }> = {}
+    const map: Record<string, { id: string; tipo: string; observacoes: string | null; localidade: string | null }> = {}
     escalas.forEach((e: any) => {
       map[`${e.funcionario_id}_${e.data}`] = { 
         id: e.id, 
         tipo: e.tipo, 
         observacoes: e.observacoes, 
-        localidade: e.localidade || null,
-        localidade_id: e.localidade_id || null
+        localidade: e.localidade || null
       }
     })
     return map
@@ -132,7 +131,7 @@ export function EscalaGradePage() {
     const existing = escalaMap[key]
     if (!existing) return
     try {
-      await updateMutation.mutateAsync({ id: existing.id, data: { localidade_id: locId, localidade: locNome } })
+      await updateMutation.mutateAsync({ id: existing.id, data: { localidade: locNome } })
     } catch {
       toast('Erro ao definir localidade', 'error')
     }
