@@ -126,6 +126,32 @@ export function EscalaLocalidadePage() {
     })
   }, [allFuncionarios, escalas, dateStr])
 
+  const handlePrint = () => {
+    window.print()
+  }
+
+  // Data for Print View
+  const printData = useMemo(() => {
+    const work = setores.map(setor => ({
+      setor,
+      localidades: localidadesConfig
+        .filter(l => l.setor === setor)
+        .map(l => ({
+          nome: l.nome,
+          members: dailyDistribution[l.id] || []
+        }))
+        .filter(l => l.members.length > 0)
+    })).filter(s => s.localidades.length > 0)
+
+    const off = {
+      folga: escalas.filter((e: any) => e.data === dateStr && (e.tipo === 'repouso' || e.tipo === 'compensar')).map((e: any) => funcMap[e.funcionario_id]?.nome).filter(Boolean),
+      ferias: escalas.filter((e: any) => e.data === dateStr && e.tipo === 'ferias').map((e: any) => funcMap[e.funcionario_id]?.nome).filter(Boolean),
+      atestado: escalas.filter((e: any) => e.data === dateStr && e.tipo === 'atestado').map((e: any) => funcMap[e.funcionario_id]?.nome).filter(Boolean),
+    }
+
+    return { work, off }
+  }, [setores, localidadesConfig, dailyDistribution, escalas, dateStr, funcMap])
+
   // Actions
   const handleAssign = async (funcId: string) => {
     if (!assignModal) return
@@ -230,12 +256,100 @@ export function EscalaLocalidadePage() {
       <TopHeader 
         title="Gestão de Locais" 
         subtitle={viewMode === 'daily' ? format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR }) : 'Vista Semanal'} 
+        actions={
+          viewMode === 'daily' && (
+            <Button variant="ghost" size="icon" onClick={handlePrint} title="Imprimir Mural">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-printer"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v5"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+            </Button>
+          )
+        }
       />
 
+      {/* PRINT ONLY VIEW - HIDDEN ON SCREEN */}
+      <div className="hidden print:block fixed inset-0 z-[9999] bg-white p-8 overflow-y-auto landscape-print">
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media print {
+            @page { size: landscape; margin: 1cm; }
+            body * { visibility: hidden; }
+            .landscape-print, .landscape-print * { visibility: visible; }
+            .landscape-print { position: absolute; left: 0; top: 0; width: 100%; height: auto; background: white !important; }
+            .no-print { display: none !important; }
+          }
+        `}} />
+        
+        <div className="flex items-center justify-between border-b-4 border-blue-600 pb-4 mb-6">
+          <div>
+            <h1 className="text-3xl font-black text-blue-900 uppercase tracking-tighter">Escala de Localidades</h1>
+            <p className="text-lg font-bold text-slate-500 uppercase">{format(currentDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</p>
+          </div>
+        </div>
+
+        {/* Work Table */}
+        <div className="grid grid-cols-3 gap-6 mb-8">
+          {printData.work.map(s => (
+            <div key={s.setor} className="space-y-4">
+              <div className="bg-blue-600 text-white px-4 py-1.5 rounded-lg inline-block font-black uppercase text-sm tracking-widest">
+                Setor: {s.setor}
+              </div>
+              <div className="space-y-4">
+                {s.localidades.map(l => (
+                  <div key={l.nome} className="border-2 border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="bg-slate-100 px-4 py-2 border-b-2 border-slate-200 flex justify-between items-center">
+                      <span className="font-black text-slate-800 uppercase text-xs">{l.nome}</span>
+                      <span className="bg-white px-2 py-0.5 rounded-md text-[10px] font-black text-blue-600 border border-blue-100">{l.members.length}</span>
+                    </div>
+                    <div className="p-3">
+                      <div className="grid grid-cols-1 gap-1">
+                        {l.members.map((m: any) => (
+                          <div key={m.id} className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                            {m.nome}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom Sections */}
+        <div className="grid grid-cols-3 gap-6 border-t-2 border-slate-100 pt-6">
+          <div className="bg-emerald-50 rounded-2xl p-5 border-2 border-emerald-100">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xl">🏖️</span>
+              <h3 className="font-black text-emerald-800 uppercase text-sm tracking-widest">Folga ({printData.off.folga.length})</h3>
+            </div>
+            <div className="grid grid-cols-1 gap-1">
+              {printData.off.folga.map(name => <div key={name} className="text-xs font-bold text-emerald-700">{name}</div>)}
+            </div>
+          </div>
+          <div className="bg-purple-50 rounded-2xl p-5 border-2 border-purple-100">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xl">✈️</span>
+              <h3 className="font-black text-purple-800 uppercase text-sm tracking-widest">Férias ({printData.off.ferias.length})</h3>
+            </div>
+            <div className="grid grid-cols-1 gap-1">
+              {printData.off.ferias.map(name => <div key={name} className="text-xs font-bold text-purple-700">{name}</div>)}
+            </div>
+          </div>
+          <div className="bg-red-50 rounded-2xl p-5 border-2 border-red-100">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xl">🏥</span>
+              <h3 className="font-black text-red-800 uppercase text-sm tracking-widest">Atestado ({printData.off.atestado.length})</h3>
+            </div>
+            <div className="grid grid-cols-1 gap-1">
+              {printData.off.atestado.map(name => <div key={name} className="text-xs font-bold text-red-700">{name}</div>)}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Control Bar */}
-      <div className="sticky top-14 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-3 flex flex-col gap-3">
+      <div className="sticky top-14 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-3 flex flex-col gap-3 print:hidden">
         <div className="flex items-center justify-between gap-4">
-          {/* Date Picker */}
           <div className="flex items-center bg-white dark:bg-slate-800 rounded-2xl p-1 shadow-sm border border-slate-100 dark:border-slate-800">
             <button onClick={() => setCurrentDate(subDays(currentDate, 1))} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all active:scale-90"><ChevronLeft className="w-5 h-5" /></button>
             <div className="px-4 flex flex-col items-center min-w-[120px]">
@@ -247,7 +361,6 @@ export function EscalaLocalidadePage() {
             <button onClick={() => setCurrentDate(addDays(currentDate, 1))} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all active:scale-90"><ChevronRight className="w-5 h-5" /></button>
           </div>
 
-          {/* Mode Selector */}
           <div className="flex bg-white dark:bg-slate-800 rounded-2xl p-1 shadow-sm border border-slate-100 dark:border-slate-800 shrink-0">
             <button 
               onClick={() => setViewMode('daily')}
@@ -291,7 +404,7 @@ export function EscalaLocalidadePage() {
       </div>
 
       {/* Dashboard Summary */}
-      <div className="grid grid-cols-2 gap-3 p-4">
+      <div className="grid grid-cols-2 gap-3 p-4 print:hidden">
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-3xl p-4 text-white shadow-lg">
           <div className="flex items-center justify-between mb-1">
             <CheckCircle2 className="w-5 h-5 opacity-80" />
@@ -309,7 +422,7 @@ export function EscalaLocalidadePage() {
       </div>
 
       {/* Main Content Area */}
-      <div className="px-4 pb-12">
+      <div className="px-4 pb-12 print:hidden">
         {viewMode === 'daily' ? (
           <div className="space-y-6">
             {setores.map(setor => {
@@ -323,7 +436,7 @@ export function EscalaLocalidadePage() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {locs.map(loc => {
-                      const members = dailyDistribution[loc.nome] || []
+                      const members = dailyDistribution[loc.id] || []
                       return (
                         <div key={loc.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
                           <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
@@ -344,17 +457,13 @@ export function EscalaLocalidadePage() {
                             </button>
                           </div>
                           <div className="p-2 min-h-[60px] flex flex-wrap gap-1.5">
-                            {(() => {
-                              const members = dailyDistribution[loc.id] || []
-                              if (members.length === 0) {
-                                return (
-                                  <div className="w-full py-4 flex flex-col items-center opacity-30">
-                                    <Users className="w-5 h-5 mb-1" />
-                                    <span className="text-[10px] font-bold">Vazio</span>
-                                  </div>
-                                )
-                              }
-                              return members.map((m: any) => (
+                            {members.length === 0 ? (
+                              <div className="w-full py-4 flex flex-col items-center opacity-30">
+                                <Users className="w-5 h-5 mb-1" />
+                                <span className="text-[10px] font-bold">Vazio</span>
+                              </div>
+                            ) : (
+                              members.map((m: any) => (
                                 <div key={m.id} className="flex items-center gap-2 pl-2 pr-1 py-1 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 group animate-scale-in">
                                   <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{m.nome}</span>
                                   <button 
@@ -365,7 +474,7 @@ export function EscalaLocalidadePage() {
                                   </button>
                                 </div>
                               ))
-                            })()}
+                            )}
                           </div>
                         </div>
                       )
@@ -395,7 +504,6 @@ export function EscalaLocalidadePage() {
             )}
           </div>
         ) : (
-          /* Weekly View (Grid - Improved) */
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
@@ -469,7 +577,7 @@ export function EscalaLocalidadePage() {
         )}
       </div>
 
-      {/* Assign Modal - Improved */}
+      {/* Assign Modal */}
       <Modal 
         open={!!assignModal} 
         onClose={() => { setAssignModal(null); setModalSearchTerm(''); }} 
