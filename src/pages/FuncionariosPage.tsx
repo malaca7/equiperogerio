@@ -22,7 +22,6 @@ import { formatPhone } from '../lib/utils'
 
 const schema = z.object({
   nome: z.string().min(2, 'Nome obrigatório'),
-  matricula: z.string().min(1, 'Matrícula obrigatória'),
   telefone: z.string().optional(),
   cargo: z.string().min(1, 'Cargo obrigatório'),
   setor: z.string().optional(),
@@ -102,7 +101,7 @@ export function FuncionariosPage() {
 
   const openCreate = () => {
     setEditing(null)
-    reset({ status: 'ativo', nome: '', matricula: '', cargo: '', setor: '', telefone: '' })
+    reset({ status: 'ativo', nome: '', cargo: '', setor: '', telefone: '' })
     setModalOpen(true)
   }
 
@@ -111,7 +110,6 @@ export function FuncionariosPage() {
     setDetailModal(null)
     reset({
       nome: func.nome,
-      matricula: func.matricula,
       telefone: func.telefone ?? '',
       cargo: func.cargo,
       setor: func.setor,
@@ -125,13 +123,13 @@ export function FuncionariosPage() {
       if (editing) {
         await updateMutation.mutateAsync({ 
           id: editing.id, 
-          data: { ...data, matricula: data.matricula || '', setor: data.setor || '' } 
+          data: { ...data, matricula: '', setor: data.setor || '' } 
         })
         toast('Funcionário atualizado com sucesso', 'success')
       } else {
         await createMutation.mutateAsync({ 
           ...data, 
-          matricula: data.matricula || '', 
+          matricula: '', 
           setor: data.setor || '' 
         })
         toast('Funcionário cadastrado com sucesso', 'success')
@@ -238,9 +236,6 @@ export function FuncionariosPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">{func.nome}</p>
                   <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{func.cargo} · {func.setor}</p>
-                  {func.matricula && (
-                    <p className="text-[10px] text-[hsl(var(--muted-foreground))]">Mat. {func.matricula}</p>
-                  )}
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <Badge variant={func.status === 'ativo' ? 'success' : 'error'}>
@@ -286,18 +281,11 @@ export function FuncionariosPage() {
             <div className="divider" />
 
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm">
-                <Briefcase className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
-                <span className="text-[hsl(var(--muted-foreground))]">Setor:</span>
-                <span className="font-medium">{detailModal.setor}</span>
-              </div>
-              {detailModal.matricula && (
                 <div className="flex items-center gap-2 text-sm">
-                  <Search className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
-                  <span className="text-[hsl(var(--muted-foreground))]">Matrícula:</span>
-                  <span className="font-medium">{detailModal.matricula}</span>
+                  <Briefcase className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
+                  <span className="text-[hsl(var(--muted-foreground))]">Setor:</span>
+                  <span className="font-medium">{detailModal.setor}</span>
                 </div>
-              )}
               {detailModal.telefone && (
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="w-4 h-4 text-[hsl(var(--muted-foreground))]" />
@@ -362,13 +350,7 @@ export function FuncionariosPage() {
             error={errors.nome?.message}
             {...register('nome')}
           />
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              id="func-matricula"
-              label="Matrícula"
-              placeholder="Ex: 001"
-              {...register('matricula')}
-            />
+          <div className="grid grid-cols-1 gap-3">
             <Input
               id="func-telefone"
               label="Telefone"
