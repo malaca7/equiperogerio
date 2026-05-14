@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react'
 import { Plus, Search, Phone, Briefcase, Filter, Edit2, Trash2, ChevronRight, Calendar, Stethoscope, Plane } from 'lucide-react'
 import { format, eachDayOfInterval, parseISO } from 'date-fns'
 import { useForm, useWatch } from 'react-hook-form'
@@ -205,7 +206,7 @@ export function FuncionariosPage() {
           <Button
             variant={showFilters ? 'primary' : 'secondary'}
             size="icon"
-            onClick={() => setShowFilters(v => !v)}
+            onClick={() => setShowFilters((v: boolean) => !v)}
           >
             <Filter className="w-4 h-4" />
           </Button>
