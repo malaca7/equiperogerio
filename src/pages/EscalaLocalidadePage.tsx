@@ -273,30 +273,41 @@ export function EscalaLocalidadePage() {
         }
       />
 
-      {/* PRINT ONLY VIEW - PROFESSIONAL MURAL DESIGN */}
-      <div className="hidden print:block fixed inset-0 z-[9999] bg-white p-6 landscape-print text-slate-950 font-sans">
+      {/* PRINT ONLY VIEW - ABSOLUTE ONE-PAGE LOCK */}
+      <div className="hidden print:flex fixed inset-0 z-[9999] bg-white landscape-print text-slate-950 font-sans flex-col overflow-hidden">
         <style dangerouslySetInnerHTML={{ __html: `
           @media print {
             @page { size: landscape; margin: 0 !important; }
-            body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
+            html, body { 
+              margin: 0 !important; 
+              padding: 0 !important; 
+              height: 100vh !important; 
+              overflow: hidden !important; 
+              -webkit-print-color-adjust: exact; 
+            }
             body * { visibility: hidden; }
             .landscape-print, .landscape-print * { visibility: visible; }
             .landscape-print { 
-              position: fixed; 
-              left: 0; 
-              top: 0; 
-              width: 100vw; 
-              height: 100vh; 
-              padding: 1cm;
+              position: fixed !important; 
+              left: 0 !important; 
+              top: 0 !important; 
+              width: 100vw !important; 
+              height: 100vh !important; 
+              padding: 0.8cm !important;
               background: white !important; 
               display: flex !important;
-              flex-direction: column;
+              flex-direction: column !important;
+              box-sizing: border-box !important;
+              page-break-after: avoid !important;
+              page-break-before: avoid !important;
             }
+            /* Garantia de que nada quebre para a pág 2 */
+            * { break-inside: avoid !important; }
           }
         `}} />
         
         {/* Header: Official Document Look */}
-        <div className="flex items-end justify-between border-b-2 border-slate-950 pb-2 mb-4">
+        <div className="flex items-end justify-between border-b-2 border-slate-950 pb-2 mb-3 shrink-0">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-slate-950 flex items-center justify-center rounded-lg text-white">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-8 h-8"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
