@@ -277,13 +277,14 @@ export function EscalaLocalidadePage() {
       <div className="hidden print:flex fixed inset-0 z-[9999] bg-white landscape-print text-slate-950 font-sans flex-col overflow-hidden">
         <style dangerouslySetInnerHTML={{ __html: `
           @media print {
-            @page { size: landscape; margin: 0 !important; }
+            @page { size: A4 landscape; margin: 0; }
             html, body { 
               margin: 0 !important; 
               padding: 0 !important; 
-              height: 100vh !important; 
-              overflow: hidden !important; 
+              width: 297mm !important;
+              height: 210mm !important;
               -webkit-print-color-adjust: exact; 
+              print-color-adjust: exact;
             }
             body * { visibility: hidden; }
             .landscape-print, .landscape-print * { visibility: visible; }
@@ -318,7 +319,7 @@ export function EscalaLocalidadePage() {
             </div>
           </div>
           <div className="text-right">
-            <div className="bg-gray-100 px-3 py-1 border-2 border-black">
+            <div className="px-3 py-1 border-[2px] border-black inline-block">
               <span className="text-[10px] font-black uppercase text-black">{format(currentDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
             </div>
           </div>
@@ -326,20 +327,21 @@ export function EscalaLocalidadePage() {
 
         <div className="grid grid-cols-4 gap-1.5 flex-1 min-h-0 w-full h-full">
           {/* Column 1: Varrição */}
-          <div className="flex flex-col w-full h-full border-r border-gray-300 pr-1">
-            <div className="flex items-center gap-1 border-l-[3px] border-black pl-1 py-px bg-gray-100 mb-1">
-              <span className="font-black text-[9px] uppercase tracking-tighter text-black">01. Varrição</span>
+          <div className="flex flex-col w-full h-full border-r border-gray-300 pr-1.5">
+            <div className="flex items-center gap-1 border-b-[2px] border-black pb-0.5 mb-1.5">
+              <span className="font-black text-[10px] uppercase tracking-widest text-black">01. Varrição</span>
             </div>
-            <div className="space-y-0.5 overflow-hidden">
+            <div className="space-y-1 overflow-hidden">
               {printData.varricao.localidades.map(l => (
-                <div key={l.nome} className="border border-gray-300 p-0.5">
-                  <p className="font-black text-[8px] uppercase text-black mb-0.5 flex items-center justify-between border-b border-gray-200 pb-px">
+                <div key={l.nome} className="pb-1 border-b border-gray-200 border-dashed last:border-0">
+                  <p className="font-black text-[8.5px] uppercase text-black mb-0.5 flex items-center justify-between">
                     <span>{l.nome}</span>
-                    <span className="text-[6px] text-gray-500">[{l.members.length}]</span>
+                    <span className="text-[6.5px] font-bold text-gray-500">[{l.members.length}]</span>
                   </p>
-                  <div className="grid grid-cols-1 gap-0 pl-0.5">
+                  <div className="grid grid-cols-1 gap-0">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[7.5px] font-bold leading-none text-gray-800 py-[1px]">
+                      <p key={m.id} className="text-[8px] font-medium leading-tight text-gray-800 flex items-center gap-1 py-[1px]">
+                        <span className="w-0.5 h-0.5 bg-gray-400 rounded-full"></span>
                         {m.nome.split(' ').slice(0, 2).join(' ')}
                       </p>
                     ))}
@@ -350,20 +352,21 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 2: Orla */}
-          <div className="flex flex-col w-full h-full border-r border-gray-300 pr-1 pl-0.5">
-            <div className="flex items-center gap-1 border-l-[3px] border-black pl-1 py-px bg-gray-100 mb-1">
-              <span className="font-black text-[9px] uppercase tracking-tighter text-black">02. Orla</span>
+          <div className="flex flex-col w-full h-full border-r border-gray-300 px-1.5">
+            <div className="flex items-center gap-1 border-b-[2px] border-black pb-0.5 mb-1.5">
+              <span className="font-black text-[10px] uppercase tracking-widest text-black">02. Orla</span>
             </div>
-            <div className="space-y-0.5 overflow-hidden">
+            <div className="space-y-1 overflow-hidden">
               {printData.orla.localidades.map(l => (
-                <div key={l.nome} className="border border-gray-300 p-0.5">
-                  <p className="font-black text-[8px] uppercase text-black mb-0.5 flex items-center justify-between border-b border-gray-200 pb-px">
+                <div key={l.nome} className="pb-1 border-b border-gray-200 border-dashed last:border-0">
+                  <p className="font-black text-[8.5px] uppercase text-black mb-0.5 flex items-center justify-between">
                     <span>{l.nome}</span>
-                    <span className="text-[6px] text-gray-500">[{l.members.length}]</span>
+                    <span className="text-[6.5px] font-bold text-gray-500">[{l.members.length}]</span>
                   </p>
-                  <div className="grid grid-cols-1 gap-0 pl-0.5">
+                  <div className="grid grid-cols-1 gap-0">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[7.5px] font-bold leading-none text-gray-800 py-[1px]">
+                      <p key={m.id} className="text-[8px] font-medium leading-tight text-gray-800 flex items-center gap-1 py-[1px]">
+                        <span className="w-0.5 h-0.5 bg-gray-400 rounded-full"></span>
                         {m.nome.split(' ').slice(0, 2).join(' ')}
                       </p>
                     ))}
@@ -374,20 +377,21 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 3: Porta a Porta */}
-          <div className="flex flex-col w-full h-full border-r border-gray-300 pr-1 pl-0.5">
-            <div className="flex items-center gap-1 border-l-[3px] border-black pl-1 py-px bg-gray-100 mb-1">
-              <span className="font-black text-[9px] uppercase tracking-tighter text-black">03. Porta a Porta</span>
+          <div className="flex flex-col w-full h-full border-r border-gray-300 px-1.5">
+            <div className="flex items-center gap-1 border-b-[2px] border-black pb-0.5 mb-1.5">
+              <span className="font-black text-[10px] uppercase tracking-widest text-black">03. Porta a Porta</span>
             </div>
-            <div className="space-y-0.5 overflow-hidden">
+            <div className="space-y-1 overflow-hidden">
               {printData.porta.localidades.map(l => (
-                <div key={l.nome} className="border border-gray-300 p-0.5">
-                  <p className="font-black text-[8px] uppercase text-black mb-0.5 flex items-center justify-between border-b border-gray-200 pb-px">
+                <div key={l.nome} className="pb-1 border-b border-gray-200 border-dashed last:border-0">
+                  <p className="font-black text-[8.5px] uppercase text-black mb-0.5 flex items-center justify-between">
                     <span>{l.nome}</span>
-                    <span className="text-[6px] text-gray-500">[{l.members.length}]</span>
+                    <span className="text-[6.5px] font-bold text-gray-500">[{l.members.length}]</span>
                   </p>
-                  <div className="grid grid-cols-1 gap-0 pl-0.5">
+                  <div className="grid grid-cols-1 gap-0">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[7.5px] font-bold leading-none text-gray-800 py-[1px]">
+                      <p key={m.id} className="text-[8px] font-medium leading-tight text-gray-800 flex items-center gap-1 py-[1px]">
+                        <span className="w-0.5 h-0.5 bg-gray-400 rounded-full"></span>
                         {m.nome.split(' ').slice(0, 2).join(' ')}
                       </p>
                     ))}
@@ -398,35 +402,35 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 4: Ausências */}
-          <div className="flex flex-col w-full h-full pl-0.5">
-            <div className="flex items-center gap-1 border-l-[3px] border-gray-500 pl-1 py-px bg-gray-100 mb-1">
-              <span className="font-black text-[9px] uppercase tracking-tighter text-gray-700">04. Ausências / Folgas</span>
+          <div className="flex flex-col w-full h-full pl-1.5">
+            <div className="flex items-center gap-1 border-b-[2px] border-black pb-0.5 mb-1.5">
+              <span className="font-black text-[10px] uppercase tracking-widest text-black">04. Ausências / Folgas</span>
             </div>
             
-            <div className="space-y-1">
+            <div className="space-y-2">
               {printData.off.folga.length > 0 && (
-                <div className="p-0.5 border border-gray-300">
-                  <p className="text-[7.5px] font-black uppercase text-black mb-0.5 flex items-center gap-1 border-b border-gray-200 pb-px">🏖️ Folga / Repouso</p>
-                  <div className="grid grid-cols-1 gap-0 pl-0.5">
-                    {printData.off.folga.map(name => <p key={name} className="text-[7.5px] font-bold text-gray-700 leading-none py-[1px]">{name.split(' ').slice(0, 2).join(' ')}</p>)}
+                <div className="pb-1 border-b border-gray-200 border-dashed last:border-0">
+                  <p className="text-[8.5px] font-black uppercase text-black mb-0.5 flex items-center gap-1">🏖️ Folga / Repouso</p>
+                  <div className="grid grid-cols-1 gap-0">
+                    {printData.off.folga.map(name => <p key={name} className="text-[8px] font-medium leading-tight text-gray-800 flex items-center gap-1 py-[1px]"><span className="w-0.5 h-0.5 bg-gray-400 rounded-full"></span>{name.split(' ').slice(0, 2).join(' ')}</p>)}
                   </div>
                 </div>
               )}
 
               {printData.off.ferias.length > 0 && (
-                <div className="p-0.5 border border-gray-300">
-                  <p className="text-[7.5px] font-black uppercase text-black mb-0.5 flex items-center gap-1 border-b border-gray-200 pb-px">✈️ Férias</p>
-                  <div className="grid grid-cols-1 gap-0 pl-0.5">
-                    {printData.off.ferias.map(name => <p key={name} className="text-[7.5px] font-bold text-gray-700 leading-none py-[1px]">{name.split(' ').slice(0, 2).join(' ')}</p>)}
+                <div className="pb-1 border-b border-gray-200 border-dashed last:border-0">
+                  <p className="text-[8.5px] font-black uppercase text-black mb-0.5 flex items-center gap-1">✈️ Férias</p>
+                  <div className="grid grid-cols-1 gap-0">
+                    {printData.off.ferias.map(name => <p key={name} className="text-[8px] font-medium leading-tight text-gray-800 flex items-center gap-1 py-[1px]"><span className="w-0.5 h-0.5 bg-gray-400 rounded-full"></span>{name.split(' ').slice(0, 2).join(' ')}</p>)}
                   </div>
                 </div>
               )}
 
               {printData.off.atestado.length > 0 && (
-                <div className="p-0.5 border border-gray-300">
-                  <p className="text-[7.5px] font-black uppercase text-black mb-0.5 flex items-center gap-1 border-b border-gray-200 pb-px">🏥 Atestado</p>
-                  <div className="grid grid-cols-1 gap-0 pl-0.5">
-                    {printData.off.atestado.map(name => <p key={name} className="text-[7.5px] font-bold text-gray-700 leading-none py-[1px]">{name.split(' ').slice(0, 2).join(' ')}</p>)}
+                <div className="pb-1 border-b border-gray-200 border-dashed last:border-0">
+                  <p className="text-[8.5px] font-black uppercase text-black mb-0.5 flex items-center gap-1">🏥 Atestado</p>
+                  <div className="grid grid-cols-1 gap-0">
+                    {printData.off.atestado.map(name => <p key={name} className="text-[8px] font-medium leading-tight text-gray-800 flex items-center gap-1 py-[1px]"><span className="w-0.5 h-0.5 bg-gray-400 rounded-full"></span>{name.split(' ').slice(0, 2).join(' ')}</p>)}
                   </div>
                 </div>
               )}

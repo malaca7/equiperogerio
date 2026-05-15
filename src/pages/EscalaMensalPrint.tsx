@@ -145,7 +145,8 @@ export function EscalaMensalPrint() {
 
       <style>{`
         @media print {
-          @page { size: A4 landscape; margin: 5mm; }
+          @page { size: A4 landscape; margin: 0; }
+          html, body { margin: 0 !important; padding: 0 !important; width: 297mm !important; height: 210mm !important; }
           .avoid-break { page-break-inside: avoid; }
         }
       `}</style>

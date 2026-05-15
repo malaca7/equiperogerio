@@ -11,6 +11,7 @@ import {
   Umbrella,
   TrendingUp,
   AlertCircle,
+  CheckCircle2,
 } from 'lucide-react'
 import {
   BarChart,

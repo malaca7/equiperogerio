@@ -18,7 +18,8 @@ import {
   Search,
   CheckCircle2,
   XCircle,
-  Clock
+  Clock,
+  Filter
 } from 'lucide-react'
 import { TopHeader } from '../components/layout/TopHeader'
 import { Loading } from '../components/ui/Loading'
@@ -149,7 +150,7 @@ export function FrequenciaPage() {
         <div className="grid grid-cols-2 gap-3 mb-2">
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-2 border border-emerald-100 dark:border-emerald-900/30 text-center shadow-sm">
             <span className="block text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-0.5">Presentes</span>
-            <span className="block text-2xl font-black text-emerald-700 dark:text-emerald-300 leading-none">{presentesCount}</span>
+            <span className="block text-2xl font-black text-emerald-700 dark:text-emerald-300 leading-none">{presentCount}</span>
           </div>
           <div className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-2 border border-red-100 dark:border-red-900/30 text-center shadow-sm">
             <span className="block text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest mb-0.5">Faltas</span>
@@ -200,7 +201,7 @@ export function FrequenciaPage() {
 
                   <div className="flex items-center gap-1.5">
                     <button 
-                      onClick={() => handleStatusChange(member.escalaId, 'falta')}
+                      onClick={() => handleStatus(member.escalaId, 'falta')}
                       className={cn(
                         "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-border",
                         member.tipo === 'falta' ? "bg-red-600 text-white border-red-600 shadow-lg shadow-red-500/30" : "bg-card text-muted-foreground hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500"
@@ -209,7 +210,7 @@ export function FrequenciaPage() {
                       <X className="w-5 h-5" />
                     </button>
                     <button 
-                      onClick={() => handleStatusChange(member.escalaId, 'presente')}
+                      onClick={() => handleStatus(member.escalaId, 'presente')}
                       className={cn(
                         "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-border",
                         member.tipo === 'presente' || member.tipo === 'hora_extra' ? "bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/30" : "bg-card text-muted-foreground hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-500"
