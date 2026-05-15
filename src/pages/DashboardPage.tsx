@@ -270,16 +270,16 @@ export function DashboardPage() {
 
         {/* Quick links */}
         <div className="grid grid-cols-2 gap-3">
-          <a href="/frequencia" className="card p-4 bg-white dark:bg-slate-900 flex flex-col items-center gap-2 text-center active:scale-95 transition-transform shadow-sm">
+          <a href="/frequencia" className="card p-4 bg-card flex flex-col items-center gap-2 text-center active:scale-95 transition-transform shadow-sm border border-border rounded-3xl hover:border-blue-400">
             <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-              <Clock className="w-5 h-5 text-blue-600" />
+              <CheckCircle2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
             <span className="text-xs font-semibold text-[hsl(var(--foreground))]">Marcar Frequência</span>
             <span className="text-[10px] text-[hsl(var(--muted-foreground))]">Registro rápido</span>
           </a>
-          <a href="/escala" className="card p-4 bg-white dark:bg-slate-900 flex flex-col items-center gap-2 text-center active:scale-95 transition-transform shadow-sm">
+          <a href="/escala" className="card p-4 bg-card flex flex-col items-center gap-2 text-center active:scale-95 transition-transform shadow-sm border border-border rounded-3xl hover:border-indigo-400">
             <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-indigo-600" />
+              <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             </div>
             <span className="text-xs font-semibold text-[hsl(var(--foreground))]">Ver Escala</span>
             <span className="text-[10px] text-[hsl(var(--muted-foreground))]">Calendário mensal</span>

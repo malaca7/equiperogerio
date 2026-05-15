@@ -323,19 +323,19 @@ export function EscalaGradePage() {
                       <React.Fragment key={setor}>
                         {/* Sector Header Row */}
                         <tr>
-                          <td colSpan={days.length + 1} className="sticky left-0 z-20 bg-white dark:bg-slate-800 px-3 py-2 border-b border-t border-slate-200 dark:border-slate-700 text-left">
+                          <td colSpan={days.length + 1} className="sticky left-0 z-20 bg-card px-3 py-2 border-b border-t border-border text-left">
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full bg-blue-500" />
-                              <span className="text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider">{setor || 'Geral'}</span>
-                              <span className="text-[10px] text-slate-400 font-medium">({funcsDoSetor.length})</span>
+                              <span className="text-[11px] font-black text-muted-foreground uppercase tracking-wider">{setor || 'Geral'}</span>
+                              <span className="text-[10px] text-muted-foreground font-medium">({funcsDoSetor.length})</span>
                             </div>
                           </td>
                         </tr>
                         {funcsDoSetor.map((func, idx) => (
-                          <tr key={func.id} className={`group ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/30 dark:bg-slate-800'}`}>
-                            <td className={`sticky left-0 z-10 border-r border-slate-200 dark:border-slate-700 px-2 py-1 font-semibold text-slate-800 dark:text-slate-200 ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/30 dark:bg-slate-800'}`}>
+                          <tr key={func.id} className={`group ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/30'}`}>
+                            <td className={`sticky left-0 z-10 border-r border-border px-2 py-1 font-semibold text-foreground ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/30'}`}>
                               <div className="flex items-center gap-1.5">
-                                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-800 dark:to-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-[9px] shrink-0">
+                                <div className="w-6 h-6 rounded-full bg-blue-100/50 dark:bg-blue-900/50 flex items-center justify-center text-blue-700 dark:text-blue-300 font-bold text-[9px] shrink-0">
                                   {func.nome.substring(0, 2).toUpperCase()}
                                 </div>
                                 <div className="min-w-0">
@@ -366,7 +366,7 @@ export function EscalaGradePage() {
                                         {cfg.letra}
                                       </div>
                                     ) : (
-                                      <div className={`inline-flex items-center justify-center w-6 h-6 rounded-md border border-dashed border-slate-200 dark:border-slate-700 text-slate-300 dark:text-slate-600 text-[8px] ${isActive ? 'border-blue-400 text-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                                      <div className={`inline-flex items-center justify-center w-6 h-6 rounded-md border border-dashed border-border text-muted-foreground text-[8px] ${isActive ? 'border-blue-400 text-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                                         ·
                                       </div>
                                     )}
@@ -374,7 +374,7 @@ export function EscalaGradePage() {
 
                                   {/* Status popup */}
                                   {isActive && (
-                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-1 flex gap-0.5 min-w-max">
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 bg-card rounded-xl shadow-2xl border border-border p-1 flex gap-0.5 min-w-max">
                                       {QUICK_STATUSES.filter(s => !!STATUS_CONFIG[s]).map(s => {
                                         const sc = STATUS_CONFIG[s]
                                         const isSelected = escala?.tipo === s
@@ -382,7 +382,7 @@ export function EscalaGradePage() {
                                           <button
                                             key={s}
                                             onClick={e => { e.stopPropagation(); handleSetStatus(func.id, dateStr, s) }}
-                                            className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black transition-all active:scale-95 ${isSelected ? `${sc.bg} ${sc.text} ring-2 ${sc.ring}` : 'bg-blue-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}
+                                            className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-black transition-all active:scale-95 ${isSelected ? `${sc.bg} ${sc.text} ring-2 ${sc.ring}` : 'bg-muted text-muted-foreground'}`}
                                             title={sc.nome}
                                           >
                                             {sc.letra}
@@ -394,16 +394,16 @@ export function EscalaGradePage() {
 
                                   {/* Localidade picker popup */}
                                   {isLocPicker && (
-                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 p-2 min-w-[140px] max-h-[200px] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                                      <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Local de trabalho</p>
-                                      <button onClick={() => handleSetLocalidade(func.id, dateStr, null, null)} className="w-full text-left px-2 py-1.5 text-[11px] rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400">
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 bg-card rounded-xl shadow-2xl border border-border p-2 min-w-[140px] max-h-[200px] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                      <p className="text-[9px] font-bold text-muted-foreground uppercase mb-1">Local de trabalho</p>
+                                      <button onClick={() => handleSetLocalidade(func.id, dateStr, null, null)} className="w-full text-left px-2 py-1.5 text-[11px] rounded-lg hover:bg-muted text-muted-foreground">
                                         Nenhum
                                       </button>
                                       {localidadesConfig.filter(lc => !func.setor || lc.setor === func.setor).map(lc => (
                                             <button
                                               key={lc.id}
                                               onClick={() => handleSetLocalidade(func.id, dateStr, lc.id, lc.nome)}
-                                              className={`w-full text-left px-2 py-1.5 text-[11px] rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 font-medium ${escala?.localidade === lc.nome ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'text-slate-700 dark:text-slate-200'}`}
+                                              className={`w-full text-left px-2 py-1.5 text-[11px] rounded-lg font-medium transition-colors ${escala?.localidade === lc.nome ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'hover:bg-muted text-foreground'}`}
                                             >
                                               📍 {lc.nome}
                                             </button>
@@ -422,18 +422,18 @@ export function EscalaGradePage() {
                   {filteredFuncionarios.filter(f => !f.setor || !setores.includes(f.setor)).length > 0 && (
                     <>
                       <tr>
-                        <td colSpan={days.length + 1} className="sticky left-0 z-10 bg-white dark:bg-slate-800 px-3 py-2 border-b border-t border-slate-200 dark:border-slate-700">
-                          <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">Sem Setor</span>
+                        <td colSpan={days.length + 1} className="sticky left-0 z-10 bg-card px-3 py-2 border-b border-t border-border">
+                          <span className="text-[11px] font-black text-muted-foreground uppercase tracking-wider">Sem Setor</span>
                         </td>
                       </tr>
                       {filteredFuncionarios.filter(f => !f.setor || !setores.includes(f.setor)).map((func, idx) => (
-                        <tr key={func.id} className={`${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/30'}`}>
-                          <td className="sticky left-0 z-10 border-r border-slate-200 dark:border-slate-700 px-2 py-1 bg-inherit">
+                        <tr key={func.id} className={`${idx % 2 === 0 ? 'bg-background' : 'bg-muted/30'}`}>
+                          <td className="sticky left-0 z-10 border-r border-border px-2 py-1 bg-inherit">
                             <div className="truncate text-[11px] font-semibold max-w-[110px]">{func.nome}</div>
                           </td>
                           {days.map(day => {
                             const dateStr = format(day, 'yyyy-MM-dd')
-                            return <td key={dateStr} className="px-px py-px text-center"><div className="w-6 h-6 rounded-md border border-dashed border-slate-200 dark:border-slate-700 text-slate-300 inline-flex items-center justify-center text-[8px]">·</div></td>
+                            return <td key={dateStr} className="px-px py-px text-center"><div className="w-6 h-6 rounded-md border border-dashed border-border text-muted-foreground inline-flex items-center justify-center text-[8px]">·</div></td>
                           })}
                         </tr>
                       ))}

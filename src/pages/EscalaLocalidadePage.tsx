@@ -307,39 +307,39 @@ export function EscalaLocalidadePage() {
         `}} />
         
         {/* Header: Official Document Look */}
-        <div className="flex items-end justify-between border-b-2 border-slate-950 pb-1 mb-1 shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-slate-950 flex items-center justify-center rounded-lg text-white">
+        <div className="flex items-end justify-between border-b-[3px] border-black pb-1 mb-2 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-black flex items-center justify-center text-white">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-6 h-6"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
             </div>
             <div>
-              <h1 className="text-xl font-black uppercase leading-none tracking-tight">Escala Diária de Trabalho</h1>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Gestão de Equipes — Encarregado Rogerio</p>
+              <h1 className="text-xl font-black uppercase leading-none tracking-tight text-black">Escala Diária de Trabalho</h1>
+              <p className="text-[9px] font-bold text-gray-700 uppercase tracking-widest mt-0.5">Gestão de Equipes — Encarregado Rogerio</p>
             </div>
           </div>
           <div className="text-right">
-            <div className="bg-slate-100 px-3 py-0.5 rounded-full border border-slate-200">
-              <span className="text-xs font-black uppercase text-slate-900">{format(currentDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
+            <div className="bg-gray-100 px-3 py-1 border-2 border-black">
+              <span className="text-[10px] font-black uppercase text-black">{format(currentDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 flex-1 min-h-0 w-full h-full">
+        <div className="grid grid-cols-4 gap-1.5 flex-1 min-h-0 w-full h-full">
           {/* Column 1: Varrição */}
-          <div className="flex flex-col gap-1 w-full h-full border-r border-slate-100 pr-1">
-            <div className="flex items-center gap-1 border-l-4 border-slate-950 pl-1 py-0.5 bg-slate-50">
-              <span className="font-black text-[10px] uppercase tracking-tighter">01. Varrição</span>
+          <div className="flex flex-col w-full h-full border-r border-gray-300 pr-1">
+            <div className="flex items-center gap-1 border-l-[3px] border-black pl-1 py-px bg-gray-100 mb-1">
+              <span className="font-black text-[9px] uppercase tracking-tighter text-black">01. Varrição</span>
             </div>
-            <div className="space-y-1 overflow-hidden">
+            <div className="space-y-0.5 overflow-hidden">
               {printData.varricao.localidades.map(l => (
-                <div key={l.nome} className="group border border-slate-200 rounded-sm p-1 mb-1 last:mb-0">
-                  <p className="font-black text-[9px] uppercase text-blue-800 mb-0.5 flex items-center justify-between">
+                <div key={l.nome} className="border border-gray-300 p-0.5">
+                  <p className="font-black text-[8px] uppercase text-black mb-0.5 flex items-center justify-between border-b border-gray-200 pb-px">
                     <span>{l.nome}</span>
-                    <span className="text-[7px] text-slate-400">[{l.members.length}]</span>
+                    <span className="text-[6px] text-gray-500">[{l.members.length}]</span>
                   </p>
-                  <div className="grid grid-cols-1 gap-0 border-l border-slate-200 pl-1">
+                  <div className="grid grid-cols-1 gap-0 pl-0.5">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[8px] font-medium leading-tight text-slate-700">
+                      <p key={m.id} className="text-[7.5px] font-bold leading-none text-gray-800 py-[1px]">
                         {m.nome.split(' ').slice(0, 2).join(' ')}
                       </p>
                     ))}
@@ -350,20 +350,20 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 2: Orla */}
-          <div className="flex flex-col gap-1 h-full border-r border-slate-100 pr-1">
-            <div className="flex items-center gap-1 border-l-4 border-slate-950 pl-1 py-0.5 bg-slate-50">
-              <span className="font-black text-[10px] uppercase tracking-tighter">02. Orla</span>
+          <div className="flex flex-col w-full h-full border-r border-gray-300 pr-1 pl-0.5">
+            <div className="flex items-center gap-1 border-l-[3px] border-black pl-1 py-px bg-gray-100 mb-1">
+              <span className="font-black text-[9px] uppercase tracking-tighter text-black">02. Orla</span>
             </div>
-            <div className="space-y-1 overflow-hidden">
+            <div className="space-y-0.5 overflow-hidden">
               {printData.orla.localidades.map(l => (
-                <div key={l.nome} className="group border border-slate-200 rounded-sm p-1 mb-1 last:mb-0">
-                  <p className="font-black text-[9px] uppercase text-blue-800 mb-0.5 flex items-center justify-between">
+                <div key={l.nome} className="border border-gray-300 p-0.5">
+                  <p className="font-black text-[8px] uppercase text-black mb-0.5 flex items-center justify-between border-b border-gray-200 pb-px">
                     <span>{l.nome}</span>
-                    <span className="text-[7px] text-slate-400">[{l.members.length}]</span>
+                    <span className="text-[6px] text-gray-500">[{l.members.length}]</span>
                   </p>
-                  <div className="grid grid-cols-1 gap-0 border-l border-slate-200 pl-1">
+                  <div className="grid grid-cols-1 gap-0 pl-0.5">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[8px] font-medium leading-tight text-slate-700">
+                      <p key={m.id} className="text-[7.5px] font-bold leading-none text-gray-800 py-[1px]">
                         {m.nome.split(' ').slice(0, 2).join(' ')}
                       </p>
                     ))}
@@ -374,20 +374,20 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 3: Porta a Porta */}
-          <div className="flex flex-col gap-1 h-full border-r border-slate-100 pr-1">
-            <div className="flex items-center gap-1 border-l-4 border-slate-950 pl-1 py-0.5 bg-slate-50">
-              <span className="font-black text-[10px] uppercase tracking-tighter">03. Porta a Porta</span>
+          <div className="flex flex-col w-full h-full border-r border-gray-300 pr-1 pl-0.5">
+            <div className="flex items-center gap-1 border-l-[3px] border-black pl-1 py-px bg-gray-100 mb-1">
+              <span className="font-black text-[9px] uppercase tracking-tighter text-black">03. Porta a Porta</span>
             </div>
-            <div className="space-y-1 overflow-hidden">
+            <div className="space-y-0.5 overflow-hidden">
               {printData.porta.localidades.map(l => (
-                <div key={l.nome} className="group border border-slate-200 rounded-sm p-1 mb-1 last:mb-0">
-                  <p className="font-black text-[9px] uppercase text-blue-800 mb-0.5 flex items-center justify-between">
+                <div key={l.nome} className="border border-gray-300 p-0.5">
+                  <p className="font-black text-[8px] uppercase text-black mb-0.5 flex items-center justify-between border-b border-gray-200 pb-px">
                     <span>{l.nome}</span>
-                    <span className="text-[7px] text-slate-400">[{l.members.length}]</span>
+                    <span className="text-[6px] text-gray-500">[{l.members.length}]</span>
                   </p>
-                  <div className="grid grid-cols-1 gap-0 border-l border-slate-200 pl-1">
+                  <div className="grid grid-cols-1 gap-0 pl-0.5">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[8px] font-medium leading-tight text-slate-700">
+                      <p key={m.id} className="text-[7.5px] font-bold leading-none text-gray-800 py-[1px]">
                         {m.nome.split(' ').slice(0, 2).join(' ')}
                       </p>
                     ))}
@@ -398,35 +398,35 @@ export function EscalaLocalidadePage() {
           </div>
 
           {/* Column 4: Ausências */}
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-1 border-l-4 border-slate-400 pl-1 py-0.5 bg-slate-100">
-              <span className="font-black text-[10px] uppercase tracking-tighter text-slate-600">04. Ausências / Folgas</span>
+          <div className="flex flex-col w-full h-full pl-0.5">
+            <div className="flex items-center gap-1 border-l-[3px] border-gray-500 pl-1 py-px bg-gray-100 mb-1">
+              <span className="font-black text-[9px] uppercase tracking-tighter text-gray-700">04. Ausências / Folgas</span>
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-1">
               {printData.off.folga.length > 0 && (
-                <div className="bg-slate-50 p-1 rounded border border-slate-200 mb-1 last:mb-0">
-                  <p className="text-[8px] font-black uppercase text-emerald-700 mb-0.5 flex items-center gap-1">🏖️ Folga / Repouso</p>
-                  <div className="grid grid-cols-1 gap-0">
-                    {printData.off.folga.map(name => <p key={name} className="text-[8px] font-bold text-slate-700 border-b border-white leading-tight">{name.split(' ').slice(0, 2).join(' ')}</p>)}
+                <div className="p-0.5 border border-gray-300">
+                  <p className="text-[7.5px] font-black uppercase text-black mb-0.5 flex items-center gap-1 border-b border-gray-200 pb-px">🏖️ Folga / Repouso</p>
+                  <div className="grid grid-cols-1 gap-0 pl-0.5">
+                    {printData.off.folga.map(name => <p key={name} className="text-[7.5px] font-bold text-gray-700 leading-none py-[1px]">{name.split(' ').slice(0, 2).join(' ')}</p>)}
                   </div>
                 </div>
               )}
 
               {printData.off.ferias.length > 0 && (
-                <div className="bg-slate-50 p-1 rounded border border-slate-200 mb-1 last:mb-0">
-                  <p className="text-[8px] font-black uppercase text-purple-700 mb-0.5 flex items-center gap-1">✈️ Férias</p>
-                  <div className="grid grid-cols-1 gap-0">
-                    {printData.off.ferias.map(name => <p key={name} className="text-[8px] font-bold text-slate-700 border-b border-white leading-tight">{name.split(' ').slice(0, 2).join(' ')}</p>)}
+                <div className="p-0.5 border border-gray-300">
+                  <p className="text-[7.5px] font-black uppercase text-black mb-0.5 flex items-center gap-1 border-b border-gray-200 pb-px">✈️ Férias</p>
+                  <div className="grid grid-cols-1 gap-0 pl-0.5">
+                    {printData.off.ferias.map(name => <p key={name} className="text-[7.5px] font-bold text-gray-700 leading-none py-[1px]">{name.split(' ').slice(0, 2).join(' ')}</p>)}
                   </div>
                 </div>
               )}
 
               {printData.off.atestado.length > 0 && (
-                <div className="bg-slate-50 p-1 rounded border border-slate-200 mb-1 last:mb-0">
-                  <p className="text-[8px] font-black uppercase text-red-700 mb-0.5 flex items-center gap-1">🏥 Atestado</p>
-                  <div className="grid grid-cols-1 gap-0">
-                    {printData.off.atestado.map(name => <p key={name} className="text-[8px] font-bold text-slate-700 border-b border-white leading-tight">{name.split(' ').slice(0, 2).join(' ')}</p>)}
+                <div className="p-0.5 border border-gray-300">
+                  <p className="text-[7.5px] font-black uppercase text-black mb-0.5 flex items-center gap-1 border-b border-gray-200 pb-px">🏥 Atestado</p>
+                  <div className="grid grid-cols-1 gap-0 pl-0.5">
+                    {printData.off.atestado.map(name => <p key={name} className="text-[7.5px] font-bold text-gray-700 leading-none py-[1px]">{name.split(' ').slice(0, 2).join(' ')}</p>)}
                   </div>
                 </div>
               )}

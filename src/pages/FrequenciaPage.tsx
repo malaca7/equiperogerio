@@ -128,118 +128,109 @@ export function FrequenciaPage() {
   const filteredSearch = (m: any) => m.nome.toLowerCase().includes(searchTerm.toLowerCase())
 
   return (
-    <div className="main-content pb-24 bg-[hsl(var(--background))]">
+    <div className="main-content pb-24 bg-background">
       <TopHeader 
         title="Chamada Diária" 
         subtitle={format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })} 
       />
 
-      {/* Date Navigator & Stats */}
-      <div className="sticky top-14 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-4">
+      <div className="sticky top-14 z-30 bg-background/90 backdrop-blur-md border-b border-border p-4">
         <div className="flex items-center justify-between mb-4">
           <button onClick={prevDay} className="w-10 h-10 rounded-2xl bg-card border border-border flex items-center justify-center hover:scale-110 transition-all shadow-sm"><ChevronLeft className="w-5 h-5" /></button>
           <div className="text-center">
-            <p className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight">
+            <p className="text-sm font-black text-foreground uppercase tracking-tight">
               {isToday(currentDate) ? 'Hoje' : format(currentDate, 'dd/MM/yyyy')}
             </p>
-            <p className="text-[10px] font-bold text-blue-600 uppercase">{format(currentDate, 'EEEE', { locale: ptBR })}</p>
+            <p className="text-[10px] font-bold text-primary uppercase">{format(currentDate, 'EEEE', { locale: ptBR })}</p>
           </div>
           <button onClick={nextDay} className="w-10 h-10 rounded-2xl bg-card border border-border flex items-center justify-center hover:scale-110 transition-all shadow-sm"><ChevronRight className="w-5 h-5" /></button>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-card rounded-2xl p-2 border border-border text-center shadow-sm">
-            <p className="text-[10px] font-black text-muted-foreground uppercase">Trabalhando</p>
-            <p className="text-lg font-black text-foreground">{totalInWork}</p>
+        <div className="grid grid-cols-2 gap-3 mb-2">
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-2 border border-emerald-100 dark:border-emerald-900/30 text-center shadow-sm">
+            <span className="block text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-0.5">Presentes</span>
+            <span className="block text-2xl font-black text-emerald-700 dark:text-emerald-300 leading-none">{presentesCount}</span>
           </div>
-          <div className="bg-white dark:bg-emerald-900/20 rounded-2xl p-2 border border-emerald-100 dark:border-emerald-900/30 text-center shadow-sm">
-            <p className="text-[10px] font-black text-emerald-600 uppercase">Presentes</p>
-            <p className="text-lg font-black text-emerald-700 dark:text-emerald-400">{presentCount}</p>
-          </div>
-          <div className="bg-white dark:bg-red-900/20 rounded-2xl p-2 border border-red-100 dark:border-red-900/30 text-center shadow-sm">
-            <p className="text-[10px] font-black text-red-600 uppercase">Faltas</p>
+          <div className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-2 border border-red-100 dark:border-red-900/30 text-center shadow-sm">
+            <span className="block text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest mb-0.5">Faltas</span>
             <p className="text-lg font-black text-red-700 dark:text-red-400">{absentCount}</p>
           </div>
         </div>
       </div>
 
       <div className="px-4 py-6 space-y-8">
-        {/* SECTION: WORKING (Chamada) */}
-        <div className="space-y-6">
-          <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600">
-              <CheckCircle2 className="w-5 h-5" />
+        <div className="flex gap-2">
+          <div className="flex-1 bg-card rounded-2xl border border-border p-2 flex items-center gap-3 shadow-sm">
+            <div className="w-8 h-8 rounded-xl bg-blue-100/50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600">
+              <Users className="w-4 h-4" />
             </div>
-            <h2 className="text-sm font-black uppercase text-slate-800 dark:text-slate-100 tracking-tighter">Em Serviço (Fazer Chamada)</h2>
+            <h2 className="text-sm font-black uppercase text-foreground tracking-tighter">Em Serviço (Fazer Chamada)</h2>
           </div>
-
-          {Object.values(workingGroups)
-            .filter(g => g.members.some(filteredSearch))
-            .map(group => (
-            <div key={group.id} className="space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">{group.nome}</h3>
-                </div>
-                <span className="text-[9px] font-bold text-slate-400">{group.members.filter(filteredSearch).length} colaboradores</span>
-              </div>
-
-              <div className="space-y-2">
-                {group.members
-                  .filter(filteredSearch)
-                  .map(member => (
-                  <div key={member.id} className="bg-card rounded-3xl border border-border p-3 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg transition-all",
-                        member.tipo === 'presente' || member.tipo === 'hora_extra' ? "bg-white text-emerald-600 border-2 border-emerald-100 dark:bg-emerald-900/30" : 
-                        member.tipo === 'falta' ? "bg-white text-red-600 border-2 border-red-100 dark:bg-red-900/30" :
-                        "bg-white text-slate-400 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm"
-                      )}>
-                        {member.nome.substring(0, 1)}
-                      </div>
-                      <div>
-                        <p className="text-sm font-black text-foreground leading-tight">{member.nome}</p>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase">{member.cargo}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <button 
-                        onClick={() => handleStatus(member.escalaId, 'falta')}
-                        className={cn(
-                          "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-border",
-                          member.tipo === 'falta' ? "bg-red-600 text-white border-red-600 shadow-lg shadow-red-500/30" : "bg-card text-muted-foreground hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500"
-                        )}
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                      <button 
-                        onClick={() => handleStatus(member.escalaId, 'presente')}
-                        className={cn(
-                          "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-border",
-                          member.tipo === 'presente' || member.tipo === 'hora_extra' ? "bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/30" : "bg-card text-muted-foreground hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-500"
-                        )}
-                      >
-                        <Check className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
         </div>
 
-        {/* SECTION: NOT WORKING */}
-        {totalOut > 0 && (
-          <div className="space-y-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center text-slate-500 border border-slate-100 dark:border-slate-700 shadow-sm">
-                <XCircle className="w-5 h-5" />
+        {Object.values(workingGroups)
+          .filter(g => g.members.some(filteredSearch))
+          .map(group => (
+          <div key={group.id} className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                <h3 className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{group.nome}</h3>
               </div>
-              <h2 className="text-sm font-black uppercase text-slate-500 tracking-tighter">Ausentes / Fora de Escala</h2>
+              <span className="text-[9px] font-bold text-muted-foreground">{group.members.filter(filteredSearch).length} colaboradores</span>
+            </div>
+
+            <div className="space-y-2">
+              {group.members
+                .filter(filteredSearch)
+                .map(member => (
+                <div key={member.id} className="bg-card rounded-3xl border border-border p-3 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg transition-all border border-border",
+                      "bg-card text-muted-foreground"
+                    )}>
+                      {member.nome.substring(0, 1)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-foreground leading-tight">{member.nome}</p>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase">{member.cargo}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button 
+                      onClick={() => handleStatusChange(member.escalaId, 'falta')}
+                      className={cn(
+                        "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-border",
+                        member.tipo === 'falta' ? "bg-red-600 text-white border-red-600 shadow-lg shadow-red-500/30" : "bg-card text-muted-foreground hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500"
+                      )}
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                    <button 
+                      onClick={() => handleStatusChange(member.escalaId, 'presente')}
+                      className={cn(
+                        "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-border",
+                        member.tipo === 'presente' || member.tipo === 'hora_extra' ? "bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/30" : "bg-card text-muted-foreground hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-500"
+                      )}
+                    >
+                      <Check className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {totalOut > 0 && (
+          <div className="space-y-6 pt-4 border-t border-border">
+            <div className="p-4 bg-card border border-border rounded-2xl flex items-center justify-between mb-4 shadow-sm">
+              <div className="w-8 h-8 rounded-xl bg-muted flex items-center justify-center text-muted-foreground border border-border shadow-sm">
+                <Filter className="w-4 h-4" />
+              </div>
+              <h2 className="text-sm font-black uppercase text-muted-foreground tracking-tighter">Ausentes / Fora de Escala</h2>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
@@ -249,14 +240,14 @@ export function FrequenciaPage() {
                 <div key={id} className="space-y-2">
                   <div className="flex items-center gap-2 px-1">
                     <span className="text-base">{group.icon}</span>
-                    <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{group.label}</h3>
+                    <h3 className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{group.label}</h3>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {group.members.filter(filteredSearch).map(member => (
                       <div key={member.id} className="bg-card rounded-2xl border border-border p-3 flex items-center justify-between shadow-sm">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 text-xs font-bold border border-blue-100">
-                            {member.nome.substring(0, 1)}
+                          <div className="w-8 h-8 rounded-lg bg-blue-50/50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 text-xs font-bold border border-blue-100 dark:border-blue-800">
+                            {member.nome.substring(0, 2).toUpperCase()}
                           </div>
                           <div>
                             <p className="text-xs font-bold text-foreground">{member.nome}</p>
