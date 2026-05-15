@@ -121,8 +121,8 @@ export function EscalaLocalidadePage() {
       if (f.cargo?.toLowerCase() === 'encarregado') return false
       
       const e = escalas.find((esc: any) => esc.funcionario_id === f.id && esc.data === dateStr)
-      // SÓ pode estar disponível se tiver status 'presente' E não tiver localidade definida
-      return e && e.tipo === 'presente' && !e.localidade
+      // SÓ pode estar disponível se estiver trabalhando (presente ou hora_extra) E não tiver localidade definida
+      return e && (e.tipo === 'presente' || e.tipo === 'hora_extra') && !e.localidade
     })
   }, [allFuncionarios, escalas, dateStr])
 
@@ -332,14 +332,16 @@ export function EscalaLocalidadePage() {
             </div>
             <div className="space-y-1 overflow-hidden">
               {printData.varricao.localidades.map(l => (
-                <div key={l.nome} className="group">
+                <div key={l.nome} className="group border border-slate-200 rounded-sm p-1 mb-1 last:mb-0">
                   <p className="font-black text-[9px] uppercase text-blue-800 mb-0.5 flex items-center justify-between">
                     <span>{l.nome}</span>
                     <span className="text-[7px] text-slate-400">[{l.members.length}]</span>
                   </p>
                   <div className="grid grid-cols-1 gap-0 border-l border-slate-200 pl-1">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[8px] font-medium leading-tight text-slate-700">{m.nome}</p>
+                      <p key={m.id} className="text-[8px] font-medium leading-tight text-slate-700">
+                        {m.nome.split(' ').slice(0, 2).join(' ')}
+                      </p>
                     ))}
                   </div>
                 </div>
@@ -354,14 +356,16 @@ export function EscalaLocalidadePage() {
             </div>
             <div className="space-y-1 overflow-hidden">
               {printData.orla.localidades.map(l => (
-                <div key={l.nome} className="group">
+                <div key={l.nome} className="group border border-slate-200 rounded-sm p-1 mb-1 last:mb-0">
                   <p className="font-black text-[9px] uppercase text-blue-800 mb-0.5 flex items-center justify-between">
                     <span>{l.nome}</span>
                     <span className="text-[7px] text-slate-400">[{l.members.length}]</span>
                   </p>
                   <div className="grid grid-cols-1 gap-0 border-l border-slate-200 pl-1">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[8px] font-medium leading-tight text-slate-700">{m.nome}</p>
+                      <p key={m.id} className="text-[8px] font-medium leading-tight text-slate-700">
+                        {m.nome.split(' ').slice(0, 2).join(' ')}
+                      </p>
                     ))}
                   </div>
                 </div>
@@ -376,14 +380,16 @@ export function EscalaLocalidadePage() {
             </div>
             <div className="space-y-1 overflow-hidden">
               {printData.porta.localidades.map(l => (
-                <div key={l.nome} className="group">
+                <div key={l.nome} className="group border border-slate-200 rounded-sm p-1 mb-1 last:mb-0">
                   <p className="font-black text-[9px] uppercase text-blue-800 mb-0.5 flex items-center justify-between">
                     <span>{l.nome}</span>
                     <span className="text-[7px] text-slate-400">[{l.members.length}]</span>
                   </p>
                   <div className="grid grid-cols-1 gap-0 border-l border-slate-200 pl-1">
                     {l.members.map((m: any) => (
-                      <p key={m.id} className="text-[8px] font-medium leading-tight text-slate-700">{m.nome}</p>
+                      <p key={m.id} className="text-[8px] font-medium leading-tight text-slate-700">
+                        {m.nome.split(' ').slice(0, 2).join(' ')}
+                      </p>
                     ))}
                   </div>
                 </div>
@@ -399,28 +405,28 @@ export function EscalaLocalidadePage() {
             
             <div className="space-y-2">
               {printData.off.folga.length > 0 && (
-                <div className="bg-slate-50 p-1 rounded border border-slate-200">
+                <div className="bg-slate-50 p-1 rounded border border-slate-200 mb-1 last:mb-0">
                   <p className="text-[8px] font-black uppercase text-emerald-700 mb-0.5 flex items-center gap-1">🏖️ Folga / Repouso</p>
                   <div className="grid grid-cols-1 gap-0">
-                    {printData.off.folga.map(name => <p key={name} className="text-[8px] font-bold text-slate-700 border-b border-white leading-tight">{name}</p>)}
+                    {printData.off.folga.map(name => <p key={name} className="text-[8px] font-bold text-slate-700 border-b border-white leading-tight">{name.split(' ').slice(0, 2).join(' ')}</p>)}
                   </div>
                 </div>
               )}
 
               {printData.off.ferias.length > 0 && (
-                <div className="bg-slate-50 p-1 rounded border border-slate-200">
+                <div className="bg-slate-50 p-1 rounded border border-slate-200 mb-1 last:mb-0">
                   <p className="text-[8px] font-black uppercase text-purple-700 mb-0.5 flex items-center gap-1">✈️ Férias</p>
                   <div className="grid grid-cols-1 gap-0">
-                    {printData.off.ferias.map(name => <p key={name} className="text-[8px] font-bold text-slate-700 border-b border-white leading-tight">{name}</p>)}
+                    {printData.off.ferias.map(name => <p key={name} className="text-[8px] font-bold text-slate-700 border-b border-white leading-tight">{name.split(' ').slice(0, 2).join(' ')}</p>)}
                   </div>
                 </div>
               )}
 
               {printData.off.atestado.length > 0 && (
-                <div className="bg-slate-50 p-1 rounded border border-slate-200">
+                <div className="bg-slate-50 p-1 rounded border border-slate-200 mb-1 last:mb-0">
                   <p className="text-[8px] font-black uppercase text-red-700 mb-0.5 flex items-center gap-1">🏥 Atestado</p>
                   <div className="grid grid-cols-1 gap-0">
-                    {printData.off.atestado.map(name => <p key={name} className="text-[8px] font-bold text-slate-700 border-b border-white leading-tight">{name}</p>)}
+                    {printData.off.atestado.map(name => <p key={name} className="text-[8px] font-bold text-slate-700 border-b border-white leading-tight">{name.split(' ').slice(0, 2).join(' ')}</p>)}
                   </div>
                 </div>
               )}
@@ -437,27 +443,27 @@ export function EscalaLocalidadePage() {
       {/* Control Bar */}
       <div className="sticky top-14 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-3 flex flex-col gap-3 print:hidden">
         <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center bg-white dark:bg-slate-800 rounded-2xl p-1 shadow-sm border border-slate-100 dark:border-slate-800">
-            <button onClick={() => setCurrentDate(subDays(currentDate, 1))} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all active:scale-90"><ChevronLeft className="w-5 h-5" /></button>
+          <div className="flex items-center bg-card rounded-2xl p-1 shadow-sm border border-border">
+            <button onClick={() => setCurrentDate(subDays(currentDate, 1))} className="p-2 hover:bg-muted rounded-xl transition-all active:scale-90"><ChevronLeft className="w-5 h-5" /></button>
             <div className="px-4 flex flex-col items-center min-w-[120px]">
               <span className="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 leading-none mb-1">
                 {isToday(currentDate) ? 'Hoje' : format(currentDate, 'EEE', { locale: ptBR })}
               </span>
-              <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{format(currentDate, 'dd/MM/yyyy')}</span>
+              <span className="text-sm font-bold text-foreground">{format(currentDate, 'dd/MM/yyyy')}</span>
             </div>
-            <button onClick={() => setCurrentDate(addDays(currentDate, 1))} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all active:scale-90"><ChevronRight className="w-5 h-5" /></button>
+            <button onClick={() => setCurrentDate(addDays(currentDate, 1))} className="p-2 hover:bg-muted rounded-xl transition-all active:scale-90"><ChevronRight className="w-5 h-5" /></button>
           </div>
 
-          <div className="flex bg-white dark:bg-slate-800 rounded-2xl p-1 shadow-sm border border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="flex bg-card rounded-2xl p-1 shadow-sm border border-border shrink-0">
             <button 
               onClick={() => setViewMode('daily')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-muted shadow-sm text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`}
             >
               <LayoutGrid className="w-4 h-4" /> Diário
             </button>
             <button 
               onClick={() => setViewMode('weekly')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${viewMode === 'weekly' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${viewMode === 'weekly' ? 'bg-muted shadow-sm text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`}
             >
               <List className="w-4 h-4" /> Semanal
             </button>
@@ -472,12 +478,12 @@ export function EscalaLocalidadePage() {
               placeholder="Buscar..." 
               value={searchTerm} 
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500/30"
+              className="w-full pl-9 pr-3 py-2.5 bg-card border border-border rounded-2xl text-sm focus:ring-2 focus:ring-blue-500/30 text-foreground placeholder:text-muted-foreground"
             />
           </div>
           <button 
             onClick={handleCopyYesterday}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl text-[10px] font-black hover:bg-slate-200 transition-colors"
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-muted text-muted-foreground rounded-2xl text-[10px] font-black hover:bg-card transition-colors border border-border"
           >
             <Copy className="w-3.5 h-3.5" /> Ontem
           </button>
@@ -525,15 +531,15 @@ export function EscalaLocalidadePage() {
                     {locs.map(loc => {
                       const members = dailyDistribution[loc.id] || []
                       return (
-                        <div key={loc.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
-                          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-800/30">
+                        <div key={loc.id} className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden flex flex-col">
+                          <div className="p-4 border-b border-border flex items-center justify-between bg-muted/30">
                             <div className="flex items-center gap-2">
                               <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
                                 <MapPin className="w-4 h-4 text-blue-600" />
                               </div>
                               <div>
-                                <h4 className="text-sm font-black text-slate-800 dark:text-slate-100">{loc.nome}</h4>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase">{members.length} membros</p>
+                                <h4 className="text-sm font-black text-foreground">{loc.nome}</h4>
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase">{members.length} membros</p>
                               </div>
                             </div>
                             <button 
@@ -551,11 +557,11 @@ export function EscalaLocalidadePage() {
                               </div>
                             ) : (
                               members.map((m: any) => (
-                                <div key={m.id} className="flex items-center gap-2 pl-2 pr-1 py-1 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 group animate-scale-in">
-                                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{m.nome}</span>
+                                <div key={m.id} className="flex items-center gap-2 pl-2 pr-1 py-1 bg-muted rounded-xl border border-border group animate-scale-in">
+                                  <span className="text-[11px] font-bold text-foreground truncate max-w-[120px]">{m.nome}</span>
                                   <button 
                                     onClick={() => handleRemove(m.escalaId)}
-                                    className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                    className="p-1 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                   >
                                     <Trash2 className="w-3 h-3" />
                                   </button>
@@ -576,9 +582,9 @@ export function EscalaLocalidadePage() {
               <div className="mt-8 space-y-3">
                 <div className="flex items-center gap-2 px-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Disponíveis no Setor</h3>
+                  <h3 className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Disponíveis no Setor</h3>
                 </div>
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-amber-200 dark:border-amber-900/30 p-4">
+                <div className="bg-card rounded-3xl border border-amber-200 dark:border-amber-900/30 p-4">
                   <div className="flex flex-wrap gap-2">
                     {availableFuncs.map(f => (
                       <div key={f.id} className="px-3 py-1.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/20 rounded-2xl text-[11px] font-black text-amber-700 dark:text-amber-400">
@@ -591,18 +597,18 @@ export function EscalaLocalidadePage() {
             )}
           </div>
         ) : (
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl overflow-x-auto">
+          <div className="bg-card rounded-3xl border border-border shadow-xl overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-white dark:bg-slate-800">
-                  <th className="sticky left-0 z-20 bg-white dark:bg-slate-800 border-b border-r border-slate-200 dark:border-slate-700 p-4 text-left min-w-[160px]">
-                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Localidade</span>
+                <tr className="bg-card">
+                  <th className="sticky left-0 z-20 bg-card border-b border-r border-border p-4 text-left min-w-[160px]">
+                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Localidade</span>
                   </th>
                   {weekDays.map(day => (
-                    <th key={day.toISOString()} className={`p-4 border-b border-slate-200 dark:border-slate-700 min-w-[150px] ${isToday(day) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                    <th key={day.toISOString()} className={`p-4 border-b border-border min-w-[150px] ${isToday(day) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
                       <div className="flex flex-col items-center">
-                        <span className="text-[9px] font-black text-slate-500 uppercase">{format(day, 'EEE', { locale: ptBR })}</span>
-                        <span className={`text-sm font-black ${isToday(day) ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-200'}`}>{format(day, 'dd')}</span>
+                        <span className="text-[9px] font-black text-muted-foreground uppercase">{format(day, 'EEE', { locale: ptBR })}</span>
+                        <span className={`text-sm font-black ${isToday(day) ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'}`}>{format(day, 'dd')}</span>
                       </div>
                     </th>
                   ))}
@@ -614,14 +620,14 @@ export function EscalaLocalidadePage() {
                   if (locs.length === 0) return null
                   return (
                     <React.Fragment key={setor}>
-                      <tr className="bg-blue-50/30 dark:bg-slate-800/50">
-                        <td colSpan={8} className="sticky left-0 z-20 px-4 py-2 border-b border-slate-200 dark:border-slate-700">
+                      <tr className="bg-muted">
+                        <td colSpan={8} className="sticky left-0 z-20 px-4 py-2 border-b border-border">
                           <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">{setor}</span>
                         </td>
                       </tr>
                       {locs.map(loc => (
-                        <tr key={loc.id} className="border-b border-slate-100 dark:border-slate-800">
-                          <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 px-4 py-3 font-bold text-xs text-slate-700 dark:text-slate-200">
+                        <tr key={loc.id} className="border-b border-border bg-card hover:bg-muted/30 transition-colors">
+                          <td className="sticky left-0 z-10 bg-card border-r border-border px-4 py-3 font-bold text-xs text-foreground">
                             {loc.nome}
                           </td>
                           {weekDays.map(day => {
@@ -635,16 +641,16 @@ export function EscalaLocalidadePage() {
                               <td 
                                 key={dStr} 
                                 onClick={() => setAssignModal({ locId: loc.id, locName: loc.nome, dateStr: dStr, setor: loc.setor })}
-                                className="p-2 align-top cursor-pointer hover:bg-blue-50/50 dark:hover:bg-slate-800 transition-colors"
+                                className="p-2 align-top cursor-pointer hover:bg-muted transition-colors"
                               >
                                 <div className="space-y-1">
                                   {assigned.length === 0 ? (
-                                    <div className="h-6 border border-dashed border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center opacity-30">
+                                    <div className="h-6 border border-dashed border-border rounded-lg flex items-center justify-center opacity-30">
                                       <span className="text-[8px] font-bold">Vazio</span>
                                     </div>
                                   ) : (
                                     assigned.map(e => (
-                                      <div key={e.id} className="px-1.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-[9px] font-bold text-slate-600 dark:text-slate-300 shadow-sm truncate">
+                                      <div key={e.id} className="px-1.5 py-1 bg-card border border-border rounded-lg text-[9px] font-bold text-foreground shadow-sm truncate">
                                         {funcMap[e.funcionario_id]?.nome.split(' ')[0]}
                                       </div>
                                     ))
@@ -686,7 +692,7 @@ export function EscalaLocalidadePage() {
               <input 
                 type="text" 
                 placeholder="Buscar funcionário disponível..." 
-                className="w-full pl-9 pr-3 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm shadow-sm focus:ring-2 focus:ring-blue-500/20 outline-none"
+                className="w-full pl-9 pr-3 py-3 bg-card border border-border rounded-2xl text-sm shadow-sm focus:ring-2 focus:ring-blue-500/20 outline-none text-foreground placeholder:text-muted-foreground"
                 value={modalSearchTerm}
                 onChange={e => setModalSearchTerm(e.target.value)}
               />
@@ -694,8 +700,12 @@ export function EscalaLocalidadePage() {
 
             <div className="max-h-[45vh] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
               {(() => {
-                const list = availableFuncs
+                const list = allFuncionarios
                   .filter(f => f.setor === assignModal.setor)
+                  .filter(f => {
+                    const e = escalas.find((esc: any) => esc.funcionario_id === f.id && esc.data === assignModal.dateStr)
+                    return e && (e.tipo === 'presente' || e.tipo === 'hora_extra') && !e.localidade
+                  })
                   .filter(f => f.nome.toLowerCase().includes(modalSearchTerm.toLowerCase()))
                 
                 if (list.length === 0) {
@@ -715,17 +725,17 @@ export function EscalaLocalidadePage() {
                       key={f.id}
                       disabled={isAlreadyHere}
                       onClick={() => { handleAssign(f.id); }}
-                      className={`w-full flex items-center justify-between p-4 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl hover:border-blue-400 hover:shadow-md transition-all active:scale-[0.98]
+                      className={`w-full flex items-center justify-between p-4 bg-card border border-border rounded-3xl hover:border-blue-400 hover:shadow-md transition-all active:scale-[0.98]
                         ${isAlreadyHere ? 'opacity-50 cursor-not-allowed grayscale' : ''}
                       `}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-black text-blue-600">
+                        <div className="w-10 h-10 rounded-2xl bg-muted flex items-center justify-center font-black text-blue-600">
                           {f.nome.substring(0, 2).toUpperCase()}
                         </div>
                         <div className="text-left">
-                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{f.nome}</p>
-                          <p className="text-[10px] text-slate-500 font-bold uppercase">{f.cargo}</p>
+                          <p className="text-sm font-bold text-foreground">{f.nome}</p>
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase">{f.cargo}</p>
                         </div>
                       </div>
                       {isAlreadyHere ? (

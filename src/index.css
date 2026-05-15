@@ -16,6 +16,20 @@
   --color-brand-900: #1e3a8a;
   --color-brand-950: #172554;
 
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
   --radius-2xl: 1rem;
   --radius-3xl: 1.5rem;
   --radius-4xl: 2rem;
@@ -45,18 +59,18 @@
 
 /* CSS custom properties for theming */
 :root {
-  --background: 0 0% 100%;
+  --background: 210 20% 98%;
   --foreground: 224 71% 4%;
   --card: 0 0% 100%;
   --card-foreground: 224 71% 4%;
   --primary: 221 83% 53%;
   --primary-foreground: 210 40% 98%;
-  --secondary: 210 20% 98%;
-  --secondary-foreground: 220 10% 30%;
-  --muted: 210 20% 98%;
-  --muted-foreground: 220 10% 50%;
-  --border: 210 20% 94%;
-  --input: 210 20% 94%;
+  --secondary: 210 20% 95%;
+  --secondary-foreground: 220 10% 25%;
+  --muted: 210 20% 96%;
+  --muted-foreground: 220 10% 45%;
+  --border: 210 20% 92%;
+  --input: 210 20% 92%;
   --ring: 221 83% 53%;
 }
 
@@ -69,10 +83,10 @@
   --primary-foreground: 222 47% 8%;
   --secondary: 215 28% 14%;
   --secondary-foreground: 210 40% 98%;
-  --muted: 215 28% 14%;
-  --muted-foreground: 215 20% 55%;
-  --border: 215 28% 18%;
-  --input: 215 28% 18%;
+  --muted: 215 28% 12%;
+  --muted-foreground: 215 20% 65%;
+  --border: 215 28% 16%;
+  --input: 215 28% 16%;
   --ring: 217 91% 60%;
 }
 

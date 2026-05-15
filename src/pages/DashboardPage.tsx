@@ -138,51 +138,51 @@ export function DashboardPage() {
               label="Presentes"
               value={stats.presentes}
               icon={UserCheck}
-              color="text-green-600"
-              bgColor="bg-white dark:bg-green-900/30 border border-green-100 shadow-sm"
+              color="text-emerald-600 dark:text-emerald-500"
+              bgColor="bg-emerald-500/10 border-emerald-500/20"
             />
             <StatCard
               label="Faltas"
               value={stats.faltas}
               icon={UserX}
-              color="text-red-600"
-              bgColor="bg-white dark:bg-red-900/30 border border-red-100 shadow-sm"
+              color="text-red-600 dark:text-red-500"
+              bgColor="bg-red-500/10 border-red-500/20"
             />
             <StatCard
               label="Atestados"
               value={stats.atestados}
               icon={FileText}
-              color="text-amber-600"
-              bgColor="bg-white dark:bg-amber-900/30 border border-amber-100 shadow-sm"
+              color="text-amber-600 dark:text-amber-500"
+              bgColor="bg-amber-500/10 border-amber-500/20"
             />
             <StatCard
               label="Folgas"
               value={stats.folgas}
               icon={Umbrella}
-              color="text-blue-600"
-              bgColor="bg-white dark:bg-blue-900/30 border border-blue-100 shadow-sm"
+              color="text-blue-600 dark:text-blue-500"
+              bgColor="bg-blue-500/10 border-blue-500/20"
             />
             <StatCard
               label="Horas Extra"
               value={`${stats.horasExtras}h`}
               icon={Clock}
-              color="text-purple-600"
-              bgColor="bg-white dark:bg-purple-900/30 border border-purple-100 shadow-sm"
+              color="text-purple-600 dark:text-purple-500"
+              bgColor="bg-purple-500/10 border-purple-500/20"
             />
             <StatCard
               label="Total Ativos"
               value={stats.totalAtivos}
               icon={Users}
-              color="text-indigo-600"
-              bgColor="bg-white dark:bg-indigo-900/30 border border-indigo-100 shadow-sm"
+              color="text-indigo-600 dark:text-indigo-500"
+              bgColor="bg-indigo-500/10 border-indigo-500/20"
             />
           </div>
         ) : null}
 
         {/* Alert: sem registros */}
         {stats && stats.totalRegistros === 0 && (
-          <div className="card p-4 border-l-4 border-amber-400 bg-white dark:bg-amber-900/10 flex items-center gap-3 shadow-md">
-            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <div className="card p-4 border-l-4 border-l-amber-500 bg-amber-500/10 flex items-center gap-3 shadow-sm">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-500 flex-shrink-0" />
             <div>
               <p className="text-sm font-semibold text-amber-800 dark:text-amber-400">
                 Nenhuma frequência hoje

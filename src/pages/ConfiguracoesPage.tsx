@@ -129,8 +129,8 @@ export function ConfiguracoesPage() {
     toast('Restaurado ao padrão', 'success')
   }
 
-  const inp = "w-full px-3 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-  const sel = "px-3 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none"
+  const inp = "w-full px-3 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-foreground placeholder:text-muted-foreground"
+  const sel = "px-3 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none text-foreground"
 
   if (loadS || loadL || loadT) return <div className="main-content"><TopHeader title="Configurações" /><div className="py-20"><Loading text="Carregando..." /></div></div>
 
@@ -144,10 +144,10 @@ export function ConfiguracoesPage() {
           { id: 'escala', icon: CalendarDays, title: 'Tipos de Escala', desc: `${tipos.length} status`, color: 'from-purple-500 to-purple-600' },
           { id: 'aparencia', icon: Palette, title: 'Aparência', desc: `Tema ${theme === 'dark' ? 'Escuro' : 'Claro'}`, color: 'from-amber-500 to-amber-600' },
         ].map(s => (
-          <button key={s.id} onClick={() => setActiveSection(s.id)} className="w-full flex items-center gap-4 p-4 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-sm hover:shadow-md transition-all active:scale-[0.98]">
+          <button key={s.id} onClick={() => setActiveSection(s.id)} className="w-full flex items-center gap-4 p-4 bg-card rounded-2xl border border-border shadow-sm hover:shadow-md transition-all active:scale-[0.98]">
             <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center shadow-lg`}><s.icon className="w-5 h-5 text-white" /></div>
-            <div className="flex-1 text-left"><h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">{s.title}</h3><p className="text-xs text-slate-500">{s.desc}</p></div>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
+            <div className="flex-1 text-left"><h3 className="text-sm font-bold text-foreground">{s.title}</h3><p className="text-xs text-muted-foreground">{s.desc}</p></div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </button>
         ))}
         <button onClick={resetAll} className="w-full text-center text-xs text-red-500 font-semibold py-3 hover:underline">Restaurar padrão</button>
@@ -164,17 +164,17 @@ export function ConfiguracoesPage() {
             const locs = localidades.filter(l => l.setor === setor)
             if (!locs.length) return null
             return (<div key={setor}><h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">{setor}</h4><div className="space-y-1">{locs.map(l => (
-              <div key={l.id} className="flex items-center gap-2 p-2 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 group shadow-sm">
+              <div key={l.id} className="flex items-center gap-2 p-2 bg-card rounded-xl border border-border group shadow-sm">
                 {editingLoc?.id === l.id ? (<>
                   <input type="text" value={editingLoc.nome} onChange={e => setEditingLoc({ ...editingLoc, nome: e.target.value })} className={`${inp} flex-1 !py-1.5 text-xs`} />
                   <select value={editingLoc.setor} onChange={e => setEditingLoc({ ...editingLoc, setor: e.target.value })} className={`${sel} !py-1.5 text-xs`}>{setores.map(s => <option key={s} value={s}>{s}</option>)}</select>
                   <button onClick={saveEditLoc} className="text-green-600 p-1"><Save className="w-4 h-4" /></button>
-                  <button onClick={() => setEditingLoc(null)} className="text-slate-400 p-1"><X className="w-4 h-4" /></button>
+                  <button onClick={() => setEditingLoc(null)} className="text-muted-foreground p-1"><X className="w-4 h-4" /></button>
                 </>) : (<>
                   <MapPin className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1">{l.nome}</span>
-                  <button onClick={() => setEditingLoc(l)} className="text-slate-400 hover:text-blue-500 p-1"><Edit2 className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => removeLocalidade(l.id)} className="text-slate-400 hover:text-red-500 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <span className="text-sm font-medium text-foreground flex-1">{l.nome}</span>
+                  <button onClick={() => setEditingLoc(l)} className="text-muted-foreground hover:text-blue-500 p-1"><Edit2 className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => removeLocalidade(l.id)} className="text-muted-foreground hover:text-red-500 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
                 </>)}
               </div>
             ))}</div></div>)
@@ -189,16 +189,16 @@ export function ConfiguracoesPage() {
             <button onClick={addSetor} className="w-10 h-10 bg-emerald-600 text-white rounded-xl flex items-center justify-center"><Plus className="w-4 h-4" /></button>
           </div>
           <div className="space-y-2">{setores.map((setor, idx) => (
-            <div key={setor} className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 group shadow-sm">
+            <div key={setor} className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border group shadow-sm">
               {editingSetor?.idx === idx ? (<>
                 <input type="text" value={editingSetor.value} onChange={e => setEditingSetor({ ...editingSetor, value: e.target.value })} className={`${inp} flex-1 !py-1.5`} onKeyDown={e => e.key === 'Enter' && saveEditSetor()} />
                 <button onClick={saveEditSetor} className="text-green-600 p-1.5"><Save className="w-4 h-4" /></button>
-                <button onClick={() => setEditingSetor(null)} className="text-slate-400 p-1.5"><X className="w-4 h-4" /></button>
+                <button onClick={() => setEditingSetor(null)} className="text-muted-foreground p-1.5"><X className="w-4 h-4" /></button>
               </>) : (<>
                 <Users className="w-4 h-4 text-emerald-500" />
-                <span className="text-sm font-bold text-slate-800 dark:text-slate-100 flex-1">{setor}</span>
-                <button onClick={() => setEditingSetor({ idx, value: setor })} className="text-slate-400 hover:text-blue-500 p-1.5"><Edit2 className="w-3.5 h-3.5" /></button>
-                <button onClick={() => removeSetor(setor)} className="text-slate-400 hover:text-red-500 p-1.5"><Trash2 className="w-3.5 h-3.5" /></button>
+                <span className="text-sm font-bold text-foreground flex-1">{setor}</span>
+                <button onClick={() => setEditingSetor({ idx, value: setor })} className="text-muted-foreground hover:text-blue-500 p-1.5"><Edit2 className="w-3.5 h-3.5" /></button>
+                <button onClick={() => removeSetor(setor)} className="text-muted-foreground hover:text-red-500 p-1.5"><Trash2 className="w-3.5 h-3.5" /></button>
               </>)}
             </div>
           ))}</div>
@@ -220,20 +220,20 @@ export function ConfiguracoesPage() {
 
           <div className="space-y-2">
             {tipos.map(t => (
-              <div key={t.id} className="flex items-center gap-2 p-2 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 shadow-sm">
+              <div key={t.id} className="flex items-center gap-2 p-2 bg-card rounded-xl border border-border shadow-sm">
                 {editingTipo?.id === t.id ? (
                   <>
                     <input type="text" value={editingTipo.letra} onChange={e => setEditingTipo({ ...editingTipo, letra: e.target.value.substring(0, 3).toUpperCase() })} className={`${inp} w-12 text-center uppercase !py-1.5 text-xs`} />
                     <input type="text" value={editingTipo.nome} onChange={e => setEditingTipo({ ...editingTipo, nome: e.target.value })} className={`${inp} flex-1 !py-1.5 text-xs`} />
                     <button onClick={saveEditTipo} className="text-green-600 p-1"><Save className="w-4 h-4" /></button>
-                    <button onClick={() => setEditingTipo(null)} className="text-slate-400 p-1"><X className="w-4 h-4" /></button>
+                    <button onClick={() => setEditingTipo(null)} className="text-muted-foreground p-1"><X className="w-4 h-4" /></button>
                   </>
                 ) : (
                   <>
                     <div className={`w-8 h-8 rounded-lg ${t.bg} ${t.text} font-black text-xs flex items-center justify-center shadow-sm shrink-0`}>{t.letra}</div>
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex-1">{t.nome}</span>
-                    <button onClick={() => setEditingTipo(t)} className="text-slate-400 hover:text-blue-500 p-1"><Edit2 className="w-3.5 h-3.5" /></button>
-                    {t.id !== 'presente' && <button onClick={() => removeTipo(t.id)} className="text-slate-400 hover:text-red-500 p-1"><Trash2 className="w-3.5 h-3.5" /></button>}
+                    <span className="text-sm font-medium text-foreground flex-1">{t.nome}</span>
+                    <button onClick={() => setEditingTipo(t)} className="text-muted-foreground hover:text-blue-500 p-1"><Edit2 className="w-3.5 h-3.5" /></button>
+                    {t.id !== 'presente' && <button onClick={() => removeTipo(t.id)} className="text-muted-foreground hover:text-red-500 p-1"><Trash2 className="w-3.5 h-3.5" /></button>}
                   </>
                 )}
               </div>

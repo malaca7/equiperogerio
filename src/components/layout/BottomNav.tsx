@@ -32,8 +32,8 @@ export function BottomNav() {
               cn(
                 'flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-all duration-200 min-w-0 flex-1',
                 isActive
-                  ? 'text-[hsl(var(--primary))]'
-                  : 'text-[hsl(var(--muted-foreground))]'
+                  ? 'text-primary'
+                  : 'text-muted-foreground'
               )
             }
           >
@@ -44,7 +44,7 @@ export function BottomNav() {
                     className={cn(
                       'p-2 rounded-xl transition-all duration-200',
                       isActive
-                        ? 'bg-[hsl(var(--primary)/0.12)]'
+                        ? 'bg-primary/10'
                         : 'bg-transparent'
                     )}
                   >

@@ -21,9 +21,12 @@ import { Loading } from './components/ui/Loading'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 2,
+      staleTime: 1000 * 30, // 30 segundos (muito mais rápido para atualizações em tempo real)
+      gcTime: 1000 * 60 * 15, // 15 minutos (dados permanecem em cache mais tempo para navegação rápida)
       retry: 2,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true, // Sincroniza dados com o banco sempre que o app volta para a tela
+      refetchOnMount: true,
+      refetchOnReconnect: true,
     },
   },
 })

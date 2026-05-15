@@ -137,20 +137,20 @@ export function FrequenciaPage() {
       {/* Date Navigator & Stats */}
       <div className="sticky top-14 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-4">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={prevDay} className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center hover:scale-110 transition-all shadow-sm"><ChevronLeft className="w-5 h-5" /></button>
+          <button onClick={prevDay} className="w-10 h-10 rounded-2xl bg-card border border-border flex items-center justify-center hover:scale-110 transition-all shadow-sm"><ChevronLeft className="w-5 h-5" /></button>
           <div className="text-center">
             <p className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight">
               {isToday(currentDate) ? 'Hoje' : format(currentDate, 'dd/MM/yyyy')}
             </p>
             <p className="text-[10px] font-bold text-blue-600 uppercase">{format(currentDate, 'EEEE', { locale: ptBR })}</p>
           </div>
-          <button onClick={nextDay} className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center hover:scale-110 transition-all shadow-sm"><ChevronRight className="w-5 h-5" /></button>
+          <button onClick={nextDay} className="w-10 h-10 rounded-2xl bg-card border border-border flex items-center justify-center hover:scale-110 transition-all shadow-sm"><ChevronRight className="w-5 h-5" /></button>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-2 border border-slate-100 dark:border-slate-700 text-center shadow-sm">
-            <p className="text-[10px] font-black text-slate-500 uppercase">Trabalhando</p>
-            <p className="text-lg font-black text-slate-700 dark:text-slate-200">{totalInWork}</p>
+          <div className="bg-card rounded-2xl p-2 border border-border text-center shadow-sm">
+            <p className="text-[10px] font-black text-muted-foreground uppercase">Trabalhando</p>
+            <p className="text-lg font-black text-foreground">{totalInWork}</p>
           </div>
           <div className="bg-white dark:bg-emerald-900/20 rounded-2xl p-2 border border-emerald-100 dark:border-emerald-900/30 text-center shadow-sm">
             <p className="text-[10px] font-black text-emerald-600 uppercase">Presentes</p>
@@ -189,7 +189,7 @@ export function FrequenciaPage() {
                 {group.members
                   .filter(filteredSearch)
                   .map(member => (
-                  <div key={member.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-3 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
+                  <div key={member.id} className="bg-card rounded-3xl border border-border p-3 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg transition-all",
@@ -200,8 +200,8 @@ export function FrequenciaPage() {
                         {member.nome.substring(0, 1)}
                       </div>
                       <div>
-                        <p className="text-sm font-black text-slate-800 dark:text-slate-100 leading-tight">{member.nome}</p>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase">{member.cargo}</p>
+                        <p className="text-sm font-black text-foreground leading-tight">{member.nome}</p>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase">{member.cargo}</p>
                       </div>
                     </div>
 
@@ -209,8 +209,8 @@ export function FrequenciaPage() {
                       <button 
                         onClick={() => handleStatus(member.escalaId, 'falta')}
                         className={cn(
-                          "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-slate-100 dark:border-slate-800",
-                          member.tipo === 'falta' ? "bg-red-600 text-white border-red-600 shadow-lg shadow-red-500/30" : "bg-white dark:bg-slate-800 text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500"
+                          "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-border",
+                          member.tipo === 'falta' ? "bg-red-600 text-white border-red-600 shadow-lg shadow-red-500/30" : "bg-card text-muted-foreground hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500"
                         )}
                       >
                         <X className="w-5 h-5" />
@@ -218,8 +218,8 @@ export function FrequenciaPage() {
                       <button 
                         onClick={() => handleStatus(member.escalaId, 'presente')}
                         className={cn(
-                          "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-slate-100 dark:border-slate-800",
-                          member.tipo === 'presente' || member.tipo === 'hora_extra' ? "bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/30" : "bg-white dark:bg-slate-800 text-slate-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-500"
+                          "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-border",
+                          member.tipo === 'presente' || member.tipo === 'hora_extra' ? "bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/30" : "bg-card text-muted-foreground hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-500"
                         )}
                       >
                         <Check className="w-5 h-5" />
@@ -253,14 +253,14 @@ export function FrequenciaPage() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {group.members.filter(filteredSearch).map(member => (
-                      <div key={member.id} className="bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 p-3 flex items-center justify-between shadow-sm">
+                      <div key={member.id} className="bg-card rounded-2xl border border-border p-3 flex items-center justify-between shadow-sm">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-slate-800 flex items-center justify-center text-blue-600 text-xs font-bold border border-blue-100">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 text-xs font-bold border border-blue-100">
                             {member.nome.substring(0, 1)}
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{member.nome}</p>
-                            <p className="text-[9px] text-slate-400 uppercase font-black">{member.tipo}</p>
+                            <p className="text-xs font-bold text-foreground">{member.nome}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase font-black">{member.tipo}</p>
                           </div>
                         </div>
                         <Badge 
@@ -296,8 +296,8 @@ export function FrequenciaPage() {
       <div className="fixed bottom-24 left-4 right-4 z-40">
         <div className="relative group">
           <div className="absolute inset-0 bg-blue-600 rounded-3xl blur opacity-20 group-focus-within:opacity-40 transition-opacity" />
-          <div className="relative flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-1 shadow-2xl">
-            <div className="w-10 h-10 flex items-center justify-center text-slate-400">
+          <div className="relative flex items-center bg-card border border-border rounded-3xl p-1 shadow-2xl">
+            <div className="w-10 h-10 flex items-center justify-center text-muted-foreground">
               <Search className="w-5 h-5" />
             </div>
             <input 
@@ -305,7 +305,7 @@ export function FrequenciaPage() {
               placeholder="Buscar na chamada..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-700 dark:text-slate-200 px-2"
+              className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold text-foreground px-2 placeholder:text-muted-foreground outline-none"
             />
           </div>
         </div>

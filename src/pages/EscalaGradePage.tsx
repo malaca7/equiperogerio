@@ -210,15 +210,15 @@ export function EscalaGradePage() {
           {/* Nav + View Toggle */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <button onClick={navigate_prev} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-blue-50 dark:hover:bg-slate-800 transition"><ChevronLeft className="w-4 h-4" /></button>
+              <button onClick={navigate_prev} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted transition"><ChevronLeft className="w-4 h-4" /></button>
               <h2 className="text-sm font-bold capitalize min-w-[140px] text-center">{title}</h2>
-              <button onClick={navigate_next} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-blue-50 dark:hover:bg-slate-800 transition"><ChevronRight className="w-4 h-4" /></button>
+              <button onClick={navigate_next} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted transition"><ChevronRight className="w-4 h-4" /></button>
             </div>
-            <div className="flex bg-blue-50 dark:bg-slate-800 rounded-lg p-0.5">
-              <button onClick={() => setViewMode('month')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${viewMode === 'month' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white border border-blue-100' : 'text-slate-500'}`}>
+            <div className="flex bg-muted rounded-lg p-0.5">
+              <button onClick={() => setViewMode('month')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${viewMode === 'month' ? 'bg-card shadow-sm text-foreground border border-border' : 'text-muted-foreground'}`}>
                 <Calendar className="w-3.5 h-3.5 inline mr-1" />Mês
               </button>
-              <button onClick={() => setViewMode('week')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${viewMode === 'week' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white border border-blue-100' : 'text-slate-500'}`}>
+              <button onClick={() => setViewMode('week')} className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${viewMode === 'week' ? 'bg-card shadow-sm text-foreground border border-border' : 'text-muted-foreground'}`}>
                 <CalendarDays className="w-3.5 h-3.5 inline mr-1" />Semana
               </button>
             </div>
@@ -233,7 +233,7 @@ export function EscalaGradePage() {
                 placeholder="Buscar funcionário..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                className="w-full pl-9 pr-3 py-2 text-sm bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-foreground placeholder:text-muted-foreground"
               />
               {searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="w-3.5 h-3.5 text-slate-400" /></button>}
             </div>
@@ -241,7 +241,7 @@ export function EscalaGradePage() {
               <select
                 value={filterSetor}
                 onChange={e => setFilterSetor(e.target.value)}
-                className="px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none"
+                className="px-3 py-2 text-sm bg-card border border-border text-foreground rounded-lg focus:outline-none"
               >
                 <option value="">Todos</option>
                 {setores.map(s => <option key={s} value={s}>{s}</option>)}
@@ -254,7 +254,7 @@ export function EscalaGradePage() {
             <Button onClick={() => setGenerateModal(true)} className="flex-1 min-w-[80px] gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] px-2">
               <Check className="w-3.5 h-3.5" />Preencher
             </Button>
-            <Button onClick={() => navigate('/escala/localidades')} variant="ghost" className="flex-1 min-w-[80px] gap-1.5 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-[11px] px-2 text-blue-600">
+            <Button onClick={() => navigate('/escala/localidades')} variant="ghost" className="flex-1 min-w-[80px] gap-1.5 border border-border bg-card hover:bg-muted text-[11px] px-2 text-blue-600 dark:text-blue-400">
               <MapPin className="w-3.5 h-3.5" />Localidades
             </Button>
             <Button onClick={() => navigate('/escala/imprimir-semanal')} variant="ghost" className="flex-1 min-w-[80px] gap-1.5 border text-[11px] px-2">
@@ -279,11 +279,11 @@ export function EscalaGradePage() {
         </div>
 
         {/* ─── Grid Table ───────────────────────────────── */}
-        <div className="relative overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-900">
+        <div className="relative overflow-x-auto rounded-xl border border-border shadow-sm bg-card">
           <table className="w-full border-collapse text-[11px]">
             <thead className="sticky top-0 z-20">
-              <tr className="bg-white dark:bg-slate-800">
-                <th className="sticky left-0 z-30 bg-white dark:bg-slate-800 border-b border-r border-slate-200 dark:border-slate-700 px-3 py-2.5 text-left font-bold text-slate-600 dark:text-slate-300 min-w-[160px]">
+              <tr className="bg-card">
+                <th className="sticky left-0 z-30 bg-card border-b border-r border-border px-3 py-2.5 text-left font-bold text-muted-foreground min-w-[160px]">
                   Funcionário
                 </th>
                 {days.map(day => {
