@@ -1,33 +1,34 @@
 import React from 'react'
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard,
-  Users,
-  Clock,
-  CalendarDays,
-  Settings,
-  MapPin,
-  MessageSquare,
-  Activity,
+  LayoutDashboard, Users, Clock, CalendarDays, Settings, MapPin, Activity, ShieldCheck,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { useAuth } from '../../contexts/AuthContext'
+import type { SystemPage } from '../../lib/auth.types'
 
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Painel', exact: true },
-  { to: '/funcionarios', icon: Users, label: 'Equipe' },
-  { to: '/escala/localidades', icon: MapPin, label: 'Locais' },
-  { to: '/frequencia', icon: Clock, label: 'Chamada' },
-  { to: '/atestados', icon: Activity, label: 'Médico' },
-  { to: '/escala', icon: CalendarDays, label: 'Escala' },
-  { to: '/configuracoes', icon: Settings, label: 'Config' },
+const navItems: { to: string; icon: any; label: string; page: SystemPage; exact?: boolean }[] = [
+  { to: '/', icon: LayoutDashboard, label: 'Painel', page: 'dashboard', exact: true },
+  { to: '/funcionarios', icon: Users, label: 'Equipe', page: 'funcionarios' },
+  { to: '/escala/localidades', icon: MapPin, label: 'Locais', page: 'localidades' },
+  { to: '/frequencia', icon: Clock, label: 'Chamada', page: 'frequencia' },
+  { to: '/atestados', icon: Activity, label: 'Médico', page: 'atestados' },
+  { to: '/escala', icon: CalendarDays, label: 'Escala', page: 'escala' },
+  { to: '/configuracoes', icon: Settings, label: 'Config', page: 'configuracoes' },
+  { to: '/admin', icon: ShieldCheck, label: 'Admin', page: 'admin' },
 ]
 
 export function BottomNav() {
+  const { hasAnyPermission } = useAuth()
+
+  // Filter items by permission
+  const visibleItems = navItems.filter(item => hasAnyPermission(item.page))
+
   return (
     <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-[500px] z-50 print:hidden">
       <div className="bg-card/80 dark:bg-card/50 backdrop-blur-2xl border border-border rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.3)] px-3 py-2">
         <div className="flex items-center justify-between gap-1">
-          {navItems.map(({ to, icon: Icon, label, exact }) => (
+          {visibleItems.map(({ to, icon: Icon, label, exact }) => (
             <NavLink
               key={to}
               to={to}

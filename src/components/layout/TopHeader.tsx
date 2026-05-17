@@ -1,5 +1,5 @@
 import React from 'react'
-import { Moon, Sun, LogOut } from 'lucide-react'
+import { Moon, Sun, LogOut, Shield } from 'lucide-react'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useAuth } from '../../contexts/AuthContext'
 import { Button } from '../ui/Button'
@@ -13,7 +13,7 @@ interface TopHeaderProps {
 
 export function TopHeader({ title, subtitle, actions }: TopHeaderProps) {
   const { theme, toggleTheme } = useTheme()
-  const { signOut } = useAuth()
+  const { signOut, user } = useAuth()
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 print:hidden">
@@ -35,6 +35,25 @@ export function TopHeader({ title, subtitle, actions }: TopHeaderProps) {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* User info */}
+          {user && (
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-muted/30 rounded-2xl border border-border/30 mr-1">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                <span className="text-[10px] font-black text-primary">{user.profile.nome.charAt(0)}</span>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-black text-foreground leading-none truncate max-w-[100px]">
+                  {user.profile.nome.split(' ')[0]}
+                </p>
+                {user.roles.length > 0 && (
+                  <p className="text-[8px] font-bold text-primary uppercase tracking-wider leading-none mt-0.5">
+                    {user.roles[0].nome}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {actions}
           <div className="flex items-center gap-2 p-1.5 bg-card/30 dark:bg-card/20 backdrop-blur-2xl rounded-[1.75rem] border border-border/40 shadow-sm">
             <Button

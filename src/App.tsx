@@ -19,15 +19,17 @@ import { ConfiguracoesPage } from './pages/ConfiguracoesPage'
 import { ObservacoesPage } from './pages/ObservacoesPage'
 import { RendimentoPage } from './pages/RendimentoPage'
 import { AtestadosPage } from './pages/AtestadosPage'
+import { AdminDashboard } from './pages/admin/AdminDashboard'
+import { RouteGuard } from './components/auth/RouteGuard'
 import { Loading } from './components/ui/Loading'
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 30, // 30 segundos (muito mais rápido para atualizações em tempo real)
-      gcTime: 1000 * 60 * 15, // 15 minutos (dados permanecem em cache mais tempo para navegação rápida)
+      staleTime: 1000 * 30,
+      gcTime: 1000 * 60 * 15,
       retry: 2,
-      refetchOnWindowFocus: true, // Sincroniza dados com o banco sempre que o app volta para a tela
+      refetchOnWindowFocus: true,
       refetchOnMount: true,
       refetchOnReconnect: true,
     },
@@ -53,19 +55,20 @@ function ProtectedLayout() {
     <>
       <main>
         <Routes>
-          <Route path="/"              element={<DashboardPage />} />
-          <Route path="/funcionarios"  element={<FuncionariosPage />} />
-          <Route path="/frequencia"    element={<FrequenciaPage />} />
-          <Route path="/escala"        element={<EscalaGradePage />} />
-          <Route path="/escala/calendario" element={<EscalaPage />} />
-          <Route path="/escala/localidades" element={<EscalaLocalidadePage />} />
-          <Route path="/escala/imprimir-semanal" element={<EscalaSemanalPrint />} />
-          <Route path="/escala/imprimir-mensal" element={<EscalaMensalPrint />} />
-          <Route path="/notificacoes"  element={<NotificacoesPage />} />
-          <Route path="/observacoes"   element={<ObservacoesPage />} />
-          <Route path="/rendimento"    element={<RendimentoPage />} />
-          <Route path="/atestados"     element={<AtestadosPage />} />
-          <Route path="/configuracoes" element={<ConfiguracoesPage />} />
+          <Route path="/" element={<RouteGuard page="dashboard"><DashboardPage /></RouteGuard>} />
+          <Route path="/funcionarios" element={<RouteGuard page="funcionarios"><FuncionariosPage /></RouteGuard>} />
+          <Route path="/frequencia" element={<RouteGuard page="frequencia"><FrequenciaPage /></RouteGuard>} />
+          <Route path="/escala" element={<RouteGuard page="escala"><EscalaGradePage /></RouteGuard>} />
+          <Route path="/escala/calendario" element={<RouteGuard page="escala"><EscalaPage /></RouteGuard>} />
+          <Route path="/escala/localidades" element={<RouteGuard page="localidades"><EscalaLocalidadePage /></RouteGuard>} />
+          <Route path="/escala/imprimir-semanal" element={<RouteGuard page="escala"><EscalaSemanalPrint /></RouteGuard>} />
+          <Route path="/escala/imprimir-mensal" element={<RouteGuard page="escala"><EscalaMensalPrint /></RouteGuard>} />
+          <Route path="/notificacoes" element={<RouteGuard page="notificacoes"><NotificacoesPage /></RouteGuard>} />
+          <Route path="/observacoes" element={<RouteGuard page="observacoes"><ObservacoesPage /></RouteGuard>} />
+          <Route path="/rendimento" element={<RouteGuard page="rendimento"><RendimentoPage /></RouteGuard>} />
+          <Route path="/atestados" element={<RouteGuard page="atestados"><AtestadosPage /></RouteGuard>} />
+          <Route path="/configuracoes" element={<RouteGuard page="configuracoes"><ConfiguracoesPage /></RouteGuard>} />
+          <Route path="/admin/*" element={<RouteGuard page="admin"><AdminDashboard /></RouteGuard>} />
         </Routes>
       </main>
       <BottomNav />
@@ -84,7 +87,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<AuthRoute />} />
-      <Route path="/*"     element={<ProtectedLayout />} />
+      <Route path="/*" element={<ProtectedLayout />} />
     </Routes>
   )
 }
