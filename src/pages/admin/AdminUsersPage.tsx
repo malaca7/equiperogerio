@@ -54,7 +54,6 @@ export function AdminUsersPage() {
   const [form, setForm] = useState({ cpf: '', senha: '', nome: '', email: '', roleId: '' })
   const [editForm, setEditForm] = useState({ id: '', cpf: '', senha: '', nome: '', email: '' })
   const [showPass, setShowPass] = useState(false)
-  const [showPass, setShowPass] = useState(false)
 
   const filtered = users.filter(u =>
     u.nome.toLowerCase().includes(search.toLowerCase()) ||
@@ -71,7 +70,6 @@ export function AdminUsersPage() {
       if (form.roleId) {
         await supabase.from('user_roles').insert({ user_id: data.id, role_id: form.roleId })
       }
-    },
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: USERS_KEY }); setCreateModal(false); toast('Usuário criado!', 'success') },
     onError: (e: any) => toast(e.message, 'error'),
