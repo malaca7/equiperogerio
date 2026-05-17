@@ -1,7 +1,7 @@
 {
-  "name": "Gestão de Equipe — Rogerio",
-  "short_name": "Equipe Rogerio",
-  "description": "Sistema de gestão de equipe, escala e frequência",
+  "name": "7 Boss",
+  "short_name": "7 Boss",
+  "description": "Gestão eficiente para toda sua equipe",
   "start_url": "/equiperogerio/",
   "display": "standalone",
   "background_color": "#0f172a",
