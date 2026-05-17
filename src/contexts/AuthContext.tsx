@@ -126,20 +126,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const info = getBrowserInfo()
 
     // Check in DB
-    const { data: profile, error } = await supabase
+    const { data: profiles, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('cpf', cleanCpf)
       .eq('senha', senha)
-      .single()
+      .limit(1)
+
+    const profile = profiles && profiles.length > 0 ? profiles[0] : null
 
     if (error || !profile) {
+      console.error('Login error:', error, 'Profiles array:', profiles, 'cleanCpf:', cleanCpf)
       await supabase.from('login_logs').insert({
         cpf: cleanCpf,
         sucesso: false,
         navegador: info.navegador,
         dispositivo: info.dispositivo,
-        motivo_falha: 'CPF ou senha incorretos',
+        motivo_falha: 'CPF ou senha incorretos - Erro DB: ' + (error?.message || 'Nenhum perfil'),
       })
       return { error: 'CPF ou senha incorretos' }
     }
