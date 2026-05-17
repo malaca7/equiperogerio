@@ -181,14 +181,14 @@ WHERE r.nome = 'ENCARREGADO'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- =====================================================
--- USUÁRIO INICIAL DE ADMIN (CPF: 00000000000, Senha: admin123)
+-- USUÁRIO INICIAL DE ADMIN (CPF: 09924553403, Senha: 1234)
 -- =====================================================
 INSERT INTO profiles (cpf, senha, nome, email, ativo) VALUES
-  ('00000000000', 'admin123', 'Administrador', 'admin@7boss.com', true)
+  ('09924553403', '1234', 'Rogerio', 'rogerio@7boss.com', true)
 ON CONFLICT (cpf) DO NOTHING;
 
 -- Atribuir cargo DESENVOLVEDOR ao admin
 INSERT INTO user_roles (user_id, role_id)
 SELECT p.id, r.id FROM profiles p, roles r
-WHERE p.cpf = '00000000000' AND r.nome = 'DESENVOLVEDOR'
+WHERE p.cpf = '09924553403' AND r.nome = 'DESENVOLVEDOR'
 ON CONFLICT (user_id, role_id) DO NOTHING;
