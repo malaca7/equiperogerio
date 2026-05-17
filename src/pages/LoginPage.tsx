@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Eye, EyeOff, Shield, Lock, ArrowRight, User } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toast'
@@ -19,6 +19,15 @@ export function LoginPage() {
   const [senha, setSenha] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [lembrarCpf, setLembrarCpf] = useState(false)
+
+  useEffect(() => {
+    const salvo = localStorage.getItem('7boss_lembrar_cpf')
+    if (salvo) {
+      setCpf(formatCPF(salvo))
+      setLembrarCpf(true)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,6 +40,13 @@ export function LoginPage() {
       toast('CPF inválido', 'warning')
       return
     }
+    
+    if (lembrarCpf) {
+      localStorage.setItem('7boss_lembrar_cpf', cleanCpf)
+    } else {
+      localStorage.removeItem('7boss_lembrar_cpf')
+    }
+
     setLoading(true)
     const { error } = await signIn(cleanCpf, senha)
     setLoading(false)
@@ -39,12 +55,10 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-[#f8fafc] relative">
-      {/* Background simplificado e profissional */}
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-200/50 via-[#f8fafc] to-[#f8fafc]"></div>
 
       <div className="relative w-full max-w-md z-10">
         <div className="flex flex-col items-center mb-10">
-          {/* Logo container */}
           <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 mb-6 overflow-hidden">
             <img 
               src="/equiperogerio/logo.png" 
@@ -66,7 +80,6 @@ export function LoginPage() {
           </div>
         </div>
 
-        {/* Card do Formulário */}
         <div className="bg-white rounded-3xl p-8 sm:p-10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
           <form onSubmit={handleSubmit} className="space-y-6" noValidate>
             <div className="text-center mb-6">
@@ -111,6 +124,24 @@ export function LoginPage() {
                   {showPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between mt-2">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <div className="relative flex items-center justify-center w-5 h-5">
+                  <input 
+                    type="checkbox" 
+                    checked={lembrarCpf}
+                    onChange={e => setLembrarCpf(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <div className="w-4.5 h-4.5 border-2 border-slate-300 rounded transition-all peer-checked:bg-blue-600 peer-checked:border-blue-600 group-hover:border-blue-400"></div>
+                  <svg className="absolute w-3 h-3 text-white scale-0 transition-transform peer-checked:scale-100 pointer-events-none" viewBox="0 0 14 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M1 5L4.5 8.5L13 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <span className="text-xs font-semibold text-slate-600 group-hover:text-slate-800 transition-colors select-none">Lembrar meu CPF</span>
+              </label>
             </div>
 
             <Button 

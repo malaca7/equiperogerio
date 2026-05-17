@@ -52,6 +52,8 @@ export function AdminUsersPage() {
   const [createModal, setCreateModal] = useState(false)
   const [editUser, setEditUser] = useState<UserWithRoles | null>(null)
   const [form, setForm] = useState({ cpf: '', senha: '', nome: '', email: '', roleId: '' })
+  const [editForm, setEditForm] = useState({ id: '', cpf: '', senha: '', nome: '', email: '' })
+  const [showPass, setShowPass] = useState(false)
   const [showPass, setShowPass] = useState(false)
 
   const filtered = users.filter(u =>
@@ -70,7 +72,21 @@ export function AdminUsersPage() {
         await supabase.from('user_roles').insert({ user_id: data.id, role_id: form.roleId })
       }
     },
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: USERS_KEY }); setCreateModal(false); toast('Usuário criado!', 'success') },
+    onError: (e: any) => toast(e.message, 'error'),
+  })
+
+  const updateMut = useMutation({
+    mutationFn: async () => {
+      const clean = editForm.cpf.replace(/\D/g, '')
+      const updates: any = { cpf: clean, nome: editForm.nome, email: editForm.email || null, updated_at: new Date().toISOString() }
+      if (editForm.senha) updates.senha = editForm.senha
+      
+      const { error } = await supabase.from('profiles').update(updates).eq('id', editForm.id)
+      if (error) throw error
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: USERS_KEY }); setEditUser(null); toast('Usuário atualizado!', 'success') },
     onError: (e: any) => toast(e.message, 'error'),
   })
 
@@ -153,7 +169,10 @@ export function AdminUsersPage() {
                   <option key={r.id} value={r.id}>{r.nome}</option>
                 ))}
               </select>
-              <button onClick={() => setEditUser(u)} className="w-10 h-10 rounded-xl bg-muted/50 text-muted-foreground hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-all">
+              <button onClick={() => { 
+                setEditForm({ id: u.id, cpf: u.cpf, senha: '', nome: u.nome, email: u.email || '' })
+                setEditUser(u) 
+              }} className="w-10 h-10 rounded-xl bg-muted/50 text-muted-foreground hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-all">
                 <UserCog className="w-5 h-5" />
               </button>
             </div>
@@ -207,6 +226,42 @@ export function AdminUsersPage() {
           <div className="flex gap-3 pt-2">
             <Button variant="secondary" onClick={() => setCreateModal(false)} className="flex-1 h-12 rounded-2xl">Cancelar</Button>
             <Button type="submit" loading={createMut.isPending} className="flex-1 h-12 rounded-2xl bg-primary text-white font-black">Criar</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal open={!!editUser} onClose={() => setEditUser(null)} title="Editar Usuário">
+        <form onSubmit={e => { e.preventDefault(); updateMut.mutate() }} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Nome *</label>
+            <input value={editForm.nome} onChange={e => setEditForm(f => ({ ...f, nome: e.target.value.toUpperCase() }))}
+              className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold uppercase outline-none focus:border-primary/30" placeholder="NOME COMPLETO" required />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">CPF *</label>
+            <input value={editForm.cpf} onChange={e => setEditForm(f => ({ ...f, cpf: e.target.value.replace(/\D/g, '').slice(0, 11) }))} inputMode="numeric"
+              className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold outline-none focus:border-primary/30" placeholder="00000000000" required />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Nova Senha</label>
+            <div className="relative">
+              <input type={showPass ? 'text' : 'password'} value={editForm.senha} onChange={e => setEditForm(f => ({ ...f, senha: e.target.value }))}
+                className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold outline-none focus:border-primary/30 pr-12" placeholder="Deixe em branco para não alterar" />
+              <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-[9px] text-muted-foreground pt-1 ml-1">Para manter a senha atual, deixe o campo vazio.</p>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Email</label>
+            <input value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+              className="w-full px-4 py-3 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold outline-none focus:border-primary/30" placeholder="email@empresa.com" />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setEditUser(null)} className="flex-1 h-12 rounded-2xl">Cancelar</Button>
+            <Button type="submit" loading={updateMut.isPending} className="flex-1 h-12 rounded-2xl bg-primary text-white font-black">Salvar Alterações</Button>
           </div>
         </form>
       </Modal>
