@@ -19,7 +19,7 @@ const getEscalaLetra = (tipo: string) => {
     case 'paternidade': return 'T'
     case 'obito_familiar': return 'O'
     case 'beneficio': return 'B'
-    case 'repouso': return 'R'
+    case 'repouso': return 'D'
     case 'compensar': return 'C'
     case 'ferias': return 'FE'
     case 'transferencia': return 'TR'
@@ -119,7 +119,7 @@ export function EscalaMensalPrint() {
                         const letra = escalaDia ? getEscalaLetra(escalaDia.tipo) : ''
                         
                         let cellClass = "border border-gray-400 p-0.5 text-center font-bold"
-                        if (letra === 'R') cellClass += " text-green-600 bg-green-50/50 print:bg-transparent"
+                        if (letra === 'D') cellClass += " text-green-600 bg-green-50/50 print:bg-transparent"
                         if (letra === 'X') cellClass += " text-blue-700"
                         if (letra === 'F') cellClass += " text-red-600 bg-red-50/50 print:bg-transparent"
 
@@ -138,7 +138,7 @@ export function EscalaMensalPrint() {
         })}
 
         <div className="mt-6 pt-3 border-t border-gray-300 text-[10px] text-gray-500 flex justify-between">
-          <p>Legenda: X=Presente | R=Repouso | F=Falta | J=F. Justif. | A=Atest. | FE=Férias | P=Susp.</p>
+          <p>Legenda: X=Presente | D=Descanso | F=Falta | J=F. Justif. | A=Atest. | FE=Férias | P=Susp.</p>
           <p>Gerado em: {format(new Date(), "dd/MM/yyyy HH:mm")}</p>
         </div>
       </div>

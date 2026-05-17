@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import ptBRLocale from '@fullcalendar/core/locales/pt-br'
-import { format, subDays, parseISO } from 'date-fns'
+import { format, subDays, parseISO, isSunday, startOfWeek, addDays, subWeeks, addWeeks, getWeek } from 'date-fns'
 import { Plus, Trash2, Copy, Printer } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { TopHeader } from '../components/layout/TopHeader'
@@ -13,6 +13,8 @@ import { Select, Textarea } from '../components/ui/Input'
 import { useToast } from '../components/ui/Toast'
 import { useFuncionarios } from '../hooks/useFuncionarios'
 import { useEscalasMensal, useCreateEscala, useDeleteEscala, useBatchUpsertEscalas, useUpdateEscala } from '../hooks/useEscalas'
+import { useConfiguracao } from '../hooks/useConfiguracoes'
+import { DEFAULT_TIPOS_ESCALA } from './ConfiguracoesPage'
 import { escalaTipoLabel, escalaTipoColor, currentMonth } from '../lib/utils'
 import type { EscalaTipo } from '../lib/database.types'
 
@@ -25,7 +27,7 @@ const tipoOptions: { value: EscalaTipo; label: string }[] = [
   { value: 'paternidade', label: 'Paternidade' },
   { value: 'obito_familiar', label: 'Óbito Familiar' },
   { value: 'beneficio', label: 'Benefício' },
-  { value: 'repouso', label: 'Repouso' },
+  { value: 'repouso', label: 'Descanso' },
   { value: 'compensar', label: 'Compensar' },
   { value: 'ferias', label: 'Férias' },
   { value: 'transferencia', label: 'Transferência' },
@@ -60,23 +62,36 @@ export function EscalaPage() {
   const { data: allFuncionarios = [] } = useFuncionarios({ status: 'ativo' })
   const funcionarios = allFuncionarios.filter(f => f.cargo?.toLowerCase() !== 'encarregado')
   const { data: escalas = [] } = useEscalasMensal(currentMonthStr)
+  const { data: localidadesList = [] } = useConfiguracao<any[]>('localidades', [])
+  const { data: tiposEscala = DEFAULT_TIPOS_ESCALA } = useConfiguracao<any[]>('tipos_escala', DEFAULT_TIPOS_ESCALA)
+
+  const STATUS_CONFIG = useMemo(() => {
+    return (tiposEscala || DEFAULT_TIPOS_ESCALA).reduce((acc: any, t: any) => {
+      acc[t.id] = t
+      return acc
+    }, {})
+  }, [tiposEscala])
+
   const createMutation = useCreateEscala()
   const updateMutation = useUpdateEscala()
   const deleteMutation = useDeleteEscala()
   const batchUpsertMutation = useBatchUpsertEscalas()
 
   // Map escalas to FullCalendar events
-  const events = escalas.map((e: any) => ({
-    id: e.id,
-    title: e.funcionarios?.nome
-      ? `${e.funcionarios.nome.split(' ')[0]} — ${escalaTipoLabel[e.tipo as EscalaTipo]}`
-      : escalaTipoLabel[e.tipo as EscalaTipo],
-    date: e.data,
-    backgroundColor: escalaTipoColor[e.tipo as EscalaTipo],
-    borderColor: 'transparent',
-    textColor: '#fff',
-    extendedProps: { escala: e },
-  }))
+  const events = escalas.map((e: any) => {
+    const cfg = STATUS_CONFIG[e.tipo]
+    return {
+      id: e.id,
+      title: e.funcionarios?.nome
+        ? `${e.funcionarios.apelido || e.funcionarios.nome.split(' ')[0]} — ${cfg?.nome || e.tipo}`
+        : cfg?.nome || e.tipo,
+      date: e.data,
+      backgroundColor: cfg?.hex || 'hsl(var(--primary))',
+      borderColor: 'transparent',
+      textColor: 'hsl(var(--primary-foreground))',
+      extendedProps: { escala: e },
+    }
+  })
 
   const handleDateClick = (info: any) => {
     setSelectedDate(info.dateStr)
@@ -164,23 +179,79 @@ export function EscalaPage() {
     
     try {
       const baseDate = parseISO(weekStartDate)
+      const weekNum = getWeek(baseDate)
       const inserts: any[] = []
       
-      // Gera de segunda a sabado (6 dias)
-      for (let i = 0; i < 6; i++) {
-        const currentDate = format(new Date(baseDate.getTime() + i * 86400000), 'yyyy-MM-dd')
-        
-        funcionarios.forEach(f => {
+      // Gera de Segunda a Domingo (7 dias)
+      for (let i = 0; i < 7; i++) {
+        const currentDateObj = new Date(baseDate.getTime() + i * 86400000)
+        const currentDateStr = format(currentDateObj, 'yyyy-MM-dd')
+        const isSun = i === 6 // Domingo
+
+        funcionarios.forEach((f, fIdx) => {
           // Verifica se já tem escala nesse dia
-          const exists = escalas.some(e => e.funcionario_id === f.id && e.data === currentDate)
-          if (!exists) {
-            inserts.push({
-              funcionario_id: f.id,
-              data: currentDate,
-              tipo: 'presente',
-              turno: 'integral',
-              observacoes: 'Gerado automaticamente',
-            })
+          const exists = escalas.some(e => e.funcionario_id === f.id && e.data === currentDateStr)
+          if (exists) return
+
+          if (isSun) {
+            // Regra de 50% para o Domingo: alterna baseado no índice do funcionário e número da semana
+            const worksThisSunday = (fIdx + weekNum) % 2 === 0
+            
+            if (worksThisSunday) {
+              // 1. Trabalha no Domingo
+              inserts.push({
+                funcionario_id: f.id,
+                data: currentDateStr,
+                tipo: 'presente',
+                turno: 'integral'
+              })
+
+              // 2. Compensado na MESMA semana (Distribuído entre Quinta, Sexta e Sábado)
+              const thu = format(addDays(baseDate, 3), 'yyyy-MM-dd')
+              const fri = format(addDays(baseDate, 4), 'yyyy-MM-dd')
+              const sat = format(addDays(baseDate, 5), 'yyyy-MM-dd')
+              
+              const compOptions = [sat, fri, thu]
+              const compDate = compOptions[fIdx % compOptions.length]
+              
+              // Remove se já adicionamos 'presente' para esse dia no loop anterior deste mesmo handleGenerateWeek
+              const existingInInsertsComp = inserts.findIndex(ins => ins.funcionario_id === f.id && ins.data === compDate)
+              if (existingInInsertsComp !== -1) {
+                inserts[existingInInsertsComp].tipo = 'compensar'
+              } else {
+                inserts.push({ funcionario_id: f.id, data: compDate, tipo: 'compensar', turno: 'integral' })
+              }
+
+              // 3. Repouso na PRÓXIMA semana (Distribuído entre Segunda, Terça e Quinta)
+              const nextMon = format(addDays(baseDate, 7), 'yyyy-MM-dd')
+              const nextTue = format(addDays(baseDate, 8), 'yyyy-MM-dd')
+              const nextThu = format(addDays(baseDate, 10), 'yyyy-MM-dd')
+              
+              const repOptions = [nextMon, nextTue, nextThu]
+              const repDate = repOptions[fIdx % repOptions.length]
+
+              inserts.push({ funcionario_id: f.id, data: repDate, tipo: 'repouso', turno: 'integral' })
+              
+            } else {
+              // Não trabalha no Domingo (Repouso)
+              inserts.push({
+                funcionario_id: f.id,
+                data: currentDateStr,
+                tipo: 'repouso',
+                turno: 'integral'
+              })
+            }
+          } else {
+            // Dias normais (Seg-Sab) - apenas se ainda não foi definido como 'compensar' pela lógica do Domingo acima
+            const alreadyAssigned = inserts.some(ins => ins.funcionario_id === f.id && ins.data === currentDateStr)
+            if (!alreadyAssigned) {
+              inserts.push({
+                funcionario_id: f.id,
+                data: currentDateStr,
+                tipo: 'presente',
+                turno: 'integral'
+              })
+            }
           }
         })
       }
@@ -192,7 +263,7 @@ export function EscalaPage() {
       }
 
       await batchUpsertMutation.mutateAsync(inserts)
-      toast(`Semana gerada! ${inserts.length} escalas criadas.`, 'success')
+      toast(`Escala Semanal Gerada! Equipe dividida 50/50 no domingo com folgas ajustadas.`, 'success')
       setGenerateWeekModal(false)
     } catch (err: any) {
       console.error(err)
@@ -203,53 +274,52 @@ export function EscalaPage() {
   const funcOptions = funcionarios.map(f => ({ value: f.id, label: f.nome }))
 
   return (
-    <div className="main-content">
+    <div className="min-h-screen bg-background pb-32">
       <TopHeader title="Escala" subtitle="Calendário mensal" />
 
-      <div className="px-4 pt-3 pb-4">
-        {/* Actions & Legend */}
-        <div className="flex flex-col gap-3 mb-4">
-          <div className="grid grid-cols-2 gap-2">
-            <Button 
-              onClick={() => setGenerateWeekModal(true)} 
-              className="w-full gap-2 bg-[hsl(var(--primary))] text-white border shadow-sm hover:brightness-110"
-            >
-              <Plus className="w-4 h-4" />
-              Preencher Semana
-            </Button>
-            <Button 
-              onClick={() => navigate('/escala/imprimir-semanal')} 
-              className="w-full gap-2 bg-[hsl(var(--card))] text-[hsl(var(--foreground))] border shadow-sm hover:bg-[hsl(var(--muted))]"
-              variant="ghost"
-            >
-              <Printer className="w-4 h-4 text-blue-600" />
-              Mural Semanal
-            </Button>
-            <Button 
-              onClick={() => navigate('/escala/imprimir-mensal')} 
-              className="w-full gap-2 bg-[hsl(var(--card))] text-[hsl(var(--foreground))] border shadow-sm hover:bg-[hsl(var(--muted))]"
-              variant="ghost"
-            >
-              <Printer className="w-4 h-4 text-purple-600" />
-              Mural Mensal
-            </Button>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {tipoOptions.map(({ value, label }) => (
-            <div key={value} className="flex items-center gap-1">
-              <div
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: escalaTipoColor[value] }}
-              />
-              <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{label}</span>
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-32">
+        {/* Elite Glass Toolbar */}
+        <div className="bg-card/80 dark:bg-card/50 backdrop-blur-xl border border-border rounded-[2.5rem] p-4 sm:p-6 shadow-sm mb-6 sm:mb-8">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button 
+                onClick={() => setGenerateWeekModal(true)} 
+                className="rounded-2xl gap-2 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-primary/20"
+              >
+                <Plus className="w-4 h-4" /> Preencher Semana
+              </Button>
+              <Button 
+                variant="ghost"
+                onClick={() => navigate('/escala/imprimir-semanal')} 
+                className="rounded-2xl gap-2 font-black text-[10px] uppercase tracking-widest border border-border"
+              >
+                <Printer className="w-4 h-4 text-blue-500" /> Mural Semanal
+              </Button>
+              <Button 
+                variant="ghost"
+                onClick={() => navigate('/escala/imprimir-mensal')} 
+                className="rounded-2xl gap-2 font-black text-[10px] uppercase tracking-widest border border-border"
+              >
+                <Printer className="w-4 h-4 text-purple-500" /> Mural Mensal
+              </Button>
             </div>
-          ))}
+
+            <div className="flex flex-wrap gap-3 justify-center">
+              {tipoOptions.slice(0, 6).map(({ value, label }) => (
+                <div key={value} className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-xl border border-border/50">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full shadow-sm"
+                    style={{ backgroundColor: escalaTipoColor[value] }}
+                  />
+                  <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">{label}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Calendar */}
-        <div className="card p-3 overflow-hidden">
+        {/* Calendar Container */}
+        <div className="bg-card/80 backdrop-blur-xl border border-border rounded-[2.5rem] p-6 shadow-xl overflow-hidden">
           <FullCalendar
             ref={calendarRef}
             plugins={[dayGridPlugin, interactionPlugin]}
@@ -285,10 +355,14 @@ export function EscalaPage() {
         </div>
 
         {/* Tap hint */}
-        <p className="text-center text-xs text-[hsl(var(--muted-foreground))] mt-3">
-          Toque em um dia para adicionar escala • Toque no evento para excluir
-        </p>
+        <div className="mt-8 flex items-center justify-center gap-3">
+          <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+          <p className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">
+            Toque em um dia para adicionar escala • Arraste para mover
+          </p>
+        </div>
       </div>
+
 
       {/* Day Manager modal */}
       <Modal
@@ -313,58 +387,99 @@ export function EscalaPage() {
             Copiar de ontem (Ignora repouso/compensar)
           </Button>
 
-          <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto pr-2 pb-4">
+          <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto pr-2 pb-4 scrollbar-thin scrollbar-thumb-slate-200">
             {funcionarios.map(func => {
               const escala = escalas.find(e => e.funcionario_id === func.id && e.data === selectedDate)
+              const isSaving = batchUpsertMutation.isPending || updateMutation.isPending || deleteMutation.isPending
               
               return (
-                <div key={func.id} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center p-3 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-700 dark:text-blue-400 font-bold text-sm shrink-0">
-                    {func.nome.substring(0, 2).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">{func.nome}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{func.setor || '-'}</p>
+                <div key={func.id} className="flex flex-col gap-4 p-4 bg-card dark:bg-[hsl(var(--card))] rounded-2xl border border-border shadow-sm transition-all hover:shadow-md">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary dark:text-primary-foreground font-bold text-sm shrink-0">
+                      {(func.apelido || func.nome).substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-foreground truncate">{func.apelido || func.nome}</p>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">{func.setor || '-'}</p>
+                    </div>
                     
-                    {/* Input de Ocorrência super rápido */}
-                    {escala && (
-                      <input 
-                        type="text" 
-                        placeholder="Adicionar ocorrência/obs..." 
-                        className="mt-2 w-full text-[11px] bg-transparent border-b border-slate-100 dark:border-slate-700 focus:outline-none focus:border-blue-400 pb-1"
-                        defaultValue={escala.observacoes || ''}
-                        onBlur={(e) => {
-                          if (e.target.value !== (escala.observacoes || '')) {
-                            updateMutation.mutate({
-                              id: escala.id,
-                              data: { observacoes: e.target.value }
-                            })
+                    <Select
+                      className="w-32 sm:w-40 text-xs font-bold border-input rounded-xl"
+                      value={escala?.tipo || ''}
+                      disabled={isSaving}
+                      onChange={(e) => {
+                        const novoTipo = e.target.value
+                        if (!novoTipo) {
+                          if (escala) deleteMutation.mutate(escala.id)
+                        } else {
+                          const isWorkingSunday = isSunday(parseISO(selectedDate!)) && (novoTipo === 'presente' || novoTipo === 'hora_extra')
+                          const updates: any[] = [{
+                            funcionario_id: func.id,
+                            data: selectedDate!,
+                            tipo: novoTipo as EscalaTipo,
+                            turno: 'integral',
+                          }]
+                          if (isWorkingSunday) {
+                            const date = parseISO(selectedDate!)
+                            const prevWeek = startOfWeek(subWeeks(date, 1), { weekStartsOn: 1 })
+                            const thu = format(addDays(prevWeek, 3), 'yyyy-MM-dd')
+                            const fri = format(addDays(prevWeek, 4), 'yyyy-MM-dd')
+                            const sat = format(addDays(prevWeek, 5), 'yyyy-MM-dd')
+                            const compTarget = [thu, fri, sat].find(d => !escalas.some(e => e.funcionario_id === func.id && e.data === d)) || sat
+                            updates.push({ funcionario_id: func.id, data: compTarget, tipo: 'compensar', turno: 'integral' })
+                            const nextWeek = startOfWeek(addWeeks(date, 1), { weekStartsOn: 1 })
+                            const mon = format(nextWeek, 'yyyy-MM-dd')
+                            const tue = format(addDays(nextWeek, 1), 'yyyy-MM-dd')
+                            const nthu = format(addDays(nextWeek, 3), 'yyyy-MM-dd')
+                            const repTarget = [mon, tue, nthu].find(d => !escalas.some(e => e.funcionario_id === func.id && e.data === d)) || mon
+                            updates.push({ funcionario_id: func.id, data: repTarget, tipo: 'repouso', turno: 'integral' })
                           }
-                        }}
-                      />
-                    )}
+                          batchUpsertMutation.mutate(updates)
+                        }
+                      }}
+                      options={[
+                        { value: '', label: 'Vazio' },
+                        ...tipoOptions
+                      ]}
+                    />
                   </div>
-                  <Select 
-                    className="w-full sm:w-44 text-sm font-medium border border-slate-100 bg-white dark:bg-slate-900/50"
-                    value={escala?.tipo || ''}
-                    onChange={(e) => {
-                      const novoTipo = e.target.value
-                      if (!novoTipo) {
-                        if (escala) deleteMutation.mutate(escala.id)
-                      } else {
-                        batchUpsertMutation.mutate([{
-                          funcionario_id: func.id,
-                          data: selectedDate!,
-                          tipo: novoTipo as EscalaTipo,
-                          turno: 'integral',
-                        }])
-                      }
-                    }}
-                    options={[
-                      { value: '', label: 'Sem escala (Vazio)' },
-                      ...tipoOptions
-                    ]}
-                  />
+
+{escala && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-13 pt-2 border-t border-border/50">
+                      {/* Localidade */}
+                      {escala.tipo === 'presente' && (
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Localidade</label>
+                          <select
+                            className="w-full text-[11px] font-bold bg-muted border border-input rounded-lg p-1.5 outline-none"
+                            value={escala.localidade || ''}
+                            onChange={(e) => updateMutation.mutate({ id: escala.id, data: { localidade: e.target.value || null } })}
+                          >
+                            <option value="">Geral / Sem Localidade</option>
+                            {(localidadesList as any[]).filter(l => !func.setor || l.setor === func.setor).map(l => (
+                              <option key={l.id} value={l.nome}>{l.nome}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Ocorrência */}
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Ocorrência</label>
+                        <input
+                          type="text"
+                          placeholder="Obs..."
+                          className="w-full text-[11px] bg-transparent border-b border-input focus:border-primary outline-none pb-1"
+                          defaultValue={escala.observacoes || ''}
+                          onBlur={(e) => {
+                            if (e.target.value !== (escala.observacoes || '')) {
+                              updateMutation.mutate({ id: escala.id, data: { observacoes: e.target.value } })
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}

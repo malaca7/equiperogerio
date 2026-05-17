@@ -13,6 +13,7 @@ export interface Database {
         Row: {
           id: string
           nome: string
+          apelido: string | null
           matricula: string
           telefone: string | null
           cargo: string
@@ -25,6 +26,7 @@ export interface Database {
         Insert: {
           id?: string
           nome: string
+          apelido?: string | null
           matricula: string
           telefone?: string | null
           cargo: string
@@ -37,6 +39,7 @@ export interface Database {
         Update: {
           id?: string
           nome?: string
+          apelido?: string | null
           matricula?: string
           telefone?: string | null
           cargo?: string

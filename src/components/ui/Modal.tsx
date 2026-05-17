@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Button } from './Button'
@@ -24,8 +25,8 @@ export function Modal({ open, onClose, title, children, className, footer }: Mod
 
   if (!open) return null
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in"
@@ -73,6 +74,7 @@ export function Modal({ open, onClose, title, children, className, footer }: Mod
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

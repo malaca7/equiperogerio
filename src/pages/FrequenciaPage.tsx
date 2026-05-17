@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
   format, 
   isToday, 
@@ -19,16 +20,28 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Filter
+  Filter,
+  Calendar,
+  MoreVertical,
+  Activity,
+  Award,
+  AlertCircle,
+  CheckCircle,
+  Zap,
+  Trash2,
+  RotateCcw
 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { cn } from '../lib/utils'
 import { TopHeader } from '../components/layout/TopHeader'
 import { Loading } from '../components/ui/Loading'
 import { useToast } from '../components/ui/Toast'
 import { useFuncionarios } from '../hooks/useFuncionarios'
-import { useEscalasMensal, useUpdateEscala, useBatchUpsertEscalas } from '../hooks/useEscalas'
+import { useEscalasMensal } from '../hooks/useEscalas'
+import { useFrequenciaData, useUpsertFrequencia, useBatchUpsertFrequencia, FREQUENCIA_KEY } from '../hooks/useFrequencia'
 import { useConfiguracao } from '../hooks/useConfiguracoes'
-import { cn } from '../lib/utils'
 import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
 
 interface Localidade {
   id: string
@@ -38,18 +51,28 @@ interface Localidade {
 
 export function FrequenciaPage() {
   const { toast } = useToast()
+  const queryClient = useQueryClient()
   const [currentDate, setCurrentDate] = useState(startOfDay(new Date()))
   const [searchTerm, setSearchTerm] = useState('')
 
   // Data fetching
   const { data: allFuncionarios = [], isLoading: loadF } = useFuncionarios({ status: 'ativo' })
   const { data: escalas = [], isLoading: loadE } = useEscalasMensal(format(currentDate, 'yyyy-MM'))
+  const { data: frequencias = [], isLoading: loadFreq } = useFrequenciaData(format(currentDate, 'yyyy-MM-dd'))
   const { data: localidadesConfig = [] } = useConfiguracao<Localidade[]>('localidades', [])
 
-  const updateMutation = useUpdateEscala()
-  const batchMutation = useBatchUpsertEscalas()
+  const upsertFreqMutation = useUpsertFrequencia()
+  const batchFreqMutation = useBatchUpsertFrequencia()
 
   const dateStr = format(currentDate, 'yyyy-MM-dd')
+
+  const freqMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    frequencias.forEach(f => {
+      map[f.funcionario_id] = f.status
+    })
+    return map
+  }, [frequencias])
 
   const funcMap = useMemo(() => {
     const map: Record<string, any> = {}
@@ -59,23 +82,22 @@ export function FrequenciaPage() {
     return map
   }, [allFuncionarios])
 
-  // Grouping for the "Chamada"
+  // Grouping for the "Chamada" - SYNCED WITH ESCALA
   const processedData = useMemo(() => {
     const workingGroups: Record<string, { id: string; nome: string; setor: string; members: any[] }> = {}
-    const notWorkingGroups: Record<string, { label: string; icon: string; members: any[] }> = {
-      'folga': { label: 'Folgas / Repouso', icon: '🏖️', members: [] },
-      'ferias': { label: 'Férias', icon: '✈️', members: [] },
-      'atestado': { label: 'Afastamentos / Atestados', icon: '🏥', members: [] },
-      'outros': { label: 'Outros', icon: '📄', members: [] },
+    const notWorkingGroups: Record<string, { label: string; icon: any; members: any[]; color: string }> = {
+      'folga': { label: 'Folgas', icon: <Activity className="w-4 h-4" />, members: [], color: 'text-blue-500' },
+      'ferias': { label: 'Férias', icon: <Calendar className="w-4 h-4" />, members: [], color: 'text-purple-500' },
+      'atestado': { label: 'Afastamentos', icon: <Activity className="w-4 h-4" />, members: [], color: 'text-amber-500' },
+      'outros': { label: 'Outros', icon: <Clock className="w-4 h-4" />, members: [], color: 'text-slate-500' },
     }
     
-    // Initialize working groups with localities
     localidadesConfig.forEach(l => {
       workingGroups[l.id] = { ...l, members: [] }
     })
     workingGroups['sem_local'] = { id: 'sem_local', nome: 'Sem Localidade', setor: 'Geral', members: [] }
 
-    const workStatuses = ['presente', 'falta', 'hora_extra']
+    const workStatuses = ['presente', 'hora_extra']
 
     escalas.forEach((e: any) => {
       if (e.data !== dateStr) return
@@ -85,17 +107,16 @@ export function FrequenciaPage() {
       const member = {
         ...f,
         escalaId: e.id,
-        tipo: e.tipo,
+        tipoPlanejado: e.tipo, 
+        tipoReal: freqMap[f.id] || null, 
         localidade: e.localidade
       }
 
       if (workStatuses.includes(e.tipo)) {
-        // Find which locality card this employee belongs to
         const loc = localidadesConfig.find(l => l.nome === e.localidade && l.setor === f.setor)
         const locKey = loc ? loc.id : 'sem_local'
         workingGroups[locKey].members.push(member)
       } else {
-        // Categorize non-working statuses
         if (e.tipo === 'repouso' || e.tipo === 'compensar') notWorkingGroups['folga'].members.push(member)
         else if (e.tipo === 'ferias') notWorkingGroups['ferias'].members.push(member)
         else if (e.tipo === 'atestado') notWorkingGroups['atestado'].members.push(member)
@@ -104,202 +125,307 @@ export function FrequenciaPage() {
     })
 
     return { workingGroups, notWorkingGroups }
-  }, [escalas, dateStr, funcMap, localidadesConfig])
+  }, [escalas, dateStr, funcMap, localidadesConfig, freqMap])
 
-  // Actions
-  const handleStatus = async (escalaId: string, tipo: string) => {
+  const handleStatus = async (funcionarioId: string, status: any) => {
     try {
-      await updateMutation.mutateAsync({ id: escalaId, data: { tipo } })
+      await upsertFreqMutation.mutateAsync({ 
+        funcionario_id: funcionarioId, 
+        data: dateStr, 
+        status 
+      })
+      toast('Registro atualizado', 'success')
     } catch (err: any) {
-      toast('Erro ao atualizar: ' + err.message, 'error')
+      toast('Erro ao registrar: ' + err.message, 'error')
+    }
+  }
+
+  const handleConfirmAll = async (members: any[]) => {
+    const pendentes = members.filter(m => !m.tipoReal)
+    if (pendentes.length === 0) return toast('Todos já foram confirmados', 'info')
+    
+    if (!confirm(`Confirmar presença de ${pendentes.length} funcionários pendentes?`)) return
+
+    try {
+      const updates = pendentes.map(m => ({
+        funcionario_id: m.id,
+        data: dateStr,
+        status: 'presente' as const
+      }))
+      await batchFreqMutation.mutateAsync(updates)
+      toast(`${pendentes.length} presenças confirmadas!`, 'success')
+    } catch (err: any) {
+      toast('Erro ao confirmar em lote: ' + err.message, 'error')
     }
   }
 
   const prevDay = () => setCurrentDate(subDays(currentDate, 1))
   const nextDay = () => setCurrentDate(addDays(currentDate, 1))
 
-  if (loadF || loadE) return <div className="main-content"><TopHeader title="Chamada Diária" /><div className="py-20"><Loading text="Carregando..." /></div></div>
+  if (loadF || loadE || loadFreq) return <div className="min-h-screen bg-background"><TopHeader title="Chamada" /><div className="py-32"><Loading text="Sincronizando com a escala..." /></div></div>
 
   const { workingGroups, notWorkingGroups } = processedData
-  const totalInWork = Object.values(workingGroups).reduce((acc, g) => acc + g.members.length, 0)
-  const totalOut = Object.values(notWorkingGroups).reduce((acc, g) => acc + g.members.length, 0)
-  const presentCount = Object.values(workingGroups).flatMap(g => g.members).filter(m => m.tipo === 'presente' || m.tipo === 'hora_extra').length
-  const absentCount = Object.values(workingGroups).flatMap(g => g.members).filter(m => m.tipo === 'falta').length
-
+  const allWorkingMembers = Object.values(workingGroups).flatMap(g => g.members)
+  const pendingCount = allWorkingMembers.filter(m => !m.tipoReal).length
+  const presentCount = allWorkingMembers.filter(m => m.tipoReal === 'presente' || m.tipoReal === 'hora_extra').length
+  const absentCount = allWorkingMembers.filter(m => m.tipoReal === 'falta').length
+  
   const filteredSearch = (m: any) => m.nome.toLowerCase().includes(searchTerm.toLowerCase())
 
   return (
-    <div className="main-content pb-24 bg-background">
+    <div className="min-h-screen bg-background pb-40">
       <TopHeader 
-        title="Chamada Diária" 
+        title="Controle de Efetivo" 
         subtitle={format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })} 
       />
 
-      <div className="sticky top-14 z-30 bg-background/90 backdrop-blur-md border-b border-border p-4">
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={prevDay} className="w-10 h-10 rounded-2xl bg-card border border-border flex items-center justify-center hover:scale-110 transition-all shadow-sm"><ChevronLeft className="w-5 h-5" /></button>
-          <div className="text-center">
-            <p className="text-sm font-black text-foreground uppercase tracking-tight">
-              {isToday(currentDate) ? 'Hoje' : format(currentDate, 'dd/MM/yyyy')}
-            </p>
-            <p className="text-[10px] font-bold text-primary uppercase">{format(currentDate, 'EEEE', { locale: ptBR })}</p>
-          </div>
-          <button onClick={nextDay} className="w-10 h-10 rounded-2xl bg-card border border-border flex items-center justify-center hover:scale-110 transition-all shadow-sm"><ChevronRight className="w-5 h-5" /></button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 mb-2">
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-2 border border-emerald-100 dark:border-emerald-900/30 text-center shadow-sm">
-            <span className="block text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-0.5">Presentes</span>
-            <span className="block text-2xl font-black text-emerald-700 dark:text-emerald-300 leading-none">{presentCount}</span>
-          </div>
-          <div className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-2 border border-red-100 dark:border-red-900/30 text-center shadow-sm">
-            <span className="block text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-widest mb-0.5">Faltas</span>
-            <p className="text-lg font-black text-red-700 dark:text-red-400">{absentCount}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-4 py-6 space-y-8">
-        <div className="flex gap-2">
-          <div className="flex-1 bg-card rounded-2xl border border-border p-2 flex items-center gap-3 shadow-sm">
-            <div className="w-8 h-8 rounded-xl bg-blue-100/50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600">
-              <Users className="w-4 h-4" />
-            </div>
-            <h2 className="text-sm font-black uppercase text-foreground tracking-tighter">Em Serviço (Fazer Chamada)</h2>
-          </div>
-        </div>
-
-        {Object.values(workingGroups)
-          .filter(g => g.members.some(filteredSearch))
-          .map(group => (
-          <div key={group.id} className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                <h3 className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{group.nome}</h3>
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-32">
+        {/* Native-Style Control Bar */}
+        <div className="bg-card/80 dark:bg-card/40 backdrop-blur-2xl border border-border/50 rounded-[2.5rem] p-4 shadow-xl mb-10 sticky top-24 z-30 transform-gpu transition-all">
+          <div className="flex flex-col md:flex-row gap-6 items-center">
+            <div className="flex items-center gap-2 bg-muted/50 p-1.5 rounded-[1.75rem] border border-border/30 w-full md:w-auto">
+              <button onClick={prevDay} className="w-10 h-10 rounded-2xl flex items-center justify-center hover:bg-card hover:shadow-sm active:scale-90 transition-all text-muted-foreground"><ChevronLeft className="w-5 h-5" /></button>
+              <div className="flex-1 md:min-w-[160px] text-center">
+                <p className="text-[9px] font-black uppercase text-primary tracking-widest">{isToday(currentDate) ? 'Hoje' : format(currentDate, 'EEE', { locale: ptBR })}</p>
+                <p className="text-sm font-black text-foreground">{format(currentDate, 'dd/MM/yyyy')}</p>
               </div>
-              <span className="text-[9px] font-bold text-muted-foreground">{group.members.filter(filteredSearch).length} colaboradores</span>
+              <button onClick={nextDay} className="w-10 h-10 rounded-2xl flex items-center justify-center hover:bg-card hover:shadow-sm active:scale-90 transition-all text-muted-foreground"><ChevronRight className="w-5 h-5" /></button>
             </div>
 
-            <div className="space-y-2">
-              {group.members
-                .filter(filteredSearch)
-                .map(member => (
-                <div key={member.id} className="bg-card rounded-3xl border border-border p-3 flex items-center justify-between shadow-sm hover:shadow-md transition-all">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg transition-all border border-border",
-                      "bg-card text-muted-foreground"
-                    )}>
-                      {member.nome.substring(0, 1)}
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-foreground leading-tight">{member.nome}</p>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">{member.cargo}</p>
-                    </div>
-                  </div>
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground/60" />
+              <input 
+                type="text" 
+                placeholder="Buscar pelo nome..." 
+                value={searchTerm} 
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-4 bg-muted/40 border border-transparent focus:border-primary/20 rounded-[1.75rem] text-sm font-bold focus:ring-0 text-foreground placeholder:text-muted-foreground/50 transition-all"
+              />
+            </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <button 
-                      onClick={() => handleStatus(member.escalaId, 'falta')}
-                      className={cn(
-                        "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-border",
-                        member.tipo === 'falta' ? "bg-red-600 text-white border-red-600 shadow-lg shadow-red-500/30" : "bg-card text-muted-foreground hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500"
-                      )}
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                    <button 
-                      onClick={() => handleStatus(member.escalaId, 'presente')}
-                      className={cn(
-                        "w-11 h-11 rounded-2xl flex items-center justify-center transition-all active:scale-90 shadow-sm border border-border",
-                        member.tipo === 'presente' || member.tipo === 'hora_extra' ? "bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/30" : "bg-card text-muted-foreground hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-500"
-                      )}
-                    >
-                      <Check className="w-5 h-5" />
-                    </button>
-                  </div>
+            <div className="flex items-center gap-2 w-full md:w-auto">
+               <div className="hidden lg:flex items-center gap-1.5 bg-background/50 p-1.5 rounded-full border border-border/30">
+                <div className={cn("flex items-center gap-2 px-4 py-2 rounded-full", pendingCount > 0 ? "bg-amber-500/10" : "bg-emerald-500/10")}>
+                  <span className={cn("text-[10px] font-black uppercase tracking-widest", pendingCount > 0 ? "text-amber-600" : "text-emerald-600")}>
+                    {pendingCount > 0 ? `${pendingCount} PENDENTES` : 'CONCLUÍDO'}
+                  </span>
                 </div>
-              ))}
+              </div>
+              <Button 
+                onClick={async () => {
+                  if (!confirm('Deseja limpar todos os registros de presença de hoje e voltar ao estado inicial pendente?')) return
+                  try {
+                    await supabase.from('frequencia').delete().eq('data', dateStr)
+                    toast('Chamada resetada com sucesso', 'success')
+                    queryClient.invalidateQueries({ queryKey: FREQUENCIA_KEY })
+                    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+                  } catch (err: any) {
+                    toast('Erro ao resetar: ' + err.message, 'error')
+                  }
+                }}
+                className="h-12 w-12 rounded-2xl bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center p-0"
+                title="Resetar Chamada"
+              >
+                <Trash2 className="w-5 h-5" />
+              </Button>
+              <Button 
+                onClick={() => handleConfirmAll(allWorkingMembers)}
+                disabled={pendingCount === 0}
+                className="flex-1 md:flex-none rounded-2xl gap-2 font-black text-[10px] uppercase tracking-widest h-12 bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white transition-all"
+              >
+                <Zap className="w-4 h-4" /> Confirmar Todos
+              </Button>
             </div>
           </div>
-        ))}
+        </div>
 
-        {totalOut > 0 && (
-          <div className="space-y-6 pt-4 border-t border-border">
-            <div className="p-4 bg-card border border-border rounded-2xl flex items-center justify-between mb-4 shadow-sm">
-              <div className="w-8 h-8 rounded-xl bg-muted flex items-center justify-center text-muted-foreground border border-border shadow-sm">
-                <Filter className="w-4 h-4" />
-              </div>
-              <h2 className="text-sm font-black uppercase text-muted-foreground tracking-tighter">Ausentes / Fora de Escala</h2>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4">
-              {Object.entries(notWorkingGroups)
-                .filter(([_, g]) => g.members.some(filteredSearch))
-                .map(([id, group]) => (
-                <div key={id} className="space-y-2">
-                  <div className="flex items-center gap-2 px-1">
-                    <span className="text-base">{group.icon}</span>
-                    <h3 className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{group.label}</h3>
+        {/* Tactical Grid */}
+        <div className="space-y-16">
+          {Object.values(workingGroups)
+            .filter(g => g.members.some(filteredSearch))
+            .map(group => {
+              const groupPendentes = group.members.filter(m => !m.tipoReal).length
+              return (
+                <div key={group.id} className="animate-fade-in">
+                  <div className="flex items-end justify-between mb-8 px-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "w-2 h-2 rounded-full shadow-[0_0_8px_rgba(var(--primary),0.6)]",
+                          groupPendentes > 0 ? "bg-amber-500" : "bg-emerald-500"
+                        )} />
+                        <h3 className="text-sm font-black uppercase text-foreground tracking-[0.2em]">{group.nome}</h3>
+                      </div>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest ml-4">{group.setor}</p>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-2xl font-black text-foreground leading-none">
+                        {group.members.filter(m => m.tipoReal && filteredSearch(m)).length}
+                      </span>
+                      <span className="text-[9px] font-black text-muted-foreground uppercase tracking-tighter">Confirmados de {group.members.filter(filteredSearch).length}</span>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {group.members.filter(filteredSearch).map(member => (
-                      <div key={member.id} className="bg-card rounded-2xl border border-border p-3 flex items-center justify-between shadow-sm">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-blue-50/50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 text-xs font-bold border border-blue-100 dark:border-blue-800">
-                            {member.nome.substring(0, 2).toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-foreground">{member.nome}</p>
-                            <p className="text-[9px] text-muted-foreground uppercase font-black">{member.tipo}</p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {group.members
+                      .filter(filteredSearch)
+                      .map(member => (
+                        <div key={member.id} className={cn(
+                          "relative bg-card/80 dark:bg-card/40 backdrop-blur-xl border rounded-[2.5rem] p-6 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all duration-500 group overflow-hidden",
+                          !member.tipoReal ? "border-amber-500/30 ring-1 ring-amber-500/10" : "border-border/50"
+                        )}>
+                          {/* Status Accent Bar */}
+                          <div className={cn(
+                            "absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-12 rounded-r-full transition-all duration-500",
+                            member.tipoReal === 'presente' || member.tipoReal === 'hora_extra' ? "bg-emerald-500" : 
+                            member.tipoReal === 'falta' ? "bg-rose-500" : "bg-amber-500 animate-pulse"
+                          )} />
+
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                              <div className={cn(
+                                "w-14 h-14 rounded-[1.25rem] flex items-center justify-center font-black text-xl shadow-inner shrink-0 transition-transform group-hover:scale-110 duration-500",
+                                member.tipoReal === 'presente' || member.tipoReal === 'hora_extra' ? "bg-emerald-500/10 text-emerald-600" : 
+                                member.tipoReal === 'falta' ? "bg-rose-500/10 text-rose-600" : "bg-amber-500/10 text-amber-600"
+                              )}>
+                                {(member.apelido || member.nome).substring(0, 1)}
+                              </div>
+                              <div className="truncate">
+                                <p className="text-base font-black text-foreground truncate leading-tight tracking-tight">{member.apelido || member.nome}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="default" className="text-[8px] font-black uppercase px-1.5 py-0 bg-muted/30 text-muted-foreground/60 border-transparent">
+                                    {member.cargo}
+                                  </Badge>
+                                  {!member.tipoReal && (
+                                    <Badge variant="default" className="text-[7px] font-black uppercase px-1.5 py-0 bg-amber-500 text-white border-transparent animate-bounce">
+                                      Confirmar?
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {member.tipoReal && (
+                                <button 
+                                  onClick={async () => {
+                                    try {
+                                      await supabase.from('frequencia').delete().eq('funcionario_id', member.id).eq('data', dateStr)
+                                      toast('Registro removido', 'success')
+                                      queryClient.invalidateQueries({ queryKey: FREQUENCIA_KEY })
+                                      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+                                    } catch (err: any) {
+                                      toast('Erro ao remover: ' + err.message, 'error')
+                                    }
+                                  }}
+                                  className="w-12 h-12 rounded-[1.25rem] flex items-center justify-center bg-muted/30 text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500 transition-all border border-transparent"
+                                  title="Remover Confirmação"
+                                >
+                                  <RotateCcw className="w-5 h-5" />
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => handleStatus(member.id, 'falta')}
+                                className={cn(
+                                  "w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all active:scale-90 shadow-md border-2",
+                                  member.tipoReal === 'falta' ? "bg-rose-600 border-rose-600 text-white shadow-rose-500/30" : "bg-muted/50 border-transparent text-muted-foreground hover:border-rose-500/50 hover:text-rose-500"
+                                )}
+                              >
+                                <X className="w-6 h-6" />
+                              </button>
+                              <button 
+                                onClick={() => handleStatus(member.id, 'presente')}
+                                className={cn(
+                                  "w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all active:scale-90 shadow-md border-2",
+                                  member.tipoReal === 'presente' || member.tipoReal === 'hora_extra' ? "bg-emerald-600 border-emerald-600 text-white shadow-emerald-500/30" : "bg-muted/50 border-transparent text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-500"
+                                )}
+                              >
+                                <Check className="w-6 h-6" />
+                              </button>
+                            </div>
                           </div>
                         </div>
-                        <Badge 
-                          variant={
-                            member.tipo === 'ferias' ? 'vacation' : 
-                            member.tipo === 'atestado' ? 'medical' : 
-                            (member.tipo === 'repouso' || member.tipo === 'compensar') ? 'off' : 
-                            'default'
-                          } 
-                          className="text-[9px] uppercase"
-                        >
-                          {member.tipo}
-                        </Badge>
-                      </div>
                     ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              )
+            })}
 
-        {totalInWork === 0 && totalOut === 0 && (
-          <div className="py-20 text-center opacity-30">
-            <Clock className="w-16 h-16 mx-auto mb-4" />
-            <p className="text-lg font-black uppercase">Ninguém Escalado</p>
-            <p className="text-sm">Preencha a escala de localidades para hoje.</p>
-          </div>
-        )}
+          {/* Exception Section */}
+          {Object.values(notWorkingGroups).some(g => g.members.length > 0) && (
+            <div className="pt-20 border-t border-border/30">
+              <div className="flex items-center gap-3 mb-10 px-4">
+                <div className="w-1.5 h-6 bg-slate-400 rounded-full" />
+                <h3 className="text-xs font-black uppercase text-slate-500 tracking-[0.2em]">Planejamento e Ausências</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                {Object.entries(notWorkingGroups).map(([id, group]) => (
+                  group.members.length > 0 && (
+                    <div key={id} className="space-y-6">
+                      <div className="flex items-center gap-3 px-2">
+                        <div className={cn("p-2 rounded-xl bg-background border border-border/50 shadow-sm", group.color)}>
+                          {group.icon}
+                        </div>
+                        <h4 className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{group.label}</h4>
+                        <span className="text-xs font-black text-foreground ml-auto">{group.members.length}</span>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {group.members.filter(filteredSearch).map(member => (
+                          <div key={member.id} className="bg-card/40 backdrop-blur-xl border border-border/50 rounded-3xl p-4 flex items-center gap-4 group hover:border-primary/30 transition-all shadow-sm">
+                            <div className="w-10 h-10 rounded-xl bg-muted/50 flex items-center justify-center text-[10px] font-black text-muted-foreground border border-border/50 shadow-inner">
+                              {(member.apelido || member.nome).substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-black text-foreground truncate uppercase">{member.apelido || member.nome}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <p className={cn("text-[9px] font-black uppercase tracking-tighter", group.color)}>{member.tipoPlanejado}</p>
+                                {member.tipoReal && (
+                                   <div className="flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">
+                                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                                      <span className="text-[7px] font-black text-emerald-600 uppercase">Validado</span>
+                                   </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Floating Search */}
-      <div className="fixed bottom-24 left-4 right-4 z-40">
-        <div className="relative group">
-          <div className="absolute inset-0 bg-blue-600 rounded-3xl blur opacity-20 group-focus-within:opacity-40 transition-opacity" />
-          <div className="relative flex items-center bg-card border border-border rounded-3xl p-1 shadow-2xl">
-            <div className="w-10 h-10 flex items-center justify-center text-muted-foreground">
-              <Search className="w-5 h-5" />
+      {/* Floating Summary Bar (Native App Style) */}
+      <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-[400px] animate-slide-up">
+        <div className="bg-foreground text-background dark:bg-card/90 dark:text-foreground backdrop-blur-2xl rounded-full p-2 pl-6 flex items-center justify-between shadow-2xl border border-white/10">
+          <div className="flex items-center gap-6">
+            <div>
+              <p className="text-[8px] font-black uppercase tracking-[0.2em] opacity-60">Operação em Campo</p>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-black tracking-tight">{presentCount} Ok</span>
+                <div className="w-1 h-1 rounded-full bg-white/30" />
+                <span className="text-sm font-black tracking-tight">{absentCount} Faltas</span>
+                {pendingCount > 0 && (
+                   <>
+                    <div className="w-1 h-1 rounded-full bg-white/30" />
+                    <span className="text-sm font-black tracking-tight text-amber-400">{pendingCount} ?</span>
+                   </>
+                )}
+              </div>
             </div>
-            <input 
-              type="text" 
-              placeholder="Buscar na chamada..." 
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold text-foreground px-2 placeholder:text-muted-foreground outline-none"
-            />
           </div>
+          <button 
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="bg-primary text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform"
+          >
+            <ChevronRight className="w-6 h-6 -rotate-90" />
+          </button>
         </div>
       </div>
     </div>

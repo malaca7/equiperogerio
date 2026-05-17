@@ -65,6 +65,23 @@ export function useFrequenciaMensal(mes: string) {
   })
 }
 
+export function useFrequenciaPeriodo(startDate: string, endDate: string) {
+  return useQuery<FrequenciaWithFunc[]>({
+    queryKey: [...FREQUENCIA_KEY, 'periodo', startDate, endDate],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('frequencia')
+        .select('*, funcionarios(id, nome, cargo, setor)')
+        .gte('data', startDate)
+        .lte('data', endDate)
+        .order('data')
+      if (error) throw error
+      return (data ?? []) as FrequenciaWithFunc[]
+    },
+    enabled: !!startDate && !!endDate,
+  })
+}
+
 export function useUpsertFrequencia() {
   const qc = useQueryClient()
   return useMutation({
@@ -135,6 +152,8 @@ interface DashboardStats {
   atestados: number
   folgas: number
   ferias: number
+  pendentes: number
+  foraEscala: number
   horasExtras: number
   totalAtivos: number
   totalInativos: number
@@ -146,33 +165,102 @@ export function useDashboardStats(date?: string) {
   return useQuery<DashboardStats>({
     queryKey: ['dashboard', d],
     queryFn: async () => {
-      const [freqResult, funcResult] = await Promise.all([
+      // 1. Fetch Config Sectors
+      const configResult = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'setores')
+        .single()
+      
+      const activeSectors = (configResult.data?.valor || []) as string[]
+
+      const [escalaResult, freqResult, funcResult] = await Promise.all([
+        supabase
+          .from('escalas')
+          .select('tipo, funcionario_id')
+          .eq('data', d),
         supabase
           .from('frequencia')
-          .select('status, hora_extra')
+          .select('status, funcionario_id')
           .eq('data', d),
         supabase
           .from('funcionarios')
-          .select('status')
+          .select('id, status, setor')
           .is('deleted_at', null),
       ])
 
+      if (escalaResult.error) throw escalaResult.error
       if (freqResult.error) throw freqResult.error
       if (funcResult.error) throw funcResult.error
 
-      const freq = (freqResult.data ?? []) as { status: string; hora_extra: number | null }[]
-      const func = (funcResult.data ?? []) as { status: string }[]
+      const escalas = (escalaResult.data ?? [])
+      const frequencias = (freqResult.data ?? [])
+      
+      // Filter ONLY employees in active sectors
+      const ativos = (funcResult.data ?? [])
+        .filter(f => f.status === 'ativo' && (activeSectors.length === 0 || activeSectors.includes(f.setor)))
+      
+      // Map frequency and scales for quick access
+      const freqMap = new Map(frequencias.map(f => [f.funcionario_id, f.status]))
+      const escalaMap = new Map(escalas.map(e => [e.funcionario_id, e.tipo]))
+
+      let presentes = 0
+      let faltas = 0
+      let atestados = 0
+      let folgas = 0
+      let ferias = 0
+      let pendentes = 0
+      let foraEscala = 0
+      let horasExtrasCount = 0
+
+      ativos.forEach(func => {
+        const freqStatus = freqMap.get(func.id)
+        const escalaTipo = escalaMap.get(func.id)
+
+        // Reality takes priority (Frequency record)
+        if (freqStatus) {
+          if (freqStatus === 'presente' || freqStatus === 'hora_extra') {
+            presentes++
+            if (freqStatus === 'hora_extra') horasExtrasCount++
+          }
+          else if (freqStatus === 'falta') faltas++
+          else if (freqStatus === 'atestado') atestados++
+          else if (freqStatus === 'folga') folgas++
+          else if (freqStatus === 'ferias') ferias++
+        } 
+        // Fallback to Plan (Escala record)
+        else if (escalaTipo) {
+          if (escalaTipo === 'presente' || escalaTipo === 'hora_extra') {
+            pendentes++ 
+            if (escalaTipo === 'hora_extra') horasExtrasCount++
+          } else if (escalaTipo === 'atestado') {
+            atestados++
+          } else if (escalaTipo === 'ferias') {
+            ferias++
+          } else if (escalaTipo === 'repouso' || escalaTipo === 'compensar') {
+            folgas++
+          } else if (escalaTipo === 'falta') {
+            faltas++
+          }
+        }
+        // Active but not in today's plan
+        else {
+          foraEscala++
+        }
+      })
 
       return {
-        presentes: freq.filter(f => f.status === 'presente' || f.status === 'hora_extra').length,
-        faltas: freq.filter(f => f.status === 'falta').length,
-        atestados: freq.filter(f => f.status === 'atestado').length,
-        folgas: freq.filter(f => f.status === 'folga').length,
-        ferias: freq.filter(f => f.status === 'ferias').length,
-        horasExtras: freq.reduce((acc, f) => acc + (f.hora_extra ?? 0), 0),
-        totalAtivos: func.filter(f => f.status === 'ativo').length,
-        totalInativos: func.filter(f => f.status === 'inativo').length,
-        totalRegistros: freq.length,
+        presentes,
+        faltas,
+        atestados,
+        folgas,
+        ferias,
+        pendentes,
+        foraEscala,
+        horasExtras: horasExtrasCount,
+        totalAtivos: ativos.length,
+        totalInativos: (funcResult.data ?? []).filter(f => f.status === 'inativo').length,
+        totalRegistros: ativos.length,
       }
     },
     refetchInterval: 30000,

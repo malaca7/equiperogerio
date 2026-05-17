@@ -59,35 +59,48 @@
 
 /* CSS custom properties for theming */
 :root {
-  --background: 210 20% 98%;
-  --foreground: 224 71% 4%;
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
   --card: 0 0% 100%;
-  --card-foreground: 224 71% 4%;
-  --primary: 221 83% 53%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 221 83% 45%; 
   --primary-foreground: 210 40% 98%;
-  --secondary: 210 20% 95%;
-  --secondary-foreground: 220 10% 25%;
-  --muted: 210 20% 96%;
-  --muted-foreground: 220 10% 45%;
-  --border: 210 20% 92%;
-  --input: 210 20% 92%;
-  --ring: 221 83% 53%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 221 83% 45%;
+  --radius: 1.5rem;
 }
 
 :root.dark {
-  --background: 224 71% 4%;
+  --background: 222 47% 2%; 
   --foreground: 210 40% 98%;
-  --card: 222 47% 8%;
+  --card: 222 47% 4%;
   --card-foreground: 210 40% 98%;
+  --popover: 222 47% 4%;
+  --popover-foreground: 210 40% 98%;
   --primary: 217 91% 60%;
-  --primary-foreground: 222 47% 8%;
-  --secondary: 215 28% 14%;
+  --primary-foreground: 222 47% 11%;
+  --secondary: 217 33% 8%;
   --secondary-foreground: 210 40% 98%;
-  --muted: 215 28% 12%;
+  --muted: 217 33% 8%;
   --muted-foreground: 215 20% 65%;
-  --border: 215 28% 16%;
-  --input: 215 28% 16%;
-  --ring: 217 91% 60%;
+  --accent: 217 33% 8%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217 33% 12%;
+  --input: 217 33% 12%;
+  --ring: 221 83% 45%;
 }
 
 /* Base */
@@ -129,11 +142,19 @@ html {
 
 /* Component classes */
 .card {
-  background-color: hsl(var(--card));
+  background-color: hsl(var(--card) / 0.85);
+  backdrop-filter: blur(24px);
   color: hsl(var(--card-foreground));
-  border-radius: 1rem;
-  border: 1px solid hsl(var(--border));
-  box-shadow: 0 1px 3px 0 rgba(0,0,0,0.07), 0 1px 2px -1px rgba(0,0,0,0.07);
+  border-radius: 2.5rem;
+  border: 1px solid hsl(var(--border) / 0.6);
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,0.04);
+  transition: all 0.3s ease;
+}
+
+.dark .card {
+  background-color: hsl(var(--card) / 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 40px -15px rgba(0,0,0,0.3);
 }
 
 .input-base {
@@ -240,26 +261,36 @@ html {
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.625rem;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-.badge-present { background-color: #dcfce7; color: #15803d; }
-.badge-absent  { background-color: #fee2e2; color: #dc2626; }
-.badge-medical { background-color: #fef3c7; color: #d97706; }
-.badge-off     { background-color: #dbeafe; color: #2563eb; }
-.badge-extra   { background-color: #ede9fe; color: #7c3aed; }
-.badge-vacation{ background-color: #ccfbf1; color: #0f766e; }
+.badge-present { background-color: #ecfdf5; color: #059669; border: 1px solid #d1fae5; }
+.badge-absent  { background-color: #fef2f2; color: #dc2626; border: 1px solid #fee2e2; }
+.badge-medical { background-color: #fffbeb; color: #d97706; border: 1px solid #fef3c7; }
+.badge-off     { background-color: #eff6ff; color: #2563eb; border: 1px solid #dbeafe; }
+.badge-extra   { background-color: #f5f3ff; color: #7c3aed; border: 1px solid #ede9fe; }
+.badge-vacation{ background-color: #f0fdfa; color: #0d9488; border: 1px solid #ccfbf1; }
 
-.dark .badge-present { background-color: rgba(21,128,61,0.3); color: #4ade80; }
-.dark .badge-absent  { background-color: rgba(220,38,38,0.3); color: #f87171; }
-.dark .badge-medical { background-color: rgba(217,119,6,0.3); color: #fbbf24; }
-.dark .badge-off     { background-color: rgba(37,99,235,0.3); color: #60a5fa; }
-.dark .badge-extra   { background-color: rgba(124,58,237,0.3); color: #a78bfa; }
-.dark .badge-vacation{ background-color: rgba(15,118,110,0.3); color: #2dd4bf; }
+.dark .badge-present { background-color: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2); }
+.dark .badge-absent  { background-color: rgba(244, 63, 94, 0.1); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.2); }
+.dark .badge-medical { background-color: rgba(245, 158, 11, 0.1); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.2); }
+.dark .badge-off     { background-color: rgba(59, 130, 246, 0.1); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.2); }
+.dark .badge-extra   { background-color: rgba(139, 92, 246, 0.1); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.2); }
+.dark .badge-vacation{ background-color: rgba(20, 184, 166, 0.1); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.2); }
+
+.dark .badge-present { background-color: hsl(142 76% 20% / 0.5); color: hsl(142 76% 60%); border: 1px solid hsl(142 76% 25%); }
+.dark .badge-absent  { background-color: hsl(0 62% 20% / 0.5); color: hsl(0 84% 60%); border: 1px solid hsl(0 62% 25%); }
+.dark .badge-medical { background-color: hsl(45 80% 20% / 0.5); color: hsl(45 93% 60%); border: 1px solid hsl(45 80% 25%); }
+.dark .badge-off     { background-color: hsl(221 83% 20% / 0.5); color: hsl(221 83% 60%); border: 1px solid hsl(221 83% 25%); }
+.dark .badge-extra   { background-color: hsl(262 83% 20% / 0.5); color: hsl(262 83% 60%); border: 1px solid hsl(262 83% 25%); }
+.dark .badge-vacation{ background-color: hsl(171 77% 20% / 0.5); color: hsl(171 77% 60%); border: 1px solid hsl(171 77% 25%); }
 
 /* Bottom nav */
 .bottom-nav {
@@ -324,7 +355,7 @@ html {
 
 /* Gradient text */
 .gradient-text {
-  background: linear-gradient(to right, #2563eb, #4f46e5);
+  background: linear-gradient(to right, hsl(var(--primary)), hsl(var(--ring)));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -414,12 +445,16 @@ html {
   background: hsl(var(--muted) / 0.3);
 }
 
-.fc .fc-col-header-cell-cushion { 
-  font-size: 0.65rem; 
-  font-weight: 700; 
-  color: hsl(var(--muted-foreground)); 
-  text-transform: uppercase; 
-  letter-spacing: 0.05em; 
+.dark .fc .fc-col-header-cell {
+  background: hsl(var(--muted) / 0.5);
+}
+
+.fc .fc-col-header-cell-cushion {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   text-decoration: none !important;
 }
 
@@ -431,16 +466,16 @@ html {
   padding-bottom: 2px;
 }
 
-.fc .fc-daygrid-day-number { 
+.fc .fc-daygrid-day-number {
   width: 26px;
   height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-size: 0.8rem; 
-  font-weight: 600; 
-  color: hsl(var(--foreground)); 
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
   text-decoration: none !important;
 }
 
@@ -455,18 +490,26 @@ html {
   box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
 }
 
+.dark .fc .fc-day-today .fc-daygrid-day-number {
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.5);
+}
+
 /* Beautiful Events */
-.fc .fc-event { 
-  border-radius: 6px !important; 
-  border: none !important; 
-  font-size: 0.65rem; 
-  font-weight: 600; 
-  padding: 3px 6px; 
-  cursor: pointer; 
+.fc .fc-event {
+  border-radius: 6px !important;
+  border: none !important;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 3px 6px;
+  cursor: pointer;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   margin: 1px 4px 2px 4px !important;
   overflow: hidden;
   transition: transform 0.1s;
+}
+
+.dark .fc .fc-event {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
 .fc .fc-event:active {
@@ -481,4 +524,31 @@ html {
 .fc .fc-toolbar.fc-header-toolbar {
   margin-bottom: 1.25rem !important;
   padding: 0 4px;
+}
+
+/* Dark theme FullCalendar additional fixes */
+.dark .fc .fc-toolbar-title {
+  color: hsl(var(--foreground));
+}
+
+.dark .fc .fc-daygrid-day-number {
+  color: hsl(var(--foreground));
+}
+
+.dark .fc .fc-daygrid-day-top {
+  color: hsl(var(--foreground));
+}
+
+.dark .fc .fc-more-link {
+  color: hsl(var(--primary));
+}
+
+.dark .fc .fc-popover {
+  background: hsl(var(--popover));
+  border-color: hsl(var(--border));
+}
+
+.dark .fc .fc-popover-header {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }

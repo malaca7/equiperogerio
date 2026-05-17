@@ -16,6 +16,9 @@ import { EscalaSemanalPrint } from './pages/EscalaSemanalPrint'
 import { EscalaMensalPrint } from './pages/EscalaMensalPrint'
 import { NotificacoesPage } from './pages/NotificacoesPage'
 import { ConfiguracoesPage } from './pages/ConfiguracoesPage'
+import { ObservacoesPage } from './pages/ObservacoesPage'
+import { RendimentoPage } from './pages/RendimentoPage'
+import { AtestadosPage } from './pages/AtestadosPage'
 import { Loading } from './components/ui/Loading'
 
 const queryClient = new QueryClient({
@@ -59,6 +62,9 @@ function ProtectedLayout() {
           <Route path="/escala/imprimir-semanal" element={<EscalaSemanalPrint />} />
           <Route path="/escala/imprimir-mensal" element={<EscalaMensalPrint />} />
           <Route path="/notificacoes"  element={<NotificacoesPage />} />
+          <Route path="/observacoes"   element={<ObservacoesPage />} />
+          <Route path="/rendimento"    element={<RendimentoPage />} />
+          <Route path="/atestados"     element={<AtestadosPage />} />
           <Route path="/configuracoes" element={<ConfiguracoesPage />} />
         </Routes>
       </main>

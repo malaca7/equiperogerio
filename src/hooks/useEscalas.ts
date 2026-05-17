@@ -1,3 +1,4 @@
+import { endOfMonth, format, parseISO, addDays } from 'date-fns'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import type { Escala, EscalaInsert, EscalaUpdate } from '../lib/database.types'
@@ -8,25 +9,41 @@ type EscalaWithFunc = Escala & {
   funcionarios: {
     id: string
     nome: string
+    apelido?: string | null
     cargo: string
     setor: string
   } | null
 }
 
 export function useEscalasMensal(mes: string) {
-  const startDate = `${mes}-01`
-  const endDate = `${mes}-31`
+  const dateObj = parseISO(mes + '-01')
+  const startDate = format(dateObj, 'yyyy-MM-01')
+  const endDate = format(endOfMonth(dateObj), 'yyyy-MM-dd')
+  const midDate = format(addDays(dateObj, 15), 'yyyy-MM-dd')
+
   return useQuery<EscalaWithFunc[]>({
     queryKey: [...ESCALAS_KEY, mes],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('escalas')
-        .select('*, funcionarios(id, nome, cargo, setor)')
-        .gte('data', startDate)
-        .lte('data', endDate)
-        .order('data')
-      if (error) throw error
-      return (data ?? []) as EscalaWithFunc[]
+      const [part1, part2] = await Promise.all([
+        supabase
+          .from('escalas')
+          .select('*, funcionarios(id, nome, apelido, cargo, setor)')
+          .gte('data', startDate)
+          .lt('data', midDate)
+          .order('data'),
+        supabase
+          .from('escalas')
+          .select('*, funcionarios(id, nome, apelido, cargo, setor)')
+          .gte('data', midDate)
+          .lte('data', endDate)
+          .order('data')
+      ])
+
+      if (part1.error) throw part1.error
+      if (part2.error) throw part2.error
+
+      const combined = [...(part1.data ?? []), ...(part2.data ?? [])]
+      return combined as EscalaWithFunc[]
     },
   })
 }
@@ -35,22 +52,38 @@ export function useEscalasPeriodo(startDate: string, endDate: string) {
   return useQuery<EscalaWithFunc[]>({
     queryKey: [...ESCALAS_KEY, 'periodo', startDate, endDate],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('escalas')
-        .select('*, funcionarios(id, nome, cargo, setor)')
-        .gte('data', startDate)
-        .lte('data', endDate)
-        .order('data')
-      if (error) throw error
-      return (data ?? []) as EscalaWithFunc[]
+      // Dividir a busca em dois blocos para contornar o limite de 1000 registros do PostgREST
+      const midDate = format(addDays(parseISO(startDate), 15), 'yyyy-MM-dd')
+      
+      const [part1, part2] = await Promise.all([
+        supabase
+          .from('escalas')
+          .select('*, funcionarios(id, nome, apelido, cargo, setor)')
+          .gte('data', startDate)
+          .lt('data', midDate)
+          .order('data'),
+        supabase
+          .from('escalas')
+          .select('*, funcionarios(id, nome, apelido, cargo, setor)')
+          .gte('data', midDate)
+          .lte('data', endDate)
+          .order('data')
+      ])
+
+      if (part1.error) throw part1.error
+      if (part2.error) throw part2.error
+
+      const combined = [...(part1.data ?? []), ...(part2.data ?? [])]
+      return combined as EscalaWithFunc[]
     },
     enabled: !!startDate && !!endDate,
   })
 }
 
 export function useEscalaFuncionario(funcionarioId: string, mes: string) {
-  const startDate = `${mes}-01`
-  const endDate = `${mes}-31`
+  const dateObj = parseISO(mes + '-01')
+  const startDate = format(dateObj, 'yyyy-MM-01')
+  const endDate = format(endOfMonth(dateObj), 'yyyy-MM-dd')
   return useQuery<Escala[]>({
     queryKey: [...ESCALAS_KEY, 'funcionario', funcionarioId, mes],
     queryFn: async () => {
@@ -83,7 +116,10 @@ export function useCreateEscala() {
       if (error) throw error
       return result as Escala
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ESCALAS_KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ESCALAS_KEY })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
   })
 }
 
@@ -101,7 +137,10 @@ export function useBatchUpsertEscalas() {
       if (error) throw error
       return result as Escala[]
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ESCALAS_KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ESCALAS_KEY })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
   })
 }
 
@@ -118,7 +157,10 @@ export function useUpdateEscala() {
       if (error) throw error
       return result as Escala
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ESCALAS_KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ESCALAS_KEY })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
   })
 }
 

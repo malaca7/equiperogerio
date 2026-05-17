@@ -7,6 +7,8 @@ import {
   CalendarDays,
   Settings,
   MapPin,
+  MessageSquare,
+  Activity,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
@@ -15,60 +17,59 @@ const navItems = [
   { to: '/funcionarios', icon: Users, label: 'Equipe' },
   { to: '/escala/localidades', icon: MapPin, label: 'Locais' },
   { to: '/frequencia', icon: Clock, label: 'Chamada' },
+  { to: '/atestados', icon: Activity, label: 'Médico' },
   { to: '/escala', icon: CalendarDays, label: 'Escala' },
   { to: '/configuracoes', icon: Settings, label: 'Config' },
 ]
 
 export function BottomNav() {
   return (
-    <nav className="bottom-nav print:hidden">
-      <div className="flex items-center justify-around px-2 py-2 safe-bottom">
-        {navItems.map(({ to, icon: Icon, label, exact }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={exact}
-            className={({ isActive }) =>
-              cn(
-                'flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-all duration-200 min-w-0 flex-1',
-                isActive
-                  ? 'text-primary'
-                  : 'text-muted-foreground'
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <div className="relative">
-                  <div
-                    className={cn(
-                      'p-2 rounded-xl transition-all duration-200',
-                      isActive
-                        ? 'bg-primary/10'
-                        : 'bg-transparent'
-                    )}
-                  >
+    <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[95%] max-w-[500px] z-50 print:hidden">
+      <div className="bg-card/80 dark:bg-card/50 backdrop-blur-2xl border border-border rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.3)] px-3 py-2">
+        <div className="flex items-center justify-between gap-1">
+          {navItems.map(({ to, icon: Icon, label, exact }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={exact}
+              className={({ isActive }) =>
+                cn(
+                  'relative flex flex-col items-center gap-1 p-2 rounded-2xl transition-all duration-300 min-w-0 flex-1 group',
+                  isActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <div className={cn(
+                    'p-2 rounded-xl transition-all duration-300 relative z-10',
+                    isActive ? 'bg-primary/10 scale-110 shadow-[0_0_15px_rgba(var(--primary),0.1)]' : 'bg-transparent'
+                  )}>
                     <Icon
                       className={cn(
-                        'w-5 h-5 transition-transform duration-200',
-                        isActive && 'scale-110'
+                        'w-5 h-5 transition-all duration-300',
+                        isActive ? 'stroke-[2.5px]' : 'stroke-[1.75px]'
                       )}
-                      strokeWidth={isActive ? 2.5 : 1.75}
                     />
                   </div>
-                </div>
-                <span
-                  className={cn(
-                    'text-[10px] font-medium truncate',
-                    isActive ? 'opacity-100' : 'opacity-60'
+                  <span
+                    className={cn(
+                      'text-[9px] font-black uppercase tracking-widest transition-all duration-300 leading-none',
+                      isActive ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'
+                    )}
+                  >
+                    {label}
+                  </span>
+                  {isActive && (
+                    <div className="absolute -bottom-1 w-1 h-1 bg-primary rounded-full shadow-[0_0_8px_rgba(var(--primary),1)] animate-pulse" />
                   )}
-                >
-                  {label}
-                </span>
-              </>
-            )}
-          </NavLink>
-        ))}
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
       </div>
     </nav>
   )
