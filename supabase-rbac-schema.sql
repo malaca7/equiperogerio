@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   updated_at timestamptz DEFAULT now()
 );
 
-CREATE INDEX idx_profiles_cpf ON profiles(cpf);
+CREATE INDEX IF NOT EXISTS idx_profiles_cpf ON profiles(cpf);
 
 -- 2. ROLES (cargos dinâmicos)
 CREATE TABLE IF NOT EXISTS roles (
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS role_permissions (
   created_at timestamptz DEFAULT now(),
   UNIQUE(role_id, permission_id)
 );
-CREATE INDEX idx_rp_role ON role_permissions(role_id);
+CREATE INDEX IF NOT EXISTS idx_rp_role ON role_permissions(role_id);
 
 -- 5. USER_ROLES
 CREATE TABLE IF NOT EXISTS user_roles (
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS user_roles (
   created_at timestamptz DEFAULT now(),
   UNIQUE(user_id, role_id)
 );
-CREATE INDEX idx_ur_user ON user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_ur_user ON user_roles(user_id);
 
 -- 6. AUDIT_LOGS
 CREATE TABLE IF NOT EXISTS audit_logs (
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   rota text,
   created_at timestamptz DEFAULT now()
 );
-CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
 
 -- 7. LOGIN_LOGS
 CREATE TABLE IF NOT EXISTS login_logs (
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS login_logs (
   motivo_falha text,
   tentativa_em timestamptz DEFAULT now()
 );
-CREATE INDEX idx_login_tentativa ON login_logs(tentativa_em DESC);
+CREATE INDEX IF NOT EXISTS idx_login_tentativa ON login_logs(tentativa_em DESC);
 
 -- 8. SECURITY_EVENTS
 CREATE TABLE IF NOT EXISTS security_events (
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS security_events (
   metadata jsonb,
   created_at timestamptz DEFAULT now()
 );
-CREATE INDEX idx_security_created ON security_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_security_created ON security_events(created_at DESC);
 
 -- =====================================================
 -- DESABILITAR RLS (login sem Supabase Auth = anon key)
