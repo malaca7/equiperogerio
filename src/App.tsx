@@ -19,6 +19,7 @@ import { ConfiguracoesPage } from './pages/ConfiguracoesPage'
 import { ObservacoesPage } from './pages/ObservacoesPage'
 import { RendimentoPage } from './pages/RendimentoPage'
 import { AtestadosPage } from './pages/AtestadosPage'
+import { EquipesPage } from './pages/EquipesPage'
 import { AdminDashboard } from './pages/admin/AdminDashboard'
 import { RouteGuard } from './components/auth/RouteGuard'
 import { Loading } from './components/ui/Loading'
@@ -67,6 +68,7 @@ function ProtectedLayout() {
           <Route path="/observacoes" element={<RouteGuard page="observacoes"><ObservacoesPage /></RouteGuard>} />
           <Route path="/rendimento" element={<RouteGuard page="rendimento"><RendimentoPage /></RouteGuard>} />
           <Route path="/atestados" element={<RouteGuard page="atestados"><AtestadosPage /></RouteGuard>} />
+          <Route path="/equipes" element={<RouteGuard page="funcionarios"><EquipesPage /></RouteGuard>} />
           <Route path="/configuracoes" element={<RouteGuard page="configuracoes"><ConfiguracoesPage /></RouteGuard>} />
           <Route path="/admin/*" element={<RouteGuard page="admin"><AdminDashboard /></RouteGuard>} />
         </Routes>

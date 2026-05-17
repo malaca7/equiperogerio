@@ -1,7 +1,7 @@
 import React from 'react'
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, Users, Clock, CalendarDays, Settings, MapPin, Activity, ShieldCheck,
+  LayoutDashboard, Users, Clock, CalendarDays, Settings, MapPin, Activity, ShieldCheck, UsersRound,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useAuth } from '../../contexts/AuthContext'
@@ -10,6 +10,7 @@ import type { SystemPage } from '../../lib/auth.types'
 const navItems: { to: string; icon: any; label: string; page: SystemPage; exact?: boolean }[] = [
   { to: '/', icon: LayoutDashboard, label: 'Painel', page: 'dashboard', exact: true },
   { to: '/funcionarios', icon: Users, label: 'Equipe', page: 'funcionarios' },
+  { to: '/equipes', icon: UsersRound, label: 'Equipes', page: 'funcionarios' },
   { to: '/escala/localidades', icon: MapPin, label: 'Locais', page: 'localidades' },
   { to: '/frequencia', icon: Clock, label: 'Chamada', page: 'frequencia' },
   { to: '/atestados', icon: Activity, label: 'Médico', page: 'atestados' },
