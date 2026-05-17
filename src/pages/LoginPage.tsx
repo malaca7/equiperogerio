@@ -38,66 +38,96 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-slate-50 dark:bg-slate-950 relative overflow-hidden">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[10%] -right-[10%] w-[50%] h-[50%] rounded-full bg-blue-600/10 blur-[120px] animate-pulse" />
-        <div className="absolute -bottom-[10%] -left-[10%] w-[50%] h-[50%] rounded-full bg-emerald-600/10 blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
-      </div>
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-[#f8fafc] relative">
+      {/* Background simplificado e profissional */}
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-200/50 via-[#f8fafc] to-[#f8fafc]"></div>
 
-      <div className="relative w-full max-w-sm z-10">
-        <div className="flex flex-col items-center mb-12">
-          <div className="relative group">
-            <div className="absolute inset-0 bg-blue-600 rounded-[2rem] blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
-            <div className="w-24 h-24 rounded-[2rem] bg-white flex items-center justify-center shadow-2xl relative z-10 transform group-hover:scale-105 transition-transform duration-500 overflow-hidden border-4 border-white">
-              <img src="/equiperogerio/logo.png" alt="7 Boss" className="w-full h-full object-contain"
-                onError={(e) => { e.currentTarget.style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove('hidden') }} />
-              <Shield className="w-12 h-12 text-blue-600 hidden" />
-            </div>
+      <div className="relative w-full max-w-md z-10">
+        <div className="flex flex-col items-center mb-10">
+          {/* Logo container */}
+          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 mb-6 overflow-hidden">
+            <img 
+              src="/equiperogerio/logo.png" 
+              alt="7 Boss Logo" 
+              className="w-full h-full object-contain"
+              onError={(e) => { 
+                e.currentTarget.style.display = 'none'; 
+                (e.currentTarget.nextElementSibling as HTMLElement)?.classList.remove('hidden') 
+              }} 
+            />
+            <Shield className="w-10 h-10 text-blue-700 hidden" strokeWidth={1.5} />
           </div>
-          <div className="mt-6 text-center">
-            <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">7 Boss</h1>
-            <p className="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 tracking-widest mt-3 opacity-70">Gestão eficiente para toda sua equipe</p>
+          
+          <div className="text-center">
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">7 Boss</h1>
+            <p className="text-xs font-semibold uppercase text-slate-500 tracking-widest mt-2">
+              Gestão Eficiente
+            </p>
           </div>
         </div>
 
-        <div className="bg-white/80 dark:bg-slate-900/40 backdrop-blur-3xl border border-white/20 dark:border-white/5 p-8 rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] dark:shadow-2xl">
-          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-            <div className="flex items-center gap-2 justify-center mb-2">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-              <span className="text-[10px] font-black uppercase text-blue-500 tracking-[0.3em]">Acesso Seguro</span>
+        {/* Card do Formulário */}
+        <div className="bg-white rounded-3xl p-8 sm:p-10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+            <div className="text-center mb-6">
+              <h2 className="text-lg font-bold text-slate-800">Acesso ao Sistema</h2>
+              <p className="text-sm text-slate-500 mt-1">Insira suas credenciais para continuar</p>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">CPF</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold uppercase text-slate-600 ml-1">CPF</label>
               <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input id="login-cpf" type="text" inputMode="numeric" placeholder="000.000.000-00"
-                  value={cpf} onChange={e => setCpf(formatCPF(e.target.value))}
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500/50 rounded-2xl h-14 text-sm font-bold text-foreground placeholder:text-muted-foreground/50 outline-none transition-all" />
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-400" />
+                <input 
+                  id="login-cpf" 
+                  type="text" 
+                  inputMode="numeric" 
+                  placeholder="000.000.000-00"
+                  value={cpf} 
+                  onChange={e => setCpf(formatCPF(e.target.value))}
+                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 rounded-xl text-sm font-semibold text-slate-900 placeholder:text-slate-400 outline-none transition-all" 
+                />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Senha</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold uppercase text-slate-600 ml-1">Senha</label>
               <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input id="login-senha" type={showPass ? 'text' : 'password'} placeholder="••••••••"
-                  value={senha} onChange={e => setSenha(e.target.value)} autoComplete="current-password"
-                  className="w-full pl-12 pr-12 py-4 bg-slate-50 dark:bg-slate-800/50 border border-transparent focus:border-blue-500/50 rounded-2xl h-14 text-sm font-bold text-foreground placeholder:text-muted-foreground/50 outline-none transition-all" />
-                <button type="button" onClick={() => setShowPass(v => !v)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-500 transition-colors">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-400" />
+                <input 
+                  id="login-senha" 
+                  type={showPass ? 'text' : 'password'} 
+                  placeholder="••••••••"
+                  value={senha} 
+                  onChange={e => setSenha(e.target.value)} 
+                  autoComplete="current-password"
+                  className="w-full pl-11 pr-12 py-3.5 bg-slate-50 border border-slate-200 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 rounded-xl text-sm font-semibold text-slate-900 placeholder:text-slate-400 outline-none transition-all" 
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setShowPass(v => !v)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors"
+                >
                   {showPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            <Button type="submit" loading={loading}
-              className="w-full h-14 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3">
-              Entrar <ArrowRight className="w-5 h-5" />
+            <Button 
+              type="submit" 
+              loading={loading}
+              className="w-full h-12 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-bold text-sm shadow-md shadow-blue-700/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4"
+            >
+              Entrar <ArrowRight className="w-4 h-4" />
             </Button>
           </form>
         </div>
-        <p className="text-center text-[10px] font-black uppercase text-slate-400 tracking-widest mt-10 opacity-50">Gestão eficiente para toda sua equipe</p>
+        
+        <div className="mt-8 text-center">
+          <p className="text-[11px] font-semibold text-slate-400">
+            &copy; {new Date().getFullYear()} 7 Boss. Todos os direitos reservados.
+          </p>
+        </div>
       </div>
     </div>
   )
