@@ -13,14 +13,12 @@
     <meta name="apple-mobile-web-app-title" content="7Locar" />
     <meta name="description" content="GEstao Eficaz - 7Locar" />
     <title>7Locar</title>
-    <!-- PDF Generation Libraries (Modern & Crash-Free Versions) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- No external PDF/Canvas libraries needed -->
     <style>
       /* ── Remove browser default headers/footers (URL, date, page number) ── */
       @page {
-        size: auto;
-        margin: 0 !important;
+        size: A4 landscape;
+        margin: 0mm !important;
       }
       @media print {
 
@@ -71,21 +69,28 @@
           -webkit-box-shadow: none !important;
           text-shadow: none !important;
         }
-
-        /* ── Hide navigation chrome ── */
-        aside, .bottom-nav, .top-header {
+        /* ── Hide navigation chrome & layout elements ── */
+        aside, nav, footer, .bottom-nav, .top-header, [class*="sidebar"], [class*="Sidebar"] {
           display: none !important;
+          visibility: hidden !important;
+        }
+
+        /* ── Reset root layout for full width ── */
+        #root, #root > *, #root > * > * {
+          max-width: 100% !important;
+          width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border-radius: 0 !important;
         }
 
         /* ── Special: EscalaLocalidadePage full-page print overlay ── */
         .print-cards-container {
           display: flex !important;
           visibility: visible !important;
-          position: fixed !important;
-          inset: 0 !important;
-          width: 100% !important;
-          height: 100% !important;
-          z-index: 9999999999 !important;
+          position: relative !important;
+          width: 297mm !important;
+          height: 210mm !important;
           background: #fff !important;
         }
         .print-cards-container * {
@@ -93,7 +98,13 @@
         }
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-BWs2x9Mo.js"></script>
+    <script type="module" crossorigin src="./assets/index-kp3hN9Rq.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/rolldown-runtime-S-ySWqyJ.js">
+    <link rel="modulepreload" crossorigin href="./assets/vendor-charts-CsHvvUQI.js">
+    <link rel="modulepreload" crossorigin href="./assets/vendor-libs-BPSJ71Tj.js">
+    <link rel="modulepreload" crossorigin href="./assets/vendor-react-core-DukF3AJC.js">
+    <link rel="modulepreload" crossorigin href="./assets/vendor-supabase-BZVyEdnX.js">
+    <link rel="modulepreload" crossorigin href="./assets/vendor-icons-TKVN0aYH.js">
     <link rel="stylesheet" crossorigin href="./assets/index-CHYlQ5IE.css">
   </head>
   <body>
