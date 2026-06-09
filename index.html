@@ -101,7 +101,7 @@
         }
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-rqdVFnDn.js"></script>
+    <script type="module" crossorigin src="./assets/index-t4Fvpdy_.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/rolldown-runtime-S-ySWqyJ.js">
     <link rel="modulepreload" crossorigin href="./assets/vendor-charts-BDm_vvxm.js">
     <link rel="modulepreload" crossorigin href="./assets/vendor-libs-6nyNCFHk.js">
@@ -150,13 +150,21 @@
       });
       observer.observe(document.getElementById('root'), { childList: true, subtree: true });
 
-      // Disable multi-touch browser pinch-to-zoom globally on mobile
+      // Disable multi-touch browser pinch-to-zoom globally on mobile, except on zoomable attachments
       document.addEventListener('touchstart', function (e) {
         if (e.touches.length > 1) {
+          const target = e.target;
+          if (target && (target.closest('.pinch-zoomable') || target.classList.contains('pinch-zoomable'))) {
+            return;
+          }
           e.preventDefault();
         }
       }, { passive: false });
       document.addEventListener('gesturestart', function (e) {
+        const target = e.target;
+        if (target && (target.closest('.pinch-zoomable') || target.classList.contains('pinch-zoomable'))) {
+          return;
+        }
         e.preventDefault();
       });
     </script>
