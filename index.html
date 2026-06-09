@@ -15,9 +15,10 @@
     <meta name="apple-mobile-web-app-title" content="7Locar" />
     <meta name="description" content="GEstao Eficaz - 7Locar" />
     <title>7Locar</title>
-    <!-- No external PDF/Canvas libraries needed -->
     <style>
-      /* ── Remove browser default headers/footers (URL, date, page number) ── */
+      html, body {
+        touch-action: manipulation;
+      }
       @page {
         size: A4 landscape;
         margin: 0mm !important;
@@ -148,6 +149,16 @@
         }
       });
       observer.observe(document.getElementById('root'), { childList: true, subtree: true });
+
+      // Disable multi-touch browser pinch-to-zoom globally on mobile
+      document.addEventListener('touchstart', function (e) {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      document.addEventListener('gesturestart', function (e) {
+        e.preventDefault();
+      });
     </script>
   </body>
 </html>
