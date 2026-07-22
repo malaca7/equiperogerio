@@ -320,6 +320,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (cpf: string, senha: string): Promise<{ error: string | null }> => {
     const cleanCpf = cpf.replace(/\D/g, '')
+    const cleanSenha = senha.trim()
     const info = getBrowserInfo()
 
     // Check in DB
@@ -327,7 +328,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .from('profiles')
       .select('*')
       .eq('cpf', cleanCpf)
-      .eq('senha', senha)
+      .eq('senha', cleanSenha)
       .limit(1)
 
     const profile = profiles && profiles.length > 0 ? profiles[0] : null

@@ -40,17 +40,18 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const cleanCpf = cpf.replace(/\D/g, '')
-    if (!cleanCpf || !senha) { toast('Preencha CPF e senha', 'warning'); return }
+    const cleanSenha = senha.trim()
+    if (!cleanCpf || !cleanSenha) { toast('Preencha CPF e senha', 'warning'); return }
     if (cleanCpf.length < 11) { toast('CPF inválido', 'warning'); return }
     if (lembrarCpf) {
       localStorage.setItem('7boss_lembrar_cpf', cleanCpf)
-      localStorage.setItem('7boss_lembrar_senha', senha)
+      localStorage.setItem('7boss_lembrar_senha', cleanSenha)
     } else {
       localStorage.removeItem('7boss_lembrar_cpf')
       localStorage.removeItem('7boss_lembrar_senha')
     }
     setLoading(true)
-    const { error } = await signIn(cleanCpf, senha)
+    const { error } = await signIn(cleanCpf, cleanSenha)
     setLoading(false)
     if (error) toast(error, 'error')
   }
