@@ -14,11 +14,14 @@ export interface Database {
           id: string
           nome: string
           apelido: string | null
+          cpf: string | null
+          pis: string | null
           matricula: string
           telefone: string | null
           cargo: string
           setor: string
           status: 'ativo' | 'inativo'
+          data_desligamento: string | null
           deleted_at: string | null
           created_at: string
           updated_at: string
@@ -27,11 +30,14 @@ export interface Database {
           id?: string
           nome: string
           apelido?: string | null
+          cpf?: string | null
+          pis?: string | null
           matricula: string
           telefone?: string | null
           cargo: string
           setor: string
           status?: 'ativo' | 'inativo'
+          data_desligamento?: string | null
           deleted_at?: string | null
           created_at?: string
           updated_at?: string
@@ -40,11 +46,14 @@ export interface Database {
           id?: string
           nome?: string
           apelido?: string | null
+          cpf?: string | null
+          pis?: string | null
           matricula?: string
           telefone?: string | null
           cargo?: string
           setor?: string
           status?: 'ativo' | 'inativo'
+          data_desligamento?: string | null
           deleted_at?: string | null
           updated_at?: string
         }

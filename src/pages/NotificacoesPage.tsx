@@ -137,7 +137,7 @@ export function NotificacoesPage() {
         }
       />
 
-      <div className="max-w-[900px] mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-32">
+      <div className="max-w-[900px] mx-auto px-4 sm:px-6 pt-28 sm:pt-32 pb-32">
         {isLoading ? (
           <div className="py-32"><Loading text="Sincronizando notificações..." /></div>
         ) : notificacoes.length === 0 ? (

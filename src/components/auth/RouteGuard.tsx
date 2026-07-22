@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { ROUTE_PAGE_MAP, type SystemPage } from '../../lib/auth.types'
+import { ROUTE_PAGE_MAP, DEFAULT_MENU_CONFIG, type SystemPage } from '../../lib/auth.types'
+import { useMenuConfig } from '../../hooks/useMenuConfig'
 import { supabase } from '../../lib/supabase'
 import { ShieldX, Lock } from 'lucide-react'
 
@@ -18,15 +19,28 @@ interface RouteGuardProps {
 export function RouteGuard({ children, page, action = 'visualizar', fallback }: RouteGuardProps) {
   const { isAuthenticated, loading, hasPermission, user } = useAuth()
   const location = useLocation()
+  const { data: menuConfig } = useMenuConfig(DEFAULT_MENU_CONFIG)
+
+  const routePageMap = useMemo(() => {
+    const map: Record<string, string> = { ...ROUTE_PAGE_MAP }
+    if (menuConfig) {
+      for (const mod of menuConfig.modulos) {
+        for (const pag of mod.paginas) {
+          map[pag.rota] = pag.id
+        }
+      }
+    }
+    return map
+  }, [menuConfig])
 
   if (loading) return null
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />
+    return <Navigate to="/" state={{ from: location }} replace />
   }
 
   // Determine the page from the route if not explicitly provided
-  const targetPage = page || ROUTE_PAGE_MAP[location.pathname]
+  const targetPage = page || routePageMap[location.pathname]
 
   if (targetPage && !hasPermission(targetPage, action)) {
     // Log the denied access
@@ -110,13 +124,21 @@ function AccessDeniedPage() {
           </span>
         </div>
 
-        {/* Back button */}
-        <button
-          onClick={() => window.history.back()}
-          className="inline-flex items-center gap-2 px-8 py-3 bg-card border border-border rounded-2xl text-sm font-bold text-foreground hover:bg-muted transition-all active:scale-95 shadow-sm"
-        >
-          Voltar
-        </button>
+        {/* Action buttons */}
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            onClick={() => window.history.back()}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-card border border-border rounded-2xl text-sm font-bold text-foreground hover:bg-muted transition-all active:scale-95 shadow-sm"
+          >
+            Voltar
+          </button>
+          <a
+            href="#/"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-2xl text-sm font-bold hover:bg-primary/95 transition-all active:scale-95 shadow-md shadow-primary/10"
+          >
+            Página Inicial
+          </a>
+        </div>
       </div>
     </div>
   )

@@ -1,8 +1,9 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { cn, getInitials } from '../../lib/utils'
 
 interface AvatarProps {
   name: string
+  src?: string
   size?: 'sm' | 'md' | 'lg' | 'xl'
   className?: string
 }
@@ -37,7 +38,24 @@ function nameToColor(name: string): string {
   return colors[Math.abs(hash) % colors.length]
 }
 
-export function Avatar({ name, size = 'md', className }: AvatarProps) {
+export function Avatar({ name, src, size = 'md', className }: AvatarProps) {
+  const [hasError, setHasError] = useState(false)
+
+  if (src && !hasError) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        onError={() => setHasError(true)}
+        className={cn(
+          'rounded-full object-cover flex-shrink-0 border border-border/40 shadow-sm bg-muted',
+          sizeClasses[size],
+          className
+        )}
+      />
+    )
+  }
+
   return (
     <div
       className={cn(

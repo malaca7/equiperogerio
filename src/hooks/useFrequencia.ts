@@ -47,34 +47,59 @@ export function useFrequenciaFuncionario(funcionarioId: string, limit = 30) {
   })
 }
 
-export function useFrequenciaMensal(mes: string) {
+export function useFrequenciaMensal(mes: string, allowedFuncIds?: string[]) {
   const startDate = `${mes}-01`
-  const endDate = `${mes}-31`
+  const year = parseInt(mes.split('-')[0])
+  const month = parseInt(mes.split('-')[1])
+  const nextDayDate = new Date(year, month, 1) // Primeiro dia do mês seguinte
+  const nextDay = nextDayDate.toISOString().substring(0, 10)
+
   return useQuery<FrequenciaWithFunc[]>({
-    queryKey: [...FREQUENCIA_KEY, 'mensal', mes],
+    queryKey: [...FREQUENCIA_KEY, 'mensal', mes, allowedFuncIds],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('frequencia')
         .select('*, funcionarios(id, nome, cargo, setor)')
         .gte('data', startDate)
-        .lte('data', endDate)
+        .lt('data', nextDay)
         .order('data')
+        
+      if (allowedFuncIds !== undefined && allowedFuncIds.length > 0) {
+        query = query.in('funcionario_id', allowedFuncIds)
+      } else if (allowedFuncIds !== undefined && allowedFuncIds.length === 0) {
+        return [] // Return empty if allowedFuncIds is provided but empty
+      }
+      
+      const { data, error } = await query
       if (error) throw error
       return (data ?? []) as FrequenciaWithFunc[]
     },
   })
 }
 
-export function useFrequenciaPeriodo(startDate: string, endDate: string) {
+export function useFrequenciaPeriodo(startDate: string, endDate: string, allowedFuncIds?: string[]) {
+  const dateParts = endDate.split('-')
+  const date = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]))
+  date.setDate(date.getDate() + 1)
+  const nextDay = date.toISOString().substring(0, 10)
+
   return useQuery<FrequenciaWithFunc[]>({
-    queryKey: [...FREQUENCIA_KEY, 'periodo', startDate, endDate],
+    queryKey: [...FREQUENCIA_KEY, 'periodo', startDate, endDate, allowedFuncIds],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('frequencia')
         .select('*, funcionarios(id, nome, cargo, setor)')
         .gte('data', startDate)
-        .lte('data', endDate)
+        .lt('data', nextDay)
         .order('data')
+        
+      if (allowedFuncIds !== undefined && allowedFuncIds.length > 0) {
+        query = query.in('funcionario_id', allowedFuncIds)
+      } else if (allowedFuncIds !== undefined && allowedFuncIds.length === 0) {
+        return []
+      }
+      
+      const { data, error } = await query
       if (error) throw error
       return (data ?? []) as FrequenciaWithFunc[]
     },
@@ -95,6 +120,9 @@ export function useUpsertFrequencia() {
         .select()
         .single()
       if (error) throw error
+      if (!result) {
+        throw new Error('Sem permissão ou RLS bloqueando a gravação de frequência no banco de dados!')
+      }
       return result as Frequencia
     },
     onSuccess: (_data, variables) => {
@@ -117,6 +145,9 @@ export function useBatchUpsertFrequencia() {
         )
         .select()
       if (error) throw error
+      if (!result || result.length === 0) {
+        throw new Error('Sem permissão ou RLS bloqueando a gravação de frequência no banco de dados!')
+      }
       return result as Frequencia[]
     },
     onSuccess: () => {
@@ -137,6 +168,9 @@ export function useUpdateFrequencia() {
         .select()
         .single()
       if (error) throw error
+      if (!result) {
+        throw new Error('Sem permissão ou RLS bloqueando a atualização de frequência no banco de dados!')
+      }
       return result as Frequencia
     },
     onSuccess: () => {
@@ -160,10 +194,10 @@ interface DashboardStats {
   totalRegistros: number
 }
 
-export function useDashboardStats(date?: string) {
+export function useDashboardStats(date?: string, allowedFuncIds?: string[]) {
   const d = date || today()
   return useQuery<DashboardStats>({
-    queryKey: ['dashboard', d],
+    queryKey: ['dashboard', d, allowedFuncIds],
     queryFn: async () => {
       // 1. Fetch Config Sectors
       const configResult = await supabase
@@ -197,8 +231,12 @@ export function useDashboardStats(date?: string) {
       const frequencias = (freqResult.data ?? [])
       
       // Filter ONLY employees in active sectors
-      const ativos = (funcResult.data ?? [])
+      let ativos = (funcResult.data ?? [])
         .filter(f => f.status === 'ativo' && (activeSectors.length === 0 || activeSectors.includes(f.setor)))
+      
+      if (allowedFuncIds !== undefined) {
+        ativos = ativos.filter(f => allowedFuncIds.includes(f.id))
+      }
       
       // Map frequency and scales for quick access
       const freqMap = new Map(frequencias.map(f => [f.funcionario_id, f.status]))

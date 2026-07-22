@@ -13,10 +13,15 @@ interface AuthContextType {
   loading: boolean
   signIn: (cpf: string, senha: string) => Promise<{ error: string | null }>
   signOut: () => void
+  reloadSession: () => Promise<void>
   hasPermission: (pagina: string, acao: string) => boolean
   hasAnyPermission: (pagina: string) => boolean
   isAdmin: boolean
   isDev: boolean
+  activePanel: string
+  setActivePanel: (panel: string) => void
+  selectedTeamId: string | null
+  setSelectedTeamId: (teamId: string | null) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -43,7 +48,7 @@ async function loadUserData(profileId: string): Promise<AuthUser | null> {
       .single()
     if (error || !profile) return null
 
-    // Get roles
+    // Get roles (still used for display, panel config, isAdmin/isDev checks)
     const { data: urData } = await supabase
       .from('user_roles')
       .select('role_id, roles(id, nome, nivel)')
@@ -54,9 +59,23 @@ async function loadUserData(profileId: string): Promise<AuthUser | null> {
       .filter(Boolean)
       .map((r: any) => ({ id: r.id, nome: r.nome, nivel: r.nivel }))
 
-    // Get permissions
-    const roleIds = roles.map((r: any) => r.id)
+    // Get permissions DIRECTLY from user_direct_permissions (per-user isolated)
     let permissions: PermissionSet = new Set()
+    
+    // 1. Load isolated permissions
+    const { data: udpData } = await supabase
+      .from('user_direct_permissions')
+      .select('permissions(pagina, acao)')
+      .eq('user_id', profileId)
+    if (udpData) {
+      for (const udp of udpData) {
+        const p = (udp as any).permissions
+        if (p) permissions.add(makePermissionKey(p.pagina, p.acao))
+      }
+    }
+
+    // 2. Load role-based permissions (from the Matriz)
+    const roleIds = roles.map((r: any) => r.id)
     if (roleIds.length > 0) {
       const { data: rpData } = await supabase
         .from('role_permissions')
@@ -70,13 +89,12 @@ async function loadUserData(profileId: string): Promise<AuthUser | null> {
       }
     }
 
-    const roleNames = roles.map((r: any) => r.nome)
     return {
       profile: profile as Profile,
       roles,
       permissions,
-      isAdmin: roleNames.includes('DESENVOLVEDOR') || roleNames.includes('GERENTE'),
-      isDev: roleNames.includes('DESENVOLVEDOR'),
+      isAdmin: roles.some((r: any) => r.nivel >= 80 || r.nome.toLowerCase().includes('admin') || r.nome.toLowerCase().includes('desenvolvedor')),
+      isDev: roles.some((r: any) => r.nivel >= 100 || r.nome.toLowerCase().includes('desenvolvedor') || r.nome.toLowerCase().includes('dev')),
     }
   } catch {
     return null
@@ -87,6 +105,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [activePanel, setActivePanelState] = useState<string>(() => {
+    return localStorage.getItem('7boss_active_panel') || 'producao'
+  })
+  const [selectedTeamId, setSelectedTeamIdState] = useState<string | null>(() => {
+    return localStorage.getItem('7boss_selected_team_id')
+  })
+
+  const setActivePanel = useCallback((panel: string) => {
+    setActivePanelState(panel)
+    localStorage.setItem('7boss_active_panel', panel)
+  }, [])
+
+  const setSelectedTeamId = useCallback((teamId: string | null) => {
+    setSelectedTeamIdState(teamId)
+    if (teamId) {
+      localStorage.setItem('7boss_selected_team_id', teamId)
+    } else {
+      localStorage.removeItem('7boss_selected_team_id')
+    }
+  }, [])
 
   // Restore session
   useEffect(() => {
@@ -100,6 +139,164 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false)
     }
   }, [])
+
+  // Auto-redirect to cargo preferred default panel & Clear team filters
+  useEffect(() => {
+    if (user && user.roles && user.roles.length > 0) {
+      const alreadySet = localStorage.getItem('7boss_panel_initialized')
+      
+      if (!alreadySet) {
+        // 1. Clear team filter on startup for unrestricted users (above encarregado, level > 50)
+        const isUnrestricted = user.roles.some(r => r.nivel > 50)
+        if (isUnrestricted) {
+          setSelectedTeamIdState(null)
+          localStorage.removeItem('7boss_selected_team_id')
+        }
+        
+        localStorage.setItem('7boss_panel_initialized', 'true')
+
+        // 2. Set default panel
+        const primaryRole = user.roles.reduce((prev, curr) => (curr.nivel > prev.nivel ? curr : prev), user.roles[0])
+        supabase
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', 'cargo_paineis')
+          .maybeSingle()
+          .then(({ data }) => {
+            const configs = data?.valor || {}
+            const cargoConfig = configs[primaryRole.id]
+            if (cargoConfig?.painel_padrao) {
+              setActivePanelState(cargoConfig.painel_padrao)
+              localStorage.setItem('7boss_active_panel', cargoConfig.painel_padrao)
+            }
+          })
+      }
+    }
+  }, [user])
+
+  // Auto-sync menu_config and permissions in database for 'gerar_relatorio'
+  useEffect(() => {
+    if (user?.isDev || user?.isAdmin) {
+      const runSync = async () => {
+        try {
+          // 1. Fetch current menu_config
+          const { data: configData } = await supabase
+            .from('configuracoes')
+            .select('valor')
+            .eq('chave', 'menu_config')
+            .maybeSingle()
+          
+          if (configData?.valor) {
+            const menuConfig = configData.valor as any
+            let changed = false
+            
+            // Helper to sync page inside a module
+            const syncPage = (modId: string, pageObj: any) => {
+              if (!menuConfig.modulos) menuConfig.modulos = []
+              const mod = menuConfig.modulos.find((m: any) => m.id === modId)
+              if (mod) {
+                if (!mod.paginas) mod.paginas = []
+                const hasRoute = mod.paginas.some((p: any) => p.rota === pageObj.rota)
+                if (!hasRoute) {
+                  console.log(`Auto-sync: Adding page ${pageObj.id} to module ${modId}`)
+                  mod.paginas.push(pageObj)
+                  mod.paginas.sort((a: any, b: any) => a.ordem - b.ordem)
+                  changed = true
+                } else {
+                  const page = mod.paginas.find((p: any) => p.rota === pageObj.rota)
+                  if (page && page.id !== pageObj.id) {
+                    console.log(`Auto-sync: Updating page ID to ${pageObj.id} at route ${pageObj.rota}`)
+                    page.id = pageObj.id
+                    changed = true
+                  }
+                }
+              }
+            }
+
+            syncPage('administrativo', { id: 'gerar_relatorio', label: 'Gerar Relatório', rota: '/equipes/gerar-relatorio', icone: 'FileText', ordem: 3, ativo: true })
+            syncPage('producao', { id: 'gerar_relatorio', label: 'Gerar Relatório', rota: '/equipes/gerar-relatorio', icone: 'FileText', ordem: 3, ativo: true })
+            syncPage('pessoal', { id: 'gerar_relatorio', label: 'Gerar Relatório', rota: '/equipes/gerar-relatorio', icone: 'FileText', ordem: 4, ativo: true })
+            syncPage('producao', { id: 'localidades', label: 'Demandas', rota: '/escala/demandas', icone: 'FileText', ordem: 6.5, ativo: true })
+
+            // Clean up from inactive pages list if present
+            if (menuConfig.inativos?.paginas) {
+              const originalLength = menuConfig.inativos.paginas.length
+              menuConfig.inativos.paginas = menuConfig.inativos.paginas.filter(
+                (p: any) => p.page?.rota !== '/equipes/gerar-relatorio' && p.page?.id !== 'gerar_relatorio'
+              )
+              if (menuConfig.inativos.paginas.length !== originalLength) {
+                changed = true
+              }
+            }
+
+            if (changed) {
+              await supabase.from('configuracoes').upsert({
+                chave: 'menu_config',
+                valor: menuConfig,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'chave' })
+              console.log('Auto-sync: Successfully updated menu_config in DB.')
+            }
+          }
+
+          // 2. Sync permissions in database
+          const { data: perms } = await supabase.from('permissions').select('*')
+          if (perms) {
+            const requiredPerms = [
+              { pagina: 'gerar_relatorio', acao: 'visualizar', descricao: 'Visualizar relatório completo da equipe' },
+              { pagina: 'gerar_relatorio', acao: 'gerenciar', descricao: 'Gerenciar e exportar relatório completo da equipe' }
+            ]
+            const missing = []
+            for (const req of requiredPerms) {
+              if (!perms.some(p => p.pagina === req.pagina && p.acao === req.acao)) {
+                missing.push(req)
+              }
+            }
+            if (missing.length > 0) {
+              await supabase.from('permissions').insert(missing)
+              console.log('Auto-sync: Successfully inserted missing permissions.')
+            }
+
+            // 3. Propagate role permissions from 'equipes' to 'gerar_relatorio'
+            const { data: updatedPerms } = await supabase.from('permissions').select('*')
+            const { data: rolePerms } = await supabase.from('role_permissions').select('*')
+            
+            if (updatedPerms && rolePerms) {
+              const permEquipesView = updatedPerms.find(p => p.pagina === 'equipes' && p.acao === 'visualizar')
+              const permEquipesManage = updatedPerms.find(p => p.pagina === 'equipes' && p.acao === 'gerenciar')
+              const permRelatorioView = updatedPerms.find(p => p.pagina === 'gerar_relatorio' && p.acao === 'visualizar')
+              const permRelatorioManage = updatedPerms.find(p => p.pagina === 'gerar_relatorio' && p.acao === 'gerenciar')
+
+              if (permEquipesView && permRelatorioView) {
+                const inserts = []
+                for (const rp of rolePerms) {
+                  if (rp.permission_id === permEquipesView.id) {
+                    const hasRelatorioView = rolePerms.some(x => x.role_id === rp.role_id && x.permission_id === permRelatorioView.id)
+                    if (!hasRelatorioView) {
+                      inserts.push({ role_id: rp.role_id, permission_id: permRelatorioView.id })
+                    }
+                  }
+                  if (permEquipesManage && permRelatorioManage && rp.permission_id === permEquipesManage.id) {
+                    const hasRelatorioManage = rolePerms.some(x => x.role_id === rp.role_id && x.permission_id === permRelatorioManage.id)
+                    if (!hasRelatorioManage) {
+                      inserts.push({ role_id: rp.role_id, permission_id: permRelatorioManage.id })
+                    }
+                  }
+                }
+                if (inserts.length > 0) {
+                  await supabase.from('role_permissions').insert(inserts)
+                  console.log(`Auto-sync: Propagated ${inserts.length} role permissions to gerar_relatorio.`)
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error during auto-sync of menu and permissions:', e)
+        }
+      }
+      runSync()
+    }
+  }, [user])
 
   // Inactivity timeout
   const resetTimer = useCallback(() => {
@@ -175,21 +372,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
     }
     localStorage.removeItem(SESSION_KEY)
+    localStorage.removeItem('7boss_panel_initialized')
     setUser(null)
   }
+
+  const reloadSession = useCallback(async () => {
+    if (user) {
+      const userData = await loadUserData(user.profile.id)
+      setUser(userData)
+    }
+  }, [user])
 
   const hasPermission = useCallback((pagina: string, acao: string) => {
     if (!user) return false
     if (user.isDev) return true
-    return user.permissions.has(makePermissionKey(pagina, acao))
+    
+    // Virtual permissions for ENCARREGADO (supervisors) to manage their team settings
+    const isEncarregado = user.roles.some(r => r.nome === 'ENCARREGADO' || r.nivel <= 50)
+    if (isEncarregado) {
+      if (pagina === 'equipes' && acao === 'visualizar') return true
+      if (pagina === 'gerar_relatorio' && acao === 'visualizar') return true
+      if (pagina === 'modelos_escala' || pagina === 'organizacao_varricao') return true
+    }
+    
+    // Compatibilidade: mapeia as permissões antigas 'editar' e 'administrar' para a nova 'gerenciar'
+    const acaoEfetiva = (acao === 'editar' || acao === 'administrar') ? 'gerenciar' : acao
+    
+    return user.permissions.has(makePermissionKey(pagina, acaoEfetiva))
   }, [user])
 
   const hasAnyPermission = useCallback((pagina: string) => {
     if (!user) return false
     if (user.isDev) return true
+
+    const isEncarregado = user.roles.some(r => r.nome === 'ENCARREGADO' || r.nivel <= 50)
+    if (isEncarregado) {
+      if (pagina === 'equipes' || pagina === 'modelos_escala' || pagina === 'gerar_relatorio' || pagina === 'organizacao_varricao') return true
+    }
+
     return user.permissions.has(makePermissionKey(pagina, 'visualizar'))
-      || user.permissions.has(makePermissionKey(pagina, 'editar'))
-      || user.permissions.has(makePermissionKey(pagina, 'administrar'))
+      || user.permissions.has(makePermissionKey(pagina, 'gerenciar'))
   }, [user])
 
   return (
@@ -199,10 +421,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       signIn,
       signOut,
+      reloadSession,
       hasPermission,
       hasAnyPermission,
       isAdmin: user?.isAdmin ?? false,
       isDev: user?.isDev ?? false,
+      activePanel,
+      setActivePanel,
+      selectedTeamId,
+      setSelectedTeamId,
     }}>
       {children}
     </AuthContext.Provider>

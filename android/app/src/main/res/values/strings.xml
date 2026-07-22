@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">7Locar</string>
+    <string name="title_activity_main">7Locar</string>
+    <string name="package_name">com.malaca.sevenlocar</string>
+    <string name="custom_url_scheme">com.malaca.sevenlocar</string>
+</resources>

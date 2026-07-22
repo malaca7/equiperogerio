@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react'
-import { CheckCircle, XCircle, AlertCircle, Info, X } from 'lucide-react'
+import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
@@ -16,18 +16,31 @@ interface ToastContextType {
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
-const icons = {
-  success: CheckCircle,
-  error: XCircle,
-  warning: AlertCircle,
-  info: Info,
-}
-
-const colors = {
-  success: 'border-green-500 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-200',
-  error: 'border-red-500 bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200',
-  warning: 'border-amber-500 bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
-  info: 'border-blue-500 bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200',
+const configs: Record<ToastType, { icon: any; classes: string; iconClass: string; bar: string }> = {
+  success: {
+    icon: CheckCircle2,
+    classes: 'bg-card border-emerald-500/30 dark:border-emerald-500/20',
+    iconClass: 'text-emerald-500',
+    bar: 'bg-emerald-500',
+  },
+  error: {
+    icon: XCircle,
+    classes: 'bg-card border-rose-500/30 dark:border-rose-500/20',
+    iconClass: 'text-rose-500',
+    bar: 'bg-rose-500',
+  },
+  warning: {
+    icon: AlertTriangle,
+    classes: 'bg-card border-amber-500/30 dark:border-amber-500/20',
+    iconClass: 'text-amber-500',
+    bar: 'bg-amber-500',
+  },
+  info: {
+    icon: Info,
+    classes: 'bg-card border-blue-500/30 dark:border-blue-500/20',
+    iconClass: 'text-blue-500',
+    bar: 'bg-blue-500',
+  },
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -46,25 +59,29 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      {/* Toast container */}
-      <div className="fixed top-4 left-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none">
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-sm z-[9999] flex flex-col gap-2 pointer-events-none">
         {toasts.map(t => {
-          const Icon = icons[t.type]
+          const { icon: Icon, classes, iconClass, bar } = configs[t.type]
           return (
             <div
               key={t.id}
               className={cn(
-                'flex items-center gap-3 p-4 rounded-xl border-l-4 shadow-card-lg animate-slide-up pointer-events-auto',
-                colors[t.type]
+                'relative flex items-center gap-3 pl-4 pr-3 py-3.5',
+                'rounded-2xl border shadow-lg shadow-black/10 dark:shadow-black/40',
+                'animate-slide-down pointer-events-auto overflow-hidden',
+                classes
               )}
             >
-              <Icon className="w-5 h-5 flex-shrink-0" />
-              <p className="text-sm font-medium flex-1">{t.message}</p>
+              {/* Color bar */}
+              <div className={cn('absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl', bar)} />
+
+              <Icon className={cn('w-5 h-5 flex-shrink-0', iconClass)} />
+              <p className="text-sm font-semibold text-foreground flex-1 leading-snug">{t.message}</p>
               <button
                 onClick={() => remove(t.id)}
-                className="flex-shrink-0 opacity-70 hover:opacity-100 transition-opacity"
+                className="w-7 h-7 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all flex-shrink-0"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           )

@@ -1,0 +1,9 @@
+{
+  "appId": "com.malaca.sevenlocar",
+  "appName": "7Locar",
+  "webDir": "dist",
+  "server": {
+    "url": "https://7locar.7all.com.br",
+    "cleartext": true
+  }
+}

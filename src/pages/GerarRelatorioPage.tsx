@@ -1,0 +1,1264 @@
+import React, { useState, useRef, useMemo, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useToast } from '../components/ui/Toast'
+import { Modal } from '../components/ui/Modal'
+import { Button } from '../components/ui/Button'
+import { Loading } from '../components/ui/Loading'
+import { TopHeader } from '../components/layout/TopHeader'
+import { useUserTeam } from '../hooks/useUserTeam'
+import { useConfiguracao } from '../hooks/useConfiguracoes'
+import { useFuncionarios } from '../hooks/useFuncionarios'
+import { cn } from '../lib/utils'
+import { format, parseISO } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
+
+import { 
+  Users, Shield, MapPin, Share2, FileText, Wrench, Briefcase, 
+  Sparkles, Truck, User, Hammer, MessageSquare, Plus, Trash2, 
+  Save, Download, Copy, Calendar, Eye, EyeOff, LayoutGrid, Check,
+  Printer
+} from 'lucide-react'
+
+interface ModeloRelatorio {
+  id: string
+  nome: string
+  equipe_id: string
+  report_title: string
+  show_metrics: boolean
+  show_localities: boolean
+  show_observations: boolean
+  show_inactives: boolean
+  show_roles: boolean
+  observations: Record<string, string>
+  created_at?: string
+  updated_at?: string
+}
+
+export function GerarRelatorioPage() {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const { data: teamInfo, isLoading: isLoadingTeamInfo } = useUserTeam()
+  
+  const isRestricted = teamInfo?.isRestricted ?? false
+  const allowedTeamIds = teamInfo?.teamIds ?? []
+
+  // Component states
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('')
+  const [selectedDate, setSelectedDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
+  const [currentTemplateId, setCurrentTemplateId] = useState<string>('')
+  
+  // Template settings states
+  const [reportTitle, setReportTitle] = useState('RELATÓRIO DIÁRIO OPERACIONAL')
+  const [showMetrics, setShowMetrics] = useState(true)
+  const [showLocalities, setShowLocalities] = useState(true)
+  const [showObservations, setShowObservations] = useState(true)
+  const [showInactives, setShowInactives] = useState(false)
+  const [showRoles, setShowRoles] = useState(true)
+  const [observations, setObservations] = useState<Record<string, string>>({})
+  
+  // UI States
+  const [newTemplateName, setNewTemplateName] = useState('')
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false)
+  const [isSavingNew, setIsSavingNew] = useState(false)
+  const [saveModalOpen, setSaveModalOpen] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const shareSquareRef = useRef<HTMLDivElement>(null)
+
+  // Fetch all teams
+  const { data: equipes = [], isLoading: isLoadingEquipes } = useQuery<any[]>({
+    queryKey: ['equipes-relatorio'],
+    queryFn: async () => {
+      const { data } = await supabase.from('equipes').select('*').order('nome')
+      return data || []
+    }
+  })
+
+  // Filter team options based on restriction
+  const availableEquipes = useMemo(() => {
+    if (isRestricted) {
+      return equipes.filter(eq => allowedTeamIds.includes(eq.id))
+    }
+    return equipes
+  }, [equipes, isRestricted, allowedTeamIds])
+
+  // Set default team
+  useEffect(() => {
+    if (availableEquipes.length > 0 && !selectedTeamId) {
+      setSelectedTeamId(availableEquipes[0].id)
+    }
+  }, [availableEquipes, selectedTeamId])
+
+  // Fetch team members
+  const { data: dbSetoresEquipes = {} } = useConfiguracao<Record<string, string[]>>('setores_equipes', {})
+  const { data: allFuncionarios = [], isLoading: loadF } = useFuncionarios()
+
+  const { data: selectedTeamMemberIds = [], isLoading: isLoadingMembrosIds } = useQuery<string[]>({
+    queryKey: ['equipe-membros-relatorio', selectedTeamId],
+    queryFn: async () => {
+      if (!selectedTeamId) return []
+      const { data } = await supabase
+        .from('equipe_membros')
+        .select('funcionario_id')
+        .eq('equipe_id', selectedTeamId)
+      return (data || []).map((m: any) => m.funcionario_id)
+    },
+    enabled: !!selectedTeamId
+  })
+
+  const membros = useMemo(() => {
+    let list = allFuncionarios
+    if (isRestricted) {
+      return list.filter(f => teamInfo?.teamMemberIds.includes(f.id))
+    }
+    if (selectedTeamId) {
+      const allowedSectors = dbSetoresEquipes[selectedTeamId] || []
+      return list.filter(f => 
+        selectedTeamMemberIds.includes(f.id) ||
+        (f.setor && allowedSectors.includes(f.setor))
+      )
+    }
+    return list
+  }, [allFuncionarios, selectedTeamId, selectedTeamMemberIds, isRestricted, teamInfo, dbSetoresEquipes])
+
+  const isLoadingMembros = loadF || isLoadingMembrosIds
+
+  // Fetch saved models/templates
+  const { data: templates = [], refetch: refetchTemplates } = useQuery<ModeloRelatorio[]>({
+    queryKey: ['modelos-relatorio', selectedTeamId],
+    queryFn: async () => {
+      if (!selectedTeamId) return []
+      const { data } = await supabase
+        .from('modelos_relatorio')
+        .select('*')
+        .eq('equipe_id', selectedTeamId)
+        .order('nome')
+      return data || []
+    },
+    enabled: !!selectedTeamId
+  })
+
+  // Fetch today's attendance
+  const { data: frequencias = [] } = useQuery<any[]>({
+    queryKey: ['frequencia-relatorio', selectedDate],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('frequencia')
+        .select('funcionario_id, status, justificativa')
+        .eq('data', selectedDate)
+      return data || []
+    }
+  })
+
+  // Fetch today's allocations
+  const { data: escalas = [] } = useQuery<any[]>({
+    queryKey: ['escalas-relatorio', selectedDate],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('escalas')
+        .select('id, funcionario_id, localidade, tipo, turno, observacoes')
+        .eq('data', selectedDate)
+      return data || []
+    }
+  })
+
+  const isTemplateModified = useMemo(() => {
+    if (!currentTemplateId) return false
+    const t = templates.find(item => item.id === currentTemplateId)
+    if (!t) return false
+    return (
+      t.report_title !== reportTitle ||
+      t.show_metrics !== showMetrics ||
+      t.show_localities !== showLocalities ||
+      t.show_observations !== showObservations ||
+      t.show_inactives !== showInactives ||
+      t.show_roles !== showRoles
+    )
+  }, [currentTemplateId, templates, reportTitle, showMetrics, showLocalities, showObservations, showInactives, showRoles])
+
+  // Sync database observations to local state when escalas changes
+  useEffect(() => {
+    const dailyObs: Record<string, string> = {}
+    escalas.forEach(e => {
+      if (e.observacoes) {
+        dailyObs[e.funcionario_id] = e.observacoes
+      }
+    })
+    setObservations(dailyObs)
+  }, [escalas])
+
+  // Helper to reset observations back to escalas daily defaults
+  const resetObservationsFromEscalas = () => {
+    const dailyObs: Record<string, string> = {}
+    escalas.forEach(e => {
+      if (e.observacoes) {
+        dailyObs[e.funcionario_id] = e.observacoes
+      }
+    })
+    setObservations(dailyObs)
+  }
+
+  // Save employee observation to database on blur
+  const handleSaveObs = async (funcId: string, value: string) => {
+    try {
+      const existing = escalas.find(e => e.funcionario_id === funcId)
+      if (existing) {
+        const { error } = await supabase
+          .from('escalas')
+          .update({ observacoes: value || null, updated_at: new Date().toISOString() })
+          .eq('id', existing.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('escalas')
+          .insert({
+            funcionario_id: funcId,
+            data: selectedDate,
+            tipo: 'presente',
+            turno: 'integral',
+            observacoes: value || null
+          })
+        if (error) throw error
+      }
+      queryClient.invalidateQueries({ queryKey: ['escalas-relatorio', selectedDate] })
+    } catch (err: any) {
+      toast('Erro ao salvar observação: ' + err.message, 'error')
+    }
+  }
+
+  // Filter members based on 'showInactives' toggle
+  const filteredMembros = useMemo(() => {
+    return membros.filter(m => showInactives ? true : m.status === 'ativo')
+  }, [membros, showInactives])
+
+  // Group members by sector
+  const membersBySector = useMemo(() => {
+    const groups: Record<string, typeof filteredMembros> = {}
+    filteredMembros.forEach(m => {
+      const sector = m.setor || 'Geral'
+      if (!groups[sector]) {
+        groups[sector] = []
+      }
+      groups[sector].push(m)
+    })
+    return groups
+  }, [filteredMembros])
+
+  // Attendance stats for selected team
+  const stats = useMemo(() => {
+    if (membros.length === 0) return { total: 0, present: 0, absent: 0, rate: 0 }
+    const activeMembers = membros.filter(m => m.status === 'ativo')
+    const activeIds = activeMembers.map(m => m.id)
+    
+    // Count attendances for this team today
+    const teamFreqs = frequencias.filter(f => activeIds.includes(f.funcionario_id))
+    const presentCount = teamFreqs.filter(f => f.status === 'presente' || f.status === 'trabalhou').length
+    const absentCount = activeMembers.length - presentCount
+
+    const rate = activeMembers.length > 0 ? Math.round((presentCount / activeMembers.length) * 100) : 0
+    return {
+      total: activeMembers.length,
+      present: presentCount,
+      absent: absentCount,
+      rate
+    }
+  }, [membros, frequencias])
+
+  // Load a selected template config
+  const handleApplyTemplate = (templateId: string) => {
+    if (!templateId) {
+      // Reset to defaults
+      setCurrentTemplateId('')
+      setReportTitle('RELATÓRIO DIÁRIO OPERACIONAL')
+      setShowMetrics(true)
+      setShowLocalities(true)
+      setShowObservations(true)
+      setShowInactives(false)
+      setShowRoles(true)
+      resetObservationsFromEscalas()
+      return
+    }
+
+    const t = templates.find(item => item.id === templateId)
+    if (t) {
+      setCurrentTemplateId(t.id)
+      setReportTitle(t.report_title)
+      setShowMetrics(t.show_metrics)
+      setShowLocalities(t.show_localities)
+      setShowObservations(t.show_observations)
+      setShowInactives(t.show_inactives)
+      setShowRoles(t.show_roles)
+      if (t.observations && Object.keys(t.observations).length > 0) {
+        setObservations(prev => ({
+          ...t.observations,
+          ...prev // Daily observations from scales take priority
+        }))
+      }
+      toast(`Configuração "${t.nome}" carregada!`, 'success')
+    }
+  }
+
+  // Save changes to current template or save as a new one
+  const handleSaveTemplate = async (isNew: boolean) => {
+    if (!selectedTeamId) return
+    
+    if (isNew && !newTemplateName.trim()) {
+      toast('Insira o nome do modelo para salvar.', 'warning')
+      return
+    }
+
+    const name = isNew ? newTemplateName.trim() : templates.find(t => t.id === currentTemplateId)?.nome
+    if (!name) return
+
+    if (isNew) setIsSavingNew(true);
+    else setIsSavingTemplate(true);
+
+    try {
+      const payload: Partial<ModeloRelatorio> = {
+        nome: name,
+        equipe_id: selectedTeamId,
+        report_title: reportTitle,
+        show_metrics: showMetrics,
+        show_localities: showLocalities,
+        show_observations: showObservations,
+        show_inactives: showInactives,
+        show_roles: showRoles,
+        observations: observations || {}, // Save current layout state notes in template
+        updated_at: new Date().toISOString()
+      }
+
+      if (!isNew && currentTemplateId) {
+        payload.id = currentTemplateId
+      }
+
+      const { data, error } = await supabase
+        .from('modelos_relatorio')
+        .upsert(payload)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      toast(isNew ? `Modelo "${name}" criado com sucesso!` : 'Alterações do modelo salvas!', 'success')
+      
+      await refetchTemplates()
+      
+      if (isNew) {
+        if (data) setCurrentTemplateId(data.id)
+        setNewTemplateName('')
+        setSaveModalOpen(false)
+      }
+    } catch (err: any) {
+      toast('Erro ao salvar modelo: ' + err.message, 'error')
+    } finally {
+      setIsSavingNew(false)
+      setIsSavingTemplate(false)
+    }
+  }
+
+  // Delete a saved template
+  const handleDeleteTemplate = async (id: string) => {
+    if (!id || !confirm('Deseja realmente excluir este modelo de relatório?')) return
+    try {
+      const { error } = await supabase
+        .from('modelos_relatorio')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      toast('Modelo excluído com sucesso!', 'success')
+      
+      if (currentTemplateId === id) {
+        handleApplyTemplate('')
+      }
+      refetchTemplates()
+    } catch (err: any) {
+      toast('Erro ao excluir modelo: ' + err.message, 'error')
+    }
+  }
+
+  // Handle single employee observation change
+  const handleObsChange = (funcId: string, value: string) => {
+    setObservations(prev => ({
+      ...prev,
+      [funcId]: value
+    }))
+  }
+
+  // Generate image and trigger sharing/download
+  // Generate image and trigger sharing/download
+  const handleExport = async (action: 'share' | 'copy' | 'download') => {
+    if (!shareSquareRef.current) return
+    const isDark = document.documentElement.classList.contains('dark')
+    toast('Preparando documento para renderização...', 'info')
+    setIsExporting(true)
+
+    // Small delay to ensure inputs are converted to static divs
+    await new Promise(r => setTimeout(r, 150))
+
+    try {
+      // Temporarily remove shadow classes from rendering
+      shareSquareRef.current.classList.add('no-shadows')
+      
+      const { toBlob } = await import('html-to-image')
+      
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      const renderOptions = {
+        backgroundColor: isDark ? '#0b0f19' : '#ffffff',
+        pixelRatio: isMobile ? 1 : 2,
+        skipFonts: true,
+        cacheBust: true,
+        filter: (node: Node) => {
+          const tagName = (node as HTMLElement).tagName?.toLowerCase()
+          if (tagName === 'svg' || tagName === 'path') {
+            return false
+          }
+          if (tagName === 'button' || tagName === 'input' || tagName === 'select') {
+            return false
+          }
+          return true
+        }
+      }
+
+      // Temporarily disable cross-origin stylesheets to prevent tainted canvas / CORS issues
+      const disabledSheets: CSSStyleSheet[] = []
+      try {
+        for (let i = 0; i < document.styleSheets.length; i++) {
+          const sheet = document.styleSheets[i]
+          try {
+            let isCrossOrigin = false
+            try {
+              if (sheet.href && !sheet.href.startsWith(window.location.origin)) {
+                isCrossOrigin = true
+              }
+            } catch (_) {
+              isCrossOrigin = true
+            }
+
+            if (isCrossOrigin) {
+              try {
+                sheet.disabled = true
+                disabledSheets.push(sheet)
+              } catch (_) {}
+            }
+          } catch (_) {}
+        }
+      } catch (err) {
+        console.warn('Error disabling cross-origin stylesheets:', err)
+      }
+
+      let blob: Blob | null = null
+      try {
+        if (isMobile) {
+          try { await toBlob(shareSquareRef.current, { ...renderOptions, pixelRatio: 1 }) } catch (_) {}
+        }
+        blob = await toBlob(shareSquareRef.current, renderOptions)
+      } catch (firstErr) {
+        console.warn('First render failed, retrying with simple options...', firstErr)
+        blob = await toBlob(shareSquareRef.current, {
+          backgroundColor: isDark ? '#0b0f19' : '#ffffff',
+          pixelRatio: 1,
+          skipFonts: true,
+          cacheBust: true,
+          filter: renderOptions.filter
+        })
+      } finally {
+        // Restore disabled stylesheets
+        disabledSheets.forEach(sheet => {
+          try {
+            sheet.disabled = false
+          } catch (_) {}
+        })
+      }
+      
+      shareSquareRef.current.classList.remove('no-shadows')
+      
+      if (!blob) {
+        throw new Error('A renderização do canvas falhou (retornou null).')
+      }
+
+      const currentTeamName = equipes.find(eq => eq.id === selectedTeamId)?.nome || 'Equipe'
+      // Sanitize team name for safe filenames in native share sheet (no spaces, special characters or accents)
+      const cleanTeamName = currentTeamName
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]/g, '-')
+        .replace(/-+/g, '-')
+      
+      const ext = blob.type === 'image/jpeg' ? 'jpg' : 'png'
+      const fileName = `relatorio-${cleanTeamName}-${selectedDate}.${ext}`
+      const file = new File([blob], fileName, { type: blob.type })
+
+      if (action === 'share') {
+        const canShare = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })
+        if (canShare) {
+          try {
+            await navigator.share({
+              title: reportTitle,
+              text: `Relatório operacional da equipe ${currentTeamName} - Data: ${selectedDate}`,
+              files: [file]
+            })
+            toast('Relatório compartilhado com sucesso!', 'success')
+            setIsExporting(false)
+            return
+          } catch (shareErr: any) {
+            if (shareErr.name === 'AbortError') {
+              setIsExporting(false)
+              return
+            }
+            console.error('Navigator share error, falling back to download', shareErr)
+          }
+        }
+      }
+
+      if (action === 'copy' && navigator.clipboard && navigator.clipboard.write) {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ [blob.type]: blob })
+          ])
+          toast('Imagem copiada! Cole (Ctrl+V) onde desejar.', 'success')
+          setIsExporting(false)
+          return
+        } catch (clipErr) {
+          console.error('Clipboard copy error', clipErr)
+        }
+      }
+
+      // Default to download (uses URL.createObjectURL which is safe on mobile and desktop)
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.download = fileName
+      link.href = objectUrl
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+      toast('Download concluído!', 'success')
+    } catch (err: any) {
+      if (shareSquareRef.current) {
+        shareSquareRef.current.classList.remove('no-shadows')
+      }
+      console.error('Failed to export image', err)
+      toast('Erro ao gerar relatório: ' + err.message, 'error')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const getSectorColors = (setor?: string) => {
+    const s = (setor || '').toLowerCase()
+    if (s.includes('op') || s.includes('prod') || s.includes('fabr') || s.includes('varr')) {
+      return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' } // blue
+    }
+    if (s.includes('adm') || s.includes('escrit') || s.includes('finan') || s.includes('rh') || s.includes('gest')) {
+      return { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' } // green
+    }
+    if (s.includes('limp') || s.includes('serv') || s.includes('conserv') || s.includes('geral')) {
+      return { bg: '#faf5ff', text: '#7e22ce', border: '#e9d5ff' } // purple
+    }
+    return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' } // gray
+  }
+
+  const getSectorIcon = (setor?: string) => {
+    const s = (setor || '').toLowerCase()
+    if (s.includes('varr') || s.includes('limp') || s.includes('serv')) return Sparkles
+    if (s.includes('adm') || s.includes('gest')) return Briefcase
+    if (s.includes('op') || s.includes('mecan')) return Hammer
+    return User
+  }
+
+  const getMemberAttendanceStatus = (memberId: string) => {
+    const freq = frequencias.find(f => f.funcionario_id === memberId)
+    if (!freq) return { label: 'Sem Registro', color: 'text-gray-400 bg-gray-100 dark:bg-gray-800 print-badge-default' }
+    
+    switch (freq.status) {
+      case 'presente':
+      case 'trabalhou':
+        return { label: 'Presente', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 print-badge-presente' }
+      case 'falta':
+        return { label: 'Falta', color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20 print-badge-falta' }
+      case 'folga':
+        return { label: 'Folga', color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 print-badge-folga' }
+      case 'atestado':
+        return { label: 'Atestado', color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20 print-badge-atestado' }
+      case 'ferias':
+        return { label: 'Férias', color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 print-badge-ferias' }
+      default:
+        return { label: freq.status, color: 'text-gray-600 bg-gray-50 print-badge-default' }
+    }
+  }
+
+  if (isLoadingTeamInfo || isLoadingEquipes || isLoadingMembros) {
+    return (
+      <div className="min-h-screen bg-background">
+        <TopHeader title="Gerar Relatório" />
+        <div className="pt-32 pb-20 flex justify-center">
+          <Loading text="Carregando dados operacionais..." />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in pb-32">
+      <TopHeader 
+        title="Gerar Relatório de Equipe" 
+        subtitle="Exportação e configuração de dossiê operacional" 
+      />
+
+      <div className="px-4 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        
+        {/* SIDEBAR CONFIGURATIONS - xl:col-span-4 */}
+        <div className="xl:col-span-4 space-y-6">
+          
+          {/* TEAM & DATE SELECTOR CARD */}
+          <div className="bg-card/80 backdrop-blur-xl border border-border/50 rounded-[2rem] p-6 shadow-sm space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-2">
+              <Users className="w-4 h-4" /> Seleção de Escopo
+            </h3>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-black uppercase text-muted-foreground tracking-wider block mb-1">
+                  Equipe
+                </label>
+                <select
+                  value={selectedTeamId}
+                  onChange={e => {
+                    setSelectedTeamId(e.target.value)
+                    setCurrentTemplateId('') // reset template
+                  }}
+                  className="w-full h-12 px-4 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold focus:ring-0 focus:border-primary/30 outline-none"
+                >
+                  {availableEquipes.map(eq => (
+                    <option key={eq.id} value={eq.id}>{eq.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-muted-foreground tracking-wider block mb-1">
+                  Data do Relatório
+                </label>
+                <div className="relative">
+                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={e => setSelectedDate(e.target.value)}
+                    className="w-full pl-11 pr-4 h-12 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold focus:ring-0 focus:border-primary/30 outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* TEMPLATE PERSISTENCE CARD */}
+          <div className="bg-card/80 backdrop-blur-xl border border-border/50 rounded-[2rem] p-6 shadow-sm space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-2">
+              <Save className="w-4 h-4" /> Modelos de Relatório
+            </h3>
+
+            <div className="space-y-3">
+              {templates.length === 0 ? (
+                <div className="text-center py-6 border border-dashed border-border/50 rounded-2xl text-muted-foreground/60 text-xs font-bold">
+                  Nenhum modelo salvo para esta equipe.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                  {templates.map(t => {
+                    const isActive = currentTemplateId === t.id
+                    const isModified = isActive && isTemplateModified
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => isActive ? setCurrentTemplateId('') : handleApplyTemplate(t.id)}
+                        className={cn(
+                          "group p-3 rounded-2xl border transition-all duration-300 cursor-pointer flex items-center justify-between",
+                          isActive
+                            ? "bg-primary/10 border-primary text-primary shadow-sm shadow-primary/10"
+                            : "bg-muted/45 border-border/30 text-foreground hover:bg-muted/65 hover:border-border/50"
+                        )}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black truncate">{t.nome}</span>
+                            {isModified && (
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Alterações pendentes" />
+                            )}
+                          </div>
+                          <span className="text-[9px] text-muted-foreground font-bold tracking-tight block truncate">
+                            {t.report_title}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {isActive && isModified && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleSaveTemplate(false)
+                              }}
+                              className="p-1.5 hover:bg-primary/20 rounded-lg text-primary transition-all"
+                              title="Salvar alterações"
+                            >
+                              <Save className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteTemplate(t.id)
+                            }}
+                            className="p-1.5 hover:bg-rose-500/20 rounded-lg text-rose-500 transition-all"
+                            title="Excluir modelo"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                {currentTemplateId ? (
+                  <>
+                    <Button
+                      onClick={() => handleSaveTemplate(false)}
+                      loading={isSavingTemplate}
+                      className={cn(
+                        "flex-1 h-11 rounded-2xl font-black uppercase text-[10px] tracking-wider transition-all",
+                        isTemplateModified
+                          ? "bg-amber-500 hover:bg-amber-600 text-white animate-pulse"
+                          : "bg-primary text-white hover:bg-primary/95"
+                      )}
+                    >
+                      Salvar no Modelo
+                    </Button>
+                    <Button
+                      onClick={() => handleApplyTemplate('')}
+                      className="h-11 px-3 rounded-2xl bg-muted text-foreground hover:bg-muted/80 font-black uppercase text-[10px] tracking-wider font-bold"
+                      title="Restaurar padrões de layout"
+                    >
+                      Limpar
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    onClick={() => setSaveModalOpen(true)}
+                    className="flex-1 h-11 rounded-2xl bg-primary text-white font-black uppercase text-[10px] tracking-wider"
+                  >
+                    Novo Modelo
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* LAYOUT OPTIONS CARD */}
+          <div className="bg-card/80 backdrop-blur-xl border border-border/50 rounded-[2rem] p-6 shadow-sm space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-2">
+              <LayoutGrid className="w-4 h-4" /> Toggles de Exibição
+            </h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-black uppercase text-muted-foreground tracking-wider block mb-1">
+                  Título do Cabeçalho
+                </label>
+                <input
+                  type="text"
+                  value={reportTitle}
+                  onChange={e => setReportTitle(e.target.value)}
+                  placeholder="EX: RELATÓRIO DIÁRIO OPERACIONAL"
+                  className="w-full px-4 h-12 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold focus:ring-0 focus:border-primary/30 outline-none"
+                />
+              </div>
+
+              <hr className="border-border/30 my-2" />
+
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowMetrics(!showMetrics)}
+                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all"
+                >
+                  <span className="text-xs font-bold text-foreground">Exibir Métricas da Equipe</span>
+                  {showMetrics ? (
+                    <Eye className="w-4 h-4 text-primary" />
+                  ) : (
+                    <EyeOff className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setShowLocalities(!showLocalities)}
+                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all"
+                >
+                  <span className="text-xs font-bold text-foreground">Exibir Localidades (Alocações)</span>
+                  {showLocalities ? (
+                    <Eye className="w-4 h-4 text-primary" />
+                  ) : (
+                    <EyeOff className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setShowObservations(!showObservations)}
+                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all"
+                >
+                  <span className="text-xs font-bold text-foreground">Exibir Observações</span>
+                  {showObservations ? (
+                    <Eye className="w-4 h-4 text-primary" />
+                  ) : (
+                    <EyeOff className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setShowRoles(!showRoles)}
+                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all"
+                >
+                  <span className="text-xs font-bold text-foreground">Exibir Cargos</span>
+                  {showRoles ? (
+                    <Eye className="w-4 h-4 text-primary" />
+                  ) : (
+                    <EyeOff className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setShowInactives(!showInactives)}
+                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all"
+                >
+                  <span className="text-xs font-bold text-foreground">Exibir Funcionários Inativos</span>
+                  {showInactives ? (
+                    <Eye className="w-4 h-4 text-primary" />
+                  ) : (
+                    <EyeOff className="w-4 h-4 text-muted-foreground" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* PREVIEW & EXPORT ACTIONS - xl:col-span-8 */}
+        <div className="xl:col-span-8 space-y-6">
+          
+          {/* EXPORT OPTIONS HEADER */}
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-card/85 backdrop-blur-xl border border-border/50 rounded-3xl p-4 shadow-sm">
+            <span className="text-xs font-black uppercase tracking-wider text-muted-foreground px-2">
+              Visualização e Exportação
+            </span>
+
+            <div className="flex flex-wrap gap-2">
+              {currentTemplateId ? (
+                <button
+                  type="button"
+                  onClick={() => handleSaveTemplate(false)}
+                  disabled={isSavingTemplate}
+                  className="h-10 px-4 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center gap-1.5 shadow-sm"
+                >
+                  <Save className="w-3.5 h-3.5" /> Salvar por Cima do Modelo
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSaveModalOpen(true)}
+                  className="h-10 px-4 rounded-xl border border-border/50 text-xs font-black uppercase tracking-wider text-foreground hover:bg-muted transition-all flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Salvar como Novo Modelo
+                </button>
+              )}
+              {typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? (
+                <button
+                  onClick={() => handleExport('share')}
+                  disabled={isExporting}
+                  className="h-10 px-5 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-wider hover:bg-primary-hover shadow-md transition-all flex items-center gap-1.5 animate-fade-in"
+                >
+                  <Share2 className="w-3.5 h-3.5" /> Compartilhar
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleExport('download')}
+                  disabled={isExporting}
+                  className="h-10 px-5 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-wider hover:bg-primary-hover shadow-md transition-all flex items-center gap-1.5 animate-fade-in"
+                >
+                  <Download className="w-3.5 h-3.5" /> Baixar PNG
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* THE CORE REPORT DOCUMENT PREVIEW CONTAINER */}
+          <div 
+            ref={shareSquareRef} 
+            id="report-print-area"
+            className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 border border-slate-200 dark:border-zinc-800 shadow-xl rounded-[2.5rem] p-10 space-y-8 max-w-full overflow-hidden"
+            style={{ fontFamily: "'Inter', sans-serif" }}
+          >
+            {/* Header section */}
+            <div className="flex justify-between items-start border-b border-slate-100 dark:border-zinc-800 pb-6 gap-6">
+              <div className="space-y-1 flex-1">
+                <h1 className="text-2xl font-black uppercase tracking-tight text-slate-800 dark:text-zinc-100">
+                  {reportTitle || 'RELATÓRIO DIÁRIO OPERACIONAL'}
+                </h1>
+                <p className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" /> 
+                  {format(parseISO(selectedDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                </p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <span className="inline-block px-3 py-1 bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 rounded-xl text-xs font-black uppercase tracking-widest">
+                  {equipes.find(eq => eq.id === selectedTeamId)?.nome || 'Sem Equipe'}
+                </span>
+              </div>
+            </div>
+
+            {/* Attendance metrics panel */}
+            {showMetrics && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50 dark:bg-zinc-900/40 border border-slate-100 dark:border-zinc-800 rounded-[1.75rem] p-5 print-metrics-grid">
+                <div className="space-y-0.5">
+                  <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Efetivo Ativo</span>
+                  <div className="text-lg font-black text-slate-800 dark:text-zinc-100">{stats.total}</div>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Presenças</span>
+                  <div className="text-lg font-black text-emerald-600">{stats.present}</div>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Ausências</span>
+                  <div className="text-lg font-black text-rose-600">{stats.absent}</div>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Taxa de Presença</span>
+                  <div className="text-lg font-black text-primary">{stats.rate}%</div>
+                </div>
+              </div>
+            )}
+
+            {/* Staff breakdown grouped by sectors */}
+            {Object.keys(membersBySector).length === 0 ? (
+              <div className="text-center py-12 text-slate-400 dark:text-zinc-500 italic text-sm">
+                Nenhum colaborador carregado para esta equipe.
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {Object.entries(membersBySector).map(([sector, funcs]) => {
+                  const Icon = getSectorIcon(sector)
+                  const colors = getSectorColors(sector)
+                  
+                  return (
+                    <div key={sector} className="space-y-3 print-sector-group">
+                      
+                      {/* Sector title bar */}
+                      <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 dark:border-zinc-800 print-sector-header">
+                        <div 
+                          className="w-7 h-7 rounded-lg flex items-center justify-center"
+                          style={{ backgroundColor: colors.bg, color: colors.text }}
+                        >
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                          Setor: {sector} ({funcs.length})
+                        </h4>
+                      </div>
+
+                      {/* Employees List under this sector styled like Excel spreadsheet */}
+                      <div className="overflow-x-auto border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm">
+                        <table className="w-full border-collapse text-left text-xs">
+                          <thead>
+                            <tr className="bg-slate-50 dark:bg-zinc-900/50">
+                              <th className="p-3 border border-slate-200 dark:border-zinc-800 font-black uppercase text-slate-600 dark:text-zinc-400 w-[30%]">Colaborador</th>
+                              {showRoles && (
+                                <th className="p-3 border border-slate-200 dark:border-zinc-800 font-black uppercase text-slate-600 dark:text-zinc-400 w-[15%]">Cargo</th>
+                              )}
+                              {showLocalities && (
+                                <th className="p-3 border border-slate-200 dark:border-zinc-800 font-black uppercase text-slate-600 dark:text-zinc-400 w-[20%]">Localidade</th>
+                              )}
+                              <th className="p-3 border border-slate-200 dark:border-zinc-800 font-black uppercase text-slate-600 dark:text-zinc-400 w-[15%]">Status</th>
+                              {showObservations && (
+                                <th className="p-3 border border-slate-200 dark:border-zinc-800 font-black uppercase text-slate-600 dark:text-zinc-400 w-[20%]">Observações</th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {funcs.map((f: any) => {
+                              const att = getMemberAttendanceStatus(f.id)
+                              const todayScale = escalas.find(e => e.funcionario_id === f.id)
+                              const obsValue = observations[f.id] || ''
+
+                              return (
+                                <tr 
+                                  key={f.id} 
+                                  className="hover:bg-slate-50/30 dark:hover:bg-zinc-900/10 transition-colors print-employee-row"
+                                >
+                                  {/* Colaborador */}
+                                  <td className="p-3 border border-slate-200 dark:border-zinc-800 font-bold text-slate-800 dark:text-zinc-200">
+                                    <div className="flex flex-wrap items-baseline gap-1">
+                                      <span className="uppercase text-[13px] tracking-tight">{f.nome}</span>
+                                      {f.apelido && (
+                                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-normal">({f.apelido})</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  
+                                  {/* Cargo */}
+                                  {showRoles && (
+                                    <td className="p-3 border border-slate-200 dark:border-zinc-800 text-slate-500 dark:text-zinc-400 font-medium">
+                                      {f.cargo || '-'}
+                                    </td>
+                                  )}
+
+                                  {/* Localidade */}
+                                  {showLocalities && (
+                                    <td className="p-3 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300">
+                                      {todayScale?.localidade ? (
+                                        <span className="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-zinc-400">
+                                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {todayScale.localidade}
+                                        </span>
+                                      ) : '-'}
+                                    </td>
+                                  )}
+
+                                  {/* Status */}
+                                  <td className="p-3 border border-slate-200 dark:border-zinc-800">
+                                    <span className={cn("px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border border-transparent inline-block text-center min-w-[75px] shadow-sm", att.color)}>
+                                      {att.label}
+                                    </span>
+                                  </td>
+
+                                  {/* Observações */}
+                                  {showObservations && (
+                                    <td className="p-1 border border-slate-200 dark:border-zinc-800">
+                                      {isExporting ? (
+                                        <div className="px-2 py-1.5 text-slate-600 dark:text-zinc-400 italic">
+                                          {obsValue || ''}
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <div className="relative print:hidden">
+                                            <input
+                                              type="text"
+                                              value={obsValue}
+                                              onChange={e => handleObsChange(f.id, e.target.value)}
+                                              onBlur={() => handleSaveObs(f.id, obsValue)}
+                                              placeholder="Adicionar obs..."
+                                              className="w-full px-2 h-8 bg-transparent border-0 rounded text-xs text-slate-700 dark:text-zinc-300 focus:ring-1 focus:ring-primary/20 outline-none"
+                                            />
+                                          </div>
+                                          {obsValue && (
+                                            <div className="hidden print:block px-2 py-1 text-slate-600 italic print-obs-static">
+                                              {obsValue}
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+                                    </td>
+                                  )}
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Footer metadata */}
+            <div className="flex justify-between items-center pt-6 border-t border-slate-100 dark:border-zinc-800 text-[9px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
+              <span>Gerado por Rogerio Administrador</span>
+              <span>7Boss Operacional</span>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* SAVE NEW MODEL MODAL */}
+      <Modal
+        open={saveModalOpen}
+        onClose={() => setSaveModalOpen(false)}
+        title="Salvar Novo Modelo de Relatório"
+        size="sm"
+      >
+        <div className="space-y-4 py-3">
+          <p className="text-xs text-muted-foreground">
+            Insira o nome para salvar as configurações atuais (toggles, título e observações) como um novo modelo reutilizável.
+          </p>
+
+          <div>
+            <label className="text-[10px] font-black uppercase text-muted-foreground tracking-wider block mb-1">
+              Nome do Modelo
+            </label>
+            <input
+              type="text"
+              value={newTemplateName}
+              onChange={e => setNewTemplateName(e.target.value)}
+              placeholder="Ex: Varrição de Domingo"
+              className="w-full px-4 h-12 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold focus:ring-0 focus:border-primary/30 outline-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => setSaveModalOpen(false)}
+              className="flex-1 h-12 rounded-2xl font-black uppercase text-xs tracking-wider"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => handleSaveTemplate(true)}
+              loading={isSavingNew}
+              className="flex-1 h-12 rounded-2xl font-black uppercase text-xs tracking-wider bg-primary text-white shadow-lg shadow-primary/20"
+            >
+              Salvar Modelo
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @page {
+          size: A4 portrait;
+          margin: 15mm !important;
+        }
+        @media print {
+          html, body {
+            background: white !important;
+            color: #0f172a !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          body {
+            visibility: hidden !important;
+          }
+          #root, #root > *, #root > * > * {
+            max-width: 100% !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: transparent !important;
+          }
+          #report-print-area {
+            visibility: visible !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+          }
+          #report-print-area * {
+            visibility: visible !important;
+          }
+          
+          /* Dark mode text/bg resets for printing */
+          #report-print-area h1,
+          #report-print-area h2,
+          #report-print-area h3,
+          #report-print-area h4,
+          #report-print-area span,
+          #report-print-area p,
+          #report-print-area div {
+            color: #0f172a !important;
+          }
+
+          /* Excel spreadsheet print layouts */
+          #report-print-area table {
+            border-collapse: collapse !important;
+            width: 100% !important;
+            margin-bottom: 20px !important;
+          }
+          #report-print-area th, 
+          #report-print-area td {
+            border: 1px solid #94a3b8 !important; /* solid, clean spreadsheet lines */
+            padding: 6px 10px !important;
+            color: #0f172a !important;
+          }
+          #report-print-area th {
+            background-color: #f1f5f9 !important; /* shaded column header like Excel */
+            font-weight: bold !important;
+          }
+          #report-print-area tbody tr:nth-child(even) {
+            background-color: #f8fafc !important;
+          }
+          
+          /* Metrics layout grid override */
+          .print-metrics-grid {
+            background-color: #f8fafc !important;
+            border: 1px solid #cbd5e1 !important;
+            display: grid !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+            gap: 16px !important;
+            padding: 16px !important;
+            border-radius: 12px !important;
+          }
+          
+          /* Preserve badge colors specifically using print-color-adjust */
+          .print-badge-presente {
+            background-color: #ecfdf5 !important;
+            color: #047857 !important;
+          }
+          .print-badge-falta {
+            background-color: #fef2f2 !important;
+            color: #b91c1c !important;
+          }
+          .print-badge-folga {
+            background-color: #eff6ff !important;
+            color: #1d4ed8 !important;
+          }
+          .print-badge-atestado {
+            background-color: #faf5ff !important;
+            color: #7e22ce !important;
+          }
+          .print-badge-ferias {
+            background-color: #fffbeb !important;
+            color: #b45309 !important;
+          }
+          .print-badge-default {
+            background-color: #f1f5f9 !important;
+            color: #475569 !important;
+          }
+          .print-badge-location {
+            background-color: #f1f5f9 !important;
+            color: #334155 !important;
+            border: 1px solid #cbd5e1 !important;
+          }
+          
+          /* Prevent items from splitting awkwardly across pages */
+          .print-sector-group {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            margin-bottom: 20px !important;
+          }
+          .print-employee-row {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .print-sector-header {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+        }
+      `}} />
+    </div>
+  )
+}

@@ -1,9 +1,14 @@
-import { endOfMonth, format, parseISO, addDays } from 'date-fns'
+import { endOfMonth, format, parseISO, addDays, subDays } from 'date-fns'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import type { Escala, EscalaInsert, EscalaUpdate } from '../lib/database.types'
 
 export const ESCALAS_KEY = ['escalas']
+
+function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Date(year, month - 1, day || 1)
+}
 
 type EscalaWithFunc = Escala & {
   funcionarios: {
@@ -16,34 +21,61 @@ type EscalaWithFunc = Escala & {
 }
 
 export function useEscalasMensal(mes: string) {
-  const dateObj = parseISO(mes + '-01')
-  const startDate = format(dateObj, 'yyyy-MM-01')
-  const endDate = format(endOfMonth(dateObj), 'yyyy-MM-dd')
-  const midDate = format(addDays(dateObj, 15), 'yyyy-MM-dd')
+  const dateObj = parseLocalDate(mes + '-01')
+  const prevDay = format(subDays(dateObj, 2), 'yyyy-MM-dd')
+  const nextDay = format(addDays(endOfMonth(dateObj), 2), 'yyyy-MM-dd')
+  
+  const d8 = format(addDays(dateObj, 8), 'yyyy-MM-dd')
+  const d16 = format(addDays(dateObj, 16), 'yyyy-MM-dd')
+  const d24 = format(addDays(dateObj, 24), 'yyyy-MM-dd')
 
   return useQuery<EscalaWithFunc[]>({
     queryKey: [...ESCALAS_KEY, mes],
     queryFn: async () => {
-      const [part1, part2] = await Promise.all([
+      const [part1, part2, part3, part4] = await Promise.all([
         supabase
           .from('escalas')
           .select('*, funcionarios(id, nome, apelido, cargo, setor)')
-          .gte('data', startDate)
-          .lt('data', midDate)
+          .gte('data', prevDay)
+          .lt('data', d8)
           .order('data'),
         supabase
           .from('escalas')
           .select('*, funcionarios(id, nome, apelido, cargo, setor)')
-          .gte('data', midDate)
-          .lte('data', endDate)
+          .gte('data', d8)
+          .lt('data', d16)
+          .order('data'),
+        supabase
+          .from('escalas')
+          .select('*, funcionarios(id, nome, apelido, cargo, setor)')
+          .gte('data', d16)
+          .lt('data', d24)
+          .order('data'),
+        supabase
+          .from('escalas')
+          .select('*, funcionarios(id, nome, apelido, cargo, setor)')
+          .gte('data', d24)
+          .lt('data', nextDay)
           .order('data')
       ])
 
       if (part1.error) throw part1.error
       if (part2.error) throw part2.error
+      if (part3.error) throw part3.error
+      if (part4.error) throw part4.error
 
-      const combined = [...(part1.data ?? []), ...(part2.data ?? [])]
-      return combined as EscalaWithFunc[]
+      const combined = [
+        ...(part1.data ?? []),
+        ...(part2.data ?? []),
+        ...(part3.data ?? []),
+        ...(part4.data ?? [])
+      ]
+
+      // Remove duplicates by ID
+      const unique = combined.filter((item, index, self) =>
+        index === self.findIndex((t) => t.id === item.id)
+      )
+      return unique as EscalaWithFunc[]
     },
   })
 }
@@ -53,20 +85,22 @@ export function useEscalasPeriodo(startDate: string, endDate: string) {
     queryKey: [...ESCALAS_KEY, 'periodo', startDate, endDate],
     queryFn: async () => {
       // Dividir a busca em dois blocos para contornar o limite de 1000 registros do PostgREST
-      const midDate = format(addDays(parseISO(startDate), 15), 'yyyy-MM-dd')
+      const midDate = format(addDays(parseLocalDate(startDate), 15), 'yyyy-MM-dd')
+      const nextDay = format(addDays(parseLocalDate(endDate), 2), 'yyyy-MM-dd')
+      const prevDay = format(subDays(parseLocalDate(startDate), 2), 'yyyy-MM-dd')
       
       const [part1, part2] = await Promise.all([
         supabase
           .from('escalas')
           .select('*, funcionarios(id, nome, apelido, cargo, setor)')
-          .gte('data', startDate)
+          .gte('data', prevDay)
           .lt('data', midDate)
           .order('data'),
         supabase
           .from('escalas')
           .select('*, funcionarios(id, nome, apelido, cargo, setor)')
           .gte('data', midDate)
-          .lte('data', endDate)
+          .lt('data', nextDay)
           .order('data')
       ])
 
@@ -81,9 +115,9 @@ export function useEscalasPeriodo(startDate: string, endDate: string) {
 }
 
 export function useEscalaFuncionario(funcionarioId: string, mes: string) {
-  const dateObj = parseISO(mes + '-01')
+  const dateObj = parseLocalDate(mes + '-01')
   const startDate = format(dateObj, 'yyyy-MM-01')
-  const endDate = format(endOfMonth(dateObj), 'yyyy-MM-dd')
+  const nextDay = format(addDays(endOfMonth(dateObj), 1), 'yyyy-MM-dd')
   return useQuery<Escala[]>({
     queryKey: [...ESCALAS_KEY, 'funcionario', funcionarioId, mes],
     queryFn: async () => {
@@ -92,7 +126,7 @@ export function useEscalaFuncionario(funcionarioId: string, mes: string) {
         .select('*')
         .eq('funcionario_id', funcionarioId)
         .gte('data', startDate)
-        .lte('data', endDate)
+        .lt('data', nextDay)
         .order('data')
       if (error) throw error
       return (data ?? []) as Escala[]
@@ -101,23 +135,62 @@ export function useEscalaFuncionario(funcionarioId: string, mes: string) {
   })
 }
 
-export function useCreateEscala() {
+export function useUpsertEscala() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (data: EscalaInsert) => {
-      const { data: result, error } = await supabase
+    mutationFn: async (payload: { item: EscalaInsert; skipFreqSync?: boolean } | EscalaInsert) => {
+      const isPayloadObject = payload && 'item' in payload
+      const item = isPayloadObject ? (payload as any).item : (payload as EscalaInsert)
+      const skipFreqSync = isPayloadObject ? !!(payload as any).skipFreqSync : false
+
+      const upsertPayload: any = {
+        funcionario_id: item.funcionario_id,
+        data: item.data,
+        tipo: item.tipo,
+        turno: item.turno,
+        updated_at: new Date().toISOString()
+      }
+      if (item.localidade !== undefined) {
+        upsertPayload.localidade = item.localidade
+      }
+      if (item.observacoes !== undefined) {
+        upsertPayload.observacoes = item.observacoes
+      }
+
+      const { data, error } = await supabase
         .from('escalas')
-        .upsert(
-          { ...data, updated_at: new Date().toISOString() },
-          { onConflict: 'funcionario_id,data' }
-        )
+        .upsert(upsertPayload, { onConflict: 'funcionario_id,data' })
         .select()
         .single()
+
       if (error) throw error
-      return result as Escala
+      const result = data as Escala
+
+      // Sincronizar com tabela de frequência
+      if (result && !skipFreqSync) {
+        const freqStatusMap: Record<string, string> = {
+          'presente': 'presente',
+          'hora_extra': 'hora_extra',
+          'falta': 'falta',
+          'compensar': 'folga',
+          'repouso': 'folga',
+          'ferias': 'ferias',
+          'atestado': 'atestado'
+        }
+        const mappedStatus = freqStatusMap[result.tipo] || 'presente'
+        await supabase.from('frequencia').upsert({
+          funcionario_id: result.funcionario_id,
+          data: result.data,
+          status: mappedStatus as any,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'funcionario_id,data' })
+      }
+
+      return result
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ESCALAS_KEY })
+      qc.invalidateQueries({ queryKey: ['frequencia'] })
       qc.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
@@ -126,19 +199,71 @@ export function useCreateEscala() {
 export function useBatchUpsertEscalas() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (data: EscalaInsert[]) => {
-      const { data: result, error } = await supabase
+    mutationFn: async (payload: { items: EscalaInsert[]; skipFreqSync?: boolean } | EscalaInsert[]) => {
+      const isArray = Array.isArray(payload)
+      const items = isArray ? payload : payload.items
+      const skipFreqSync = isArray ? false : !!payload.skipFreqSync
+
+      if (items.length === 0) return []
+
+      const upsertPayloads = items.map(item => {
+        const p: any = {
+          funcionario_id: item.funcionario_id,
+          data: item.data,
+          tipo: item.tipo,
+          turno: item.turno,
+          updated_at: new Date().toISOString()
+        }
+        if (item.localidade !== undefined) {
+          p.localidade = item.localidade
+        }
+        if (item.observacoes !== undefined) {
+          p.observacoes = item.observacoes
+        }
+        return p
+      })
+
+      const { data: results, error: upsertError } = await supabase
         .from('escalas')
-        .upsert(
-          data.map(d => ({ ...d, updated_at: new Date().toISOString() })),
-          { onConflict: 'funcionario_id,data' }
-        )
+        .upsert(upsertPayloads, { onConflict: 'funcionario_id,data' })
         .select()
-      if (error) throw error
-      return result as Escala[]
+
+      if (upsertError) throw upsertError
+
+      // Sincronizar com tabela de frequência se não skipFreqSync
+      if (results && results.length > 0 && !skipFreqSync) {
+        const freqStatusMap: Record<string, string> = {
+          'presente': 'presente',
+          'hora_extra': 'hora_extra',
+          'falta': 'falta',
+          'compensar': 'folga',
+          'repouso': 'folga',
+          'ferias': 'ferias',
+          'atestado': 'atestado'
+        }
+
+        const freqUpserts = results.map(result => {
+          const mappedStatus = freqStatusMap[result.tipo] || 'presente'
+          return {
+            funcionario_id: result.funcionario_id,
+            data: result.data,
+            status: mappedStatus as any,
+            updated_at: new Date().toISOString()
+          }
+        })
+
+        const { error: freqError } = await supabase
+          .from('frequencia')
+          .upsert(freqUpserts, { onConflict: 'funcionario_id,data' })
+
+        if (freqError) throw freqError
+      }
+
+      return results as Escala[]
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ESCALAS_KEY })
+      qc.invalidateQueries({ queryKey: ['frequencia'] })
       qc.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
@@ -147,7 +272,7 @@ export function useBatchUpsertEscalas() {
 export function useUpdateEscala() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: EscalaUpdate }) => {
+    mutationFn: async ({ id, data, skipFreqSync }: { id: string; data: EscalaUpdate; skipFreqSync?: boolean }) => {
       const { data: result, error } = await supabase
         .from('escalas')
         .update({ ...data, updated_at: new Date().toISOString() })
@@ -155,10 +280,35 @@ export function useUpdateEscala() {
         .select()
         .single()
       if (error) throw error
+      if (!result) {
+        throw new Error('Sem permissão ou RLS bloqueando a atualização no banco de dados!')
+      }
+
+      // Sincronizar com tabela de frequência APENAS se o tipo foi alterado na mutation e skipFreqSync for falso
+      if (!skipFreqSync && data.tipo !== undefined && result.tipo) {
+        const freqStatusMap: Record<string, string> = {
+          'presente': 'presente',
+          'hora_extra': 'hora_extra',
+          'falta': 'falta',
+          'compensar': 'folga',
+          'repouso': 'folga',
+          'ferias': 'ferias',
+          'atestado': 'atestado'
+        }
+        const mappedStatus = freqStatusMap[result.tipo] || 'presente'
+        await supabase.from('frequencia').upsert({
+          funcionario_id: result.funcionario_id,
+          data: result.data,
+          status: mappedStatus as any,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'funcionario_id,data' })
+      }
+
       return result as Escala
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ESCALAS_KEY })
+      qc.invalidateQueries({ queryKey: ['frequencia'] })
       qc.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
@@ -168,12 +318,22 @@ export function useDeleteEscala() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
+      const { data: escala } = await supabase.from('escalas').select('*').eq('id', id).maybeSingle()
+      
       const { error } = await supabase
         .from('escalas')
         .delete()
         .eq('id', id)
       if (error) throw error
+
+      if (escala) {
+        await supabase.from('frequencia').delete().eq('funcionario_id', escala.funcionario_id).eq('data', escala.data)
+      }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ESCALAS_KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ESCALAS_KEY })
+      qc.invalidateQueries({ queryKey: ['frequencia'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
   })
 }

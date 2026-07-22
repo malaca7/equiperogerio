@@ -19,7 +19,7 @@ export function useConfiguracao<T = any>(chave: string, fallback: T) {
       }
       return (data?.valor ?? fallback) as T
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 5, // 5 minutes
   })
 }
 
