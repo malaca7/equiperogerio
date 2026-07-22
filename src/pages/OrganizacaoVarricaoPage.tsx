@@ -75,78 +75,60 @@ export interface RuaVarricao {
   pontosRota: [number, number][]
 }
 
-// Initial Sample Data for Sweeping Organization (Recife / Metropolitan Example)
+// Initial Data for Sweeping Organization (Cabo de Santo Agostinho & Suape)
 const INITIAL_SETORES: SetorVarricao[] = [
   {
-    id: 'setor-1',
-    codigo: 'SET-01',
-    nome: 'Centro Histórico & Comercial',
-    descricao: 'Área comercial densa, praças e vias de alto tráfego de pedestres.',
+    id: 'setor-varricao',
+    codigo: 'SET-VARR',
+    nome: 'Varrição - Centro & Vias Principais',
+    descricao: 'Área urbana do Cabo de Santo Agostinho, corredores viários e vias públicas centrais.',
     cor: '#10b981',
-    equipeNome: 'Equipe Alfa (Centro)',
-    encarregadoNome: 'Carlos Eduardo',
-    centroLat: -8.0628,
-    centroLng: -34.8785,
-    areaKm2: 3.4,
+    equipeNome: 'Equipes de Varrição',
+    encarregadoNome: 'Encarregado Geral',
+    centroLat: -8.2863,
+    centroLng: -35.0354,
+    areaKm2: 12.5,
     poligono: [
-      [-8.0585, -34.8845],
-      [-8.0570, -34.8720],
-      [-8.0680, -34.8710],
-      [-8.0695, -34.8830],
+      [-8.2600, -35.0500],
+      [-8.2550, -35.0000],
+      [-8.3100, -35.0000],
+      [-8.3150, -35.0550],
     ]
   },
   {
-    id: 'setor-2',
-    codigo: 'SET-02',
-    nome: 'Orla & Corredor Turístico',
-    descricao: 'Avenida beira-mar, calçadão, quiosques e avenidas de grande fluxo.',
+    id: 'setor-orla',
+    codigo: 'SET-ORLA',
+    nome: 'Orla & Praias (Itapuama, Gaibu, Suape)',
+    descricao: 'Orla marítima, calçadões praianos, acessos às praias de Gaibu, Itapuama, Enseadas e Suape.',
     cor: '#3b82f6',
-    equipeNome: 'Equipe Bravo (Orla)',
-    encarregadoNome: 'Marcos Rogério',
-    centroLat: -8.1180,
-    centroLng: -34.8960,
-    areaKm2: 4.8,
+    equipeNome: 'Equipe de Orla',
+    encarregadoNome: 'Encarregado da Orla',
+    centroLat: -8.3200,
+    centroLng: -34.9450,
+    areaKm2: 18.2,
     poligono: [
-      [-8.1050, -34.8990],
-      [-8.1030, -34.8910],
-      [-8.1320, -34.8950],
-      [-8.1340, -34.9030],
+      [-8.2800, -34.9500],
+      [-8.2750, -34.9300],
+      [-8.3700, -34.9500],
+      [-8.3750, -34.9700],
     ]
   },
   {
-    id: 'setor-3',
-    codigo: 'SET-03',
-    nome: 'Zona Norte - Residencial & Praças',
-    descricao: 'Bairros residenciais, corredores de ônibus e praças públicas.',
+    id: 'setor-porta',
+    codigo: 'SET-PAP',
+    nome: 'Porta a Porta - Coleta & Residencial',
+    descricao: 'Setores residenciais, bairros periféricos e vias secundárias de coleta.',
     cor: '#8b5cf6',
-    equipeNome: 'Equipe Charlie (Norte)',
-    encarregadoNome: 'Roberto Silva',
-    centroLat: -8.0350,
-    centroLng: -34.9000,
-    areaKm2: 5.2,
+    equipeNome: 'Equipe Coleta',
+    encarregadoNome: 'Encarregado Coleta',
+    centroLat: -8.2750,
+    centroLng: -35.0400,
+    areaKm2: 15.0,
     poligono: [
-      [-8.0250, -34.9120],
-      [-8.0220, -34.8900],
-      [-8.0450, -34.8880],
-      [-8.0480, -34.9100],
-    ]
-  },
-  {
-    id: 'setor-4',
-    codigo: 'SET-04',
-    nome: 'Distrito Industrial & Logístico',
-    descricao: 'Vias largas, grandes galpões, avenidas de tráfego pesado.',
-    cor: '#f59e0b',
-    equipeNome: 'Equipe Delta (Industrial)',
-    encarregadoNome: 'Antônio Peixoto',
-    centroLat: -8.0850,
-    centroLng: -34.9350,
-    areaKm2: 6.1,
-    poligono: [
-      [-8.0720, -34.9500],
-      [-8.0700, -34.9200],
-      [-8.0980, -34.9180],
-      [-8.1000, -34.9480],
+      [-8.2500, -35.0700],
+      [-8.2450, -35.0200],
+      [-8.2950, -35.0200],
+      [-8.3000, -35.0700],
     ]
   }
 ]
@@ -154,156 +136,117 @@ const INITIAL_SETORES: SetorVarricao[] = [
 const INITIAL_RUAS: RuaVarricao[] = [
   {
     id: 'rua-1',
-    setorId: 'setor-1',
-    nome: 'Av. Conde da Boa Vista',
-    trecho: 'Ponte Duarte Coelho até a Praça do Derby',
-    extensaoKm: 2.3,
+    setorId: 'setor-varricao',
+    nome: 'Av. Laura Cavalcante',
+    trecho: 'Orla de Gaibu até o trevo de acesso à PE-28',
+    extensaoKm: 2.8,
     frequencia: 'Diária - Diurno',
     turno: 'Diurno',
-    equipeNome: 'Equipe Alfa (Centro)',
-    encarregadoNome: 'Carlos Eduardo',
-    garisAlocados: 8,
-    prioridade: 'Alta',
-    status: 'Em Varrição',
-    pontosRota: [
-      [-8.0590, -34.8840],
-      [-8.0595, -34.8870],
-      [-8.0600, -34.8900],
-      [-8.0605, -34.8930]
-    ]
-  },
-  {
-    id: 'rua-2',
-    setorId: 'setor-1',
-    nome: 'Rua da Aurora',
-    trecho: 'Ponte Limoeiro até a Ponte Princesa Isabel',
-    extensaoKm: 1.8,
-    frequencia: 'Diária - Noturno',
-    turno: 'Noturno',
-    equipeNome: 'Equipe Alfa (Centro)',
-    encarregadoNome: 'Carlos Eduardo',
-    garisAlocados: 6,
-    prioridade: 'Alta',
-    status: 'Concluída',
-    pontosRota: [
-      [-8.0575, -34.8780],
-      [-8.0610, -34.8790],
-      [-8.0640, -34.8805]
-    ]
-  },
-  {
-    id: 'rua-3',
-    setorId: 'setor-1',
-    nome: 'Rua do Hospício & Imperatriz',
-    trecho: 'Calçadão do Centro Comercial',
-    extensaoKm: 1.4,
-    frequencia: 'Diária - Diurno',
-    turno: 'Diurno',
-    equipeNome: 'Equipe Alfa (Centro)',
-    encarregadoNome: 'Carlos Eduardo',
-    garisAlocados: 5,
-    prioridade: 'Alta',
-    status: 'Em Varrição',
-    pontosRota: [
-      [-8.0615, -34.8820],
-      [-8.0630, -34.8810],
-      [-8.0650, -34.8800]
-    ]
-  },
-  {
-    id: 'rua-4',
-    setorId: 'setor-2',
-    nome: 'Av. Boa Viagem',
-    trecho: 'Segundo Jardim até a Feirinha de Boa Viagem',
-    extensaoKm: 4.5,
-    frequencia: 'Diária - Diurno',
-    turno: 'Diurno',
-    equipeNome: 'Equipe Bravo (Orla)',
-    encarregadoNome: 'Marcos Rogério',
+    equipeNome: 'Equipe de Varrição',
+    encarregadoNome: 'Rogerio',
     garisAlocados: 12,
     prioridade: 'Alta',
     status: 'Em Varrição',
     pontosRota: [
-      [-8.1060, -34.8930],
-      [-8.1140, -34.8950],
-      [-8.1220, -34.8970],
-      [-8.1300, -34.8990]
+      [-8.3245, -34.9450],
+      [-8.3220, -34.9480],
+      [-8.3200, -34.9520],
+      [-8.3180, -34.9550]
+    ]
+  },
+  {
+    id: 'rua-2',
+    setorId: 'setor-varricao',
+    nome: 'PE-28 Acesso a Gaibu',
+    trecho: 'Trevo da PE-60 até o portal de entrada de Gaibu',
+    extensaoKm: 4.2,
+    frequencia: 'Diária - Diurno',
+    turno: 'Diurno',
+    equipeNome: 'Equipe de Varrição',
+    encarregadoNome: 'Rogerio',
+    garisAlocados: 10,
+    prioridade: 'Alta',
+    status: 'Em Varrição',
+    pontosRota: [
+      [-8.3150, -34.9700],
+      [-8.3180, -34.9650],
+      [-8.3200, -34.9580]
+    ]
+  },
+  {
+    id: 'rua-3',
+    setorId: 'setor-orla',
+    nome: 'Orla de Gaibu & Calçadão',
+    trecho: 'Faixa praiana da Laura Cavalcante ao Morro das Gaetanas',
+    extensaoKm: 2.5,
+    frequencia: 'Diária - Diurno',
+    turno: 'Diurno',
+    equipeNome: 'Equipe de Orla',
+    encarregadoNome: 'Rogerio',
+    garisAlocados: 15,
+    prioridade: 'Alta',
+    status: 'Em Varrição',
+    pontosRota: [
+      [-8.3280, -34.9430],
+      [-8.3250, -34.9440],
+      [-8.3210, -34.9445]
+    ]
+  },
+  {
+    id: 'rua-4',
+    setorId: 'setor-orla',
+    nome: 'Orla de Itapuama',
+    trecho: 'Praia de Itapuama até Enseadas dos Corais',
+    extensaoKm: 3.1,
+    frequencia: 'Diária - Noturno',
+    turno: 'Noturno',
+    equipeNome: 'Equipe de Orla',
+    encarregadoNome: 'Rogerio',
+    garisAlocados: 8,
+    prioridade: 'Média',
+    status: 'Pendente',
+    pontosRota: [
+      [-8.2900, -34.9400],
+      [-8.2980, -34.9410],
+      [-8.3050, -34.9420]
     ]
   },
   {
     id: 'rua-5',
-    setorId: 'setor-2',
-    nome: 'Av. Conselheiro Aguiar',
-    trecho: 'Pina até o Parque Dona Lindu',
-    extensaoKm: 4.2,
-    frequencia: 'Diária - Noturno',
-    turno: 'Noturno',
-    equipeNome: 'Equipe Bravo (Orla)',
-    encarregadoNome: 'Marcos Rogério',
-    garisAlocados: 10,
-    prioridade: 'Média',
-    status: 'Pendente',
+    setorId: 'setor-varricao',
+    nome: 'Anel Viário do Cabo',
+    trecho: 'Entroncamento BR-101 ao Centro Comercial',
+    extensaoKm: 5.4,
+    frequencia: '3x por Semana',
+    turno: 'Diurno',
+    equipeNome: 'Equipe de Varrição',
+    encarregadoNome: 'Rogerio',
+    garisAlocados: 9,
+    prioridade: 'Alta',
+    status: 'Concluída',
     pontosRota: [
-      [-8.1070, -34.8960],
-      [-8.1150, -34.8980],
-      [-8.1230, -34.9000]
+      [-8.2950, -35.0300],
+      [-8.2900, -35.0320],
+      [-8.2850, -35.0350]
     ]
   },
   {
     id: 'rua-6',
-    setorId: 'setor-3',
-    nome: 'Av. Rosa e Silva',
-    trecho: 'Clube Náutico até o Parque do Tamarineira',
-    extensaoKm: 3.1,
-    frequencia: '3x por Semana',
-    turno: 'Diurno',
-    equipeNome: 'Equipe Charlie (Norte)',
-    encarregadoNome: 'Roberto Silva',
-    garisAlocados: 6,
-    prioridade: 'Média',
-    status: 'Concluída',
-    pontosRota: [
-      [-8.0440, -34.8970],
-      [-8.0380, -34.9000],
-      [-8.0320, -34.9030]
-    ]
-  },
-  {
-    id: 'rua-7',
-    setorId: 'setor-3',
-    nome: 'Estrada do Encanamento',
-    trecho: 'Casa Forte até o Arraial',
-    extensaoKm: 2.6,
-    frequencia: '3x por Semana',
-    turno: 'Vespertino',
-    equipeNome: 'Equipe Charlie (Norte)',
-    encarregadoNome: 'Roberto Silva',
-    garisAlocados: 5,
-    prioridade: 'Baixa',
-    status: 'Pendente',
-    pontosRota: [
-      [-8.0330, -34.9100],
-      [-8.0300, -34.9150],
-      [-8.0270, -34.9190]
-    ]
-  },
-  {
-    id: 'rua-8',
-    setorId: 'setor-4',
-    nome: 'Av. Marechal Mascarenhas de Moraes',
-    trecho: 'Aeroporto até a Ponte da Imbiribeira',
-    extensaoKm: 5.8,
+    setorId: 'setor-varricao',
+    nome: 'Estrada Velha do Suape',
+    trecho: 'Margens da PE-60 ao Complexo Industrial de Suape',
+    extensaoKm: 6.2,
     frequencia: '2x por Semana',
-    turno: 'Noturno',
-    equipeNome: 'Equipe Delta (Industrial)',
-    encarregadoNome: 'Antônio Peixoto',
+    turno: 'Vespertino',
+    equipeNome: 'Equipe de Varrição',
+    encarregadoNome: 'Rogerio',
     garisAlocados: 8,
     prioridade: 'Média',
-    status: 'Em Varrição',
+    status: 'Pendente',
     pontosRota: [
-      [-8.0750, -34.9250],
-      [-8.0850, -34.9300],
-      [-8.0950, -34.9350]
+      [-8.2800, -35.0200],
+      [-8.3000, -35.0000],
+      [-8.3300, -34.9800]
     ]
   }
 ]
@@ -324,11 +267,20 @@ export function OrganizacaoVarricaoPage() {
       const { data: enc } = await supabase.from('equipe_encarregados').select('equipe_id, profiles(id, nome)')
       const { data: mem } = await supabase.from('equipe_membros').select('equipe_id, funcionarios(id, nome, cargo, status, setor)')
 
-      return equipes.map(eq => ({
-        ...eq,
-        encarregados: (enc || []).filter((e: any) => e.equipe_id === eq.id).map((e: any) => e.profiles?.nome).filter(Boolean),
-        membrosCount: (mem || []).filter((m: any) => m.equipe_id === eq.id).length
-      }))
+      return equipes.map(eq => {
+        const teamMembros = (mem || []).filter((m: any) => m.equipe_id === eq.id)
+        const garis = teamMembros.filter((m: any) => {
+          const cargo = (m.funcionarios?.cargo || '').toLowerCase()
+          const setor = (m.funcionarios?.setor || '').toLowerCase()
+          return cargo.includes('agente') || cargo.includes('gari') || setor.includes('varri')
+        })
+        return {
+          ...eq,
+          encarregados: (enc || []).filter((e: any) => e.equipe_id === eq.id).map((e: any) => e.profiles?.nome).filter(Boolean),
+          membrosCount: teamMembros.length,
+          garisCount: garis.length > 0 ? garis.length : teamMembros.length
+        }
+      })
     }
   })
 
@@ -339,6 +291,9 @@ export function OrganizacaoVarricaoPage() {
       return data || []
     }
   })
+
+  // Platform Sectors <-> Teams Config
+  const { data: dbSetoresEquipes = {} } = useConfiguracao<Record<string, string[]>>('setores_equipes', {})
 
   // Persistent Configuration from DB / Local
   const { data: dbSetores } = useConfiguracao<SetorVarricao[]>('varricao_setores', INITIAL_SETORES)
@@ -392,13 +347,27 @@ export function OrganizacaoVarricaoPage() {
         rua.encarregadoNome.toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesSetor = selectedSetorId === 'todos' || rua.setorId === selectedSetorId
-      const matchesEquipe = selectedEquipeIdFilter === 'todos' || rua.equipeId === selectedEquipeIdFilter
+
+      let matchesEquipe = selectedEquipeIdFilter === 'todos'
+      if (!matchesEquipe) {
+        const targetTeam = dbEquipes.find(eq => eq.id === selectedEquipeIdFilter)
+        const teamSetores = dbSetoresEquipes[selectedEquipeIdFilter] || []
+        const currentSetorObj = setores.find(s => s.id === rua.setorId)
+
+        matchesEquipe = 
+          rua.equipeId === selectedEquipeIdFilter ||
+          (!!targetTeam && rua.equipeNome.toLowerCase().includes(targetTeam.nome.toLowerCase())) ||
+          (teamSetores.length > 0 && !!currentSetorObj && teamSetores.some((ts: string) => 
+            currentSetorObj.nome.toLowerCase().includes(ts.toLowerCase())
+          ))
+      }
+
       const matchesTurno = selectedTurno === 'todos' || rua.turno === selectedTurno
       const matchesStatus = selectedStatus === 'todos' || rua.status === selectedStatus
 
       return matchesSearch && matchesSetor && matchesEquipe && matchesTurno && matchesStatus
     })
-  }, [ruas, searchTerm, selectedSetorId, selectedEquipeIdFilter, selectedTurno, selectedStatus])
+  }, [ruas, searchTerm, selectedSetorId, selectedEquipeIdFilter, selectedTurno, selectedStatus, dbEquipes, dbSetoresEquipes, setores])
 
   // Aggregate Metrics
   const stats = useMemo(() => {
@@ -449,7 +418,7 @@ export function OrganizacaoVarricaoPage() {
       leafletMapRef.current = null
     }
 
-    const defaultCenter: [number, number] = [-8.0600, -34.8850]
+    const defaultCenter: [number, number] = [-8.2863, -35.0354]
     const map = L.map(mapContainerRef.current, {
       center: defaultCenter,
       zoom: 12,
