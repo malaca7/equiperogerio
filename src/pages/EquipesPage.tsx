@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react'
-import { Plus, Search, Users, UserCheck, X, Shield, Trash2, Edit2, MapPin, LayoutGrid, Share2, FileText, Camera, Download, Award, Wrench, Briefcase, Sparkles, Truck, User, Hammer } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Plus, Search, Users, UserCheck, X, Shield, Trash2, Edit2, MapPin, LayoutGrid, Share2, FileText, Camera, Download, Award, Wrench, Briefcase, Sparkles, Truck, User, Hammer, Route } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -795,10 +796,16 @@ export function EquipesPage() {
                   <div className="flex gap-2 w-full">
                     {canManageTeam(eq.id) && (
                       <Button onClick={() => { setSelectedEquipeId(eq.id); setTab('membros'); setMemSearch('') }}
-                        className="w-full h-10 rounded-xl bg-primary/10 text-primary font-black text-[11px] uppercase tracking-wider hover:bg-primary/20 transition-all flex items-center justify-center">
+                        className="flex-1 h-10 rounded-xl bg-primary/10 text-primary font-black text-[11px] uppercase tracking-wider hover:bg-primary/20 transition-all flex items-center justify-center">
                         <UserCheck className="w-3.5 h-3.5 mr-1.5" /> {isEncarregado ? "Membros" : "Gerenciar"}
                       </Button>
                     )}
+                    <Link
+                      to={`/escala/organizacao-varricao?equipeId=${eq.id}`}
+                      className="flex-1 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-black text-[11px] uppercase tracking-wider hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Route className="w-3.5 h-3.5" /> Varrição
+                    </Link>
                   </div>
                 </div>
               )

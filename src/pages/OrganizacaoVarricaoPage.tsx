@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useSearchParams, Link, useNavigate } from 'react-router-dom'
 import { 
   MapPin, 
   Search, 
@@ -25,8 +26,13 @@ import {
   Printer, 
   Download,
   Activity,
-  UserCheck
+  UserCheck,
+  ExternalLink,
+  Target,
+  Network
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '../lib/supabase'
 import { TopHeader } from '../components/layout/TopHeader'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../components/ui/Toast'
@@ -43,6 +49,7 @@ export interface SetorVarricao {
   nome: string
   descricao: string
   cor: string
+  equipeId?: string | null
   equipeNome: string
   encarregadoNome: string
   centroLat: number
@@ -59,6 +66,7 @@ export interface RuaVarricao {
   extensaoKm: number
   frequencia: 'Diária - Diurno' | 'Diária - Noturno' | '3x por Semana' | '2x por Semana'
   turno: 'Diurno' | 'Noturno' | 'Vespertino'
+  equipeId?: string | null
   equipeNome: string
   encarregadoNome: string
   garisAlocados: number
@@ -74,7 +82,7 @@ const INITIAL_SETORES: SetorVarricao[] = [
     codigo: 'SET-01',
     nome: 'Centro Histórico & Comercial',
     descricao: 'Área comercial densa, praças e vias de alto tráfego de pedestres.',
-    cor: '#10b981', // Emerald
+    cor: '#10b981',
     equipeNome: 'Equipe Alfa (Centro)',
     encarregadoNome: 'Carlos Eduardo',
     centroLat: -8.0628,
@@ -91,8 +99,8 @@ const INITIAL_SETORES: SetorVarricao[] = [
     id: 'setor-2',
     codigo: 'SET-02',
     nome: 'Orla & Corredor Turístico',
-    descricao: 'Avenida beira-mar, calçadão, quiotes e avenidas de grande fluxo.',
-    cor: '#3b82f6', // Blue
+    descricao: 'Avenida beira-mar, calçadão, quiosques e avenidas de grande fluxo.',
+    cor: '#3b82f6',
     equipeNome: 'Equipe Bravo (Orla)',
     encarregadoNome: 'Marcos Rogério',
     centroLat: -8.1180,
@@ -110,7 +118,7 @@ const INITIAL_SETORES: SetorVarricao[] = [
     codigo: 'SET-03',
     nome: 'Zona Norte - Residencial & Praças',
     descricao: 'Bairros residenciais, corredores de ônibus e praças públicas.',
-    cor: '#8b5cf6', // Purple
+    cor: '#8b5cf6',
     equipeNome: 'Equipe Charlie (Norte)',
     encarregadoNome: 'Roberto Silva',
     centroLat: -8.0350,
@@ -128,7 +136,7 @@ const INITIAL_SETORES: SetorVarricao[] = [
     codigo: 'SET-04',
     nome: 'Distrito Industrial & Logístico',
     descricao: 'Vias largas, grandes galpões, avenidas de tráfego pesado.',
-    cor: '#f59e0b', // Amber
+    cor: '#f59e0b',
     equipeNome: 'Equipe Delta (Industrial)',
     encarregadoNome: 'Antônio Peixoto',
     centroLat: -8.0850,
@@ -301,8 +309,36 @@ const INITIAL_RUAS: RuaVarricao[] = [
 ]
 
 export function OrganizacaoVarricaoPage() {
-  const { hasAnyPermission } = useAuth()
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const { toast } = useToast()
+
+  const queryEquipeId = searchParams.get('equipeId')
+
+  // Real Supabase Queries
+  const { data: dbEquipes = [] } = useQuery<any[]>({
+    queryKey: ['equipes-varricao-integration'],
+    queryFn: async () => {
+      const { data: equipes } = await supabase.from('equipes').select('*').order('nome')
+      if (!equipes) return []
+      const { data: enc } = await supabase.from('equipe_encarregados').select('equipe_id, profiles(id, nome)')
+      const { data: mem } = await supabase.from('equipe_membros').select('equipe_id, funcionarios(id, nome, cargo, status, setor)')
+
+      return equipes.map(eq => ({
+        ...eq,
+        encarregados: (enc || []).filter((e: any) => e.equipe_id === eq.id).map((e: any) => e.profiles?.nome).filter(Boolean),
+        membrosCount: (mem || []).filter((m: any) => m.equipe_id === eq.id).length
+      }))
+    }
+  })
+
+  const { data: dbRegioes = [] } = useQuery<any[]>({
+    queryKey: ['regioes-varricao-integration'],
+    queryFn: async () => {
+      const { data } = await supabase.from('regioes').select('*').order('nome')
+      return data || []
+    }
+  })
 
   // Persistent Configuration from DB / Local
   const { data: dbSetores } = useConfiguracao<SetorVarricao[]>('varricao_setores', INITIAL_SETORES)
@@ -312,7 +348,7 @@ export function OrganizacaoVarricaoPage() {
   const [setores, setSetores] = useState<SetorVarricao[]>(dbSetores || INITIAL_SETORES)
   const [ruas, setRuas] = useState<RuaVarricao[]>(dbRuas || INITIAL_RUAS)
 
-  // Sync when DB config resolves
+  // Sync DB config
   useEffect(() => {
     if (dbSetores) setSetores(dbSetores)
   }, [dbSetores])
@@ -324,18 +360,22 @@ export function OrganizacaoVarricaoPage() {
   // Filters & State
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedSetorId, setSelectedSetorId] = useState<string>('todos')
+  const [selectedEquipeIdFilter, setSelectedEquipeIdFilter] = useState<string>(queryEquipeId || 'todos')
   const [selectedTurno, setSelectedTurno] = useState<string>('todos')
   const [selectedStatus, setSelectedStatus] = useState<string>('todos')
   const [activeTab, setActiveTab] = useState<'mapa' | 'equipes' | 'ruas'>('mapa')
   const [hoveredRuaId, setHoveredRuaId] = useState<string | null>(null)
-  const [selectedRua, setSelectedRua] = useState<RuaVarricao | null>(null)
+
+  // Sync URL search params into filter state
+  useEffect(() => {
+    if (queryEquipeId) {
+      setSelectedEquipeIdFilter(queryEquipeId)
+    }
+  }, [queryEquipeId])
 
   // Modal States
   const [isModalRuaOpen, setIsModalRuaOpen] = useState(false)
   const [editingRua, setEditingRua] = useState<Partial<RuaVarricao> | null>(null)
-
-  const [isModalSetorOpen, setIsModalSetorOpen] = useState(false)
-  const [editingSetor, setEditingSetor] = useState<Partial<SetorVarricao> | null>(null)
 
   // Map Container Ref & Leaflet Instance
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -352,12 +392,13 @@ export function OrganizacaoVarricaoPage() {
         rua.encarregadoNome.toLowerCase().includes(searchTerm.toLowerCase())
 
       const matchesSetor = selectedSetorId === 'todos' || rua.setorId === selectedSetorId
+      const matchesEquipe = selectedEquipeIdFilter === 'todos' || rua.equipeId === selectedEquipeIdFilter
       const matchesTurno = selectedTurno === 'todos' || rua.turno === selectedTurno
       const matchesStatus = selectedStatus === 'todos' || rua.status === selectedStatus
 
-      return matchesSearch && matchesSetor && matchesTurno && matchesStatus
+      return matchesSearch && matchesSetor && matchesEquipe && matchesTurno && matchesStatus
     })
-  }, [ruas, searchTerm, selectedSetorId, selectedTurno, selectedStatus])
+  }, [ruas, searchTerm, selectedSetorId, selectedEquipeIdFilter, selectedTurno, selectedStatus])
 
   // Aggregate Metrics
   const stats = useMemo(() => {
@@ -377,7 +418,6 @@ export function OrganizacaoVarricaoPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // Check if Leaflet CSS exists
     if (!document.getElementById('leaflet-css')) {
       const link = document.createElement('link')
       link.id = 'leaflet-css'
@@ -386,7 +426,6 @@ export function OrganizacaoVarricaoPage() {
       document.head.appendChild(link)
     }
 
-    // Check if Leaflet JS exists
     if ((window as any).L) {
       setLeafletLoaded(true)
     } else {
@@ -405,13 +444,11 @@ export function OrganizacaoVarricaoPage() {
     const L = (window as any).L
     if (!L) return
 
-    // Destroy existing map if any
     if (leafletMapRef.current) {
       leafletMapRef.current.remove()
       leafletMapRef.current = null
     }
 
-    // Center map around Recife / Default center
     const defaultCenter: [number, number] = [-8.0600, -34.8850]
     const map = L.map(mapContainerRef.current, {
       center: defaultCenter,
@@ -421,7 +458,6 @@ export function OrganizacaoVarricaoPage() {
 
     leafletMapRef.current = map
 
-    // Tile Layer: OpenStreetMap Standard or Carto Dark/Light
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors | Gestão de Varrição',
       maxZoom: 18
@@ -458,7 +494,6 @@ export function OrganizacaoVarricaoPage() {
           opacity: 0.85
         }).addTo(map)
 
-        // Custom Popup Content
         const popupHtml = `
           <div style="font-family: sans-serif; padding: 4px;">
             <div style="font-size: 14px; font-weight: 800; color: #1e293b; margin-bottom: 2px;">${rua.nome}</div>
@@ -482,7 +517,6 @@ export function OrganizacaoVarricaoPage() {
 
         polyline.bindPopup(popupHtml)
 
-        // Marker at Start of Route
         const startPoint = rua.pontosRota[0]
         const customIcon = L.divIcon({
           className: 'custom-map-marker',
@@ -514,16 +548,6 @@ export function OrganizacaoVarricaoPage() {
     }
   }
 
-  const saveSetoresToDb = async (newSetores: SetorVarricao[]) => {
-    setSetores(newSetores)
-    try {
-      await updateConfig.mutateAsync({ chave: 'varricao_setores', valor: newSetores })
-      toast('Setores de varrição atualizados!', 'success')
-    } catch {
-      toast('Atualizado localmente.', 'info')
-    }
-  }
-
   // Handle Street Modal Save
   const handleSaveRua = (e: React.FormEvent) => {
     e.preventDefault()
@@ -532,9 +556,15 @@ export function OrganizacaoVarricaoPage() {
       return
     }
 
+    const selectedEquipe = dbEquipes.find(eq => eq.id === editingRua.equipeId)
+
     let updatedList: RuaVarricao[]
     if (editingRua.id) {
-      updatedList = ruas.map(r => r.id === editingRua.id ? (editingRua as RuaVarricao) : r)
+      updatedList = ruas.map(r => r.id === editingRua.id ? {
+        ...(editingRua as RuaVarricao),
+        equipeNome: selectedEquipe ? selectedEquipe.nome : (editingRua.equipeNome || 'Equipe Varrição'),
+        encarregadoNome: selectedEquipe?.encarregados?.[0] || editingRua.encarregadoNome || 'Encarregado'
+      } : r)
     } else {
       const newRua: RuaVarricao = {
         id: `rua-${Date.now()}`,
@@ -544,9 +574,10 @@ export function OrganizacaoVarricaoPage() {
         extensaoKm: Number(editingRua.extensaoKm) || 1.5,
         frequencia: editingRua.frequencia || 'Diária - Diurno',
         turno: editingRua.turno || 'Diurno',
-        equipeNome: editingRua.equipeNome || 'Equipe Varrição',
-        encarregadoNome: editingRua.encarregadoNome || 'Encarregado Responsável',
-        garisAlocados: Number(editingRua.garisAlocados) || 4,
+        equipeId: editingRua.equipeId || null,
+        equipeNome: selectedEquipe ? selectedEquipe.nome : (editingRua.equipeNome || 'Equipe Varrição'),
+        encarregadoNome: selectedEquipe?.encarregados?.[0] || editingRua.encarregadoNome || 'Encarregado Responsável',
+        garisAlocados: Number(editingRua.garisAlocados) || (selectedEquipe?.membrosCount || 4),
         prioridade: editingRua.prioridade || 'Média',
         status: editingRua.status || 'Pendente',
         pontosRota: editingRua.pontosRota || [[-8.0600, -34.8850], [-8.0620, -34.8880]]
@@ -585,25 +616,47 @@ export function OrganizacaoVarricaoPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
 
-        {/* Top Header & Actions Bar */}
+        {/* Top Header & Integrated Quick Nav Links */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card/60 backdrop-blur-md border border-border/60 rounded-3xl p-6 shadow-sm">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-500/20">
-                Operação de Limpeza Urbana
+                Operação de Limpeza Urbana Integredada
               </span>
-              <span className="text-xs font-bold text-muted-foreground">&bull; Atualizado em Tempo Real</span>
+              {queryEquipeId && (
+                <span className="px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full border border-blue-500/20">
+                  Filtro por Equipe Ativo
+                </span>
+              )}
             </div>
             <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
               <Route className="w-7 h-7 text-primary" />
               Mapeamento & Cobertura de Varrição
             </h1>
             <p className="text-xs font-medium text-muted-foreground">
-              Definição de setores operacionais, itinerários de ruas por equipe e acompanhamento no mapa.
+              Sincronizado com as Equipes do Supabase e com a página de Meta e Rota (Localidades).
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            
+            {/* Direct Quick Links to Equipes and Meta e Rota */}
+            <Link
+              to="/equipes"
+              className="px-4 py-2.5 rounded-2xl bg-muted/60 hover:bg-muted text-foreground text-xs font-bold transition-all border border-border/50 flex items-center gap-1.5 shadow-sm"
+            >
+              <Network className="w-4 h-4 text-purple-500" />
+              <span>Ver Equipes</span>
+            </Link>
+
+            <Link
+              to="/escala/localidades"
+              className="px-4 py-2.5 rounded-2xl bg-muted/60 hover:bg-muted text-foreground text-xs font-bold transition-all border border-border/50 flex items-center gap-1.5 shadow-sm"
+            >
+              <Target className="w-4 h-4 text-blue-500" />
+              <span>Meta e Rota</span>
+            </Link>
+
             <Button
               onClick={() => {
                 setEditingRua({
@@ -761,6 +814,18 @@ export function OrganizacaoVarricaoPage() {
               <span>Filtros:</span>
             </div>
 
+            {/* Equipes Supabase Filter */}
+            <select
+              value={selectedEquipeIdFilter}
+              onChange={e => setSelectedEquipeIdFilter(e.target.value)}
+              className="bg-muted/40 border border-border/50 rounded-xl px-3 py-1.5 text-xs font-bold text-foreground outline-none focus:border-primary/50"
+            >
+              <option value="todos">Todas as Equipes (Supabase)</option>
+              {dbEquipes.map(eq => (
+                <option key={eq.id} value={eq.id}>{eq.nome}</option>
+              ))}
+            </select>
+
             {/* Setor Filter */}
             <select
               value={selectedSetorId}
@@ -797,13 +862,15 @@ export function OrganizacaoVarricaoPage() {
               <option value="Pendente">Pendente</option>
             </select>
 
-            {(searchTerm || selectedSetorId !== 'todos' || selectedTurno !== 'todos' || selectedStatus !== 'todos') && (
+            {(searchTerm || selectedSetorId !== 'todos' || selectedEquipeIdFilter !== 'todos' || selectedTurno !== 'todos' || selectedStatus !== 'todos') && (
               <button
                 onClick={() => {
                   setSearchTerm('')
                   setSelectedSetorId('todos')
+                  setSelectedEquipeIdFilter('todos')
                   setSelectedTurno('todos')
                   setSelectedStatus('todos')
+                  navigate('/escala/organizacao-varricao', { replace: true })
                 }}
                 className="text-xs font-bold text-rose-500 hover:underline ml-auto"
               >
@@ -1154,6 +1221,30 @@ export function OrganizacaoVarricaoPage() {
         <form onSubmit={handleSaveRua} className="space-y-4 pt-2">
           
           <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Equipe Responsável (Vincular Supabase) *</label>
+            <select
+              value={editingRua?.equipeId || ''}
+              onChange={e => {
+                const eqId = e.target.value
+                const selectedEq = dbEquipes.find(eq => eq.id === eqId)
+                setEditingRua(prev => ({
+                  ...prev,
+                  equipeId: eqId,
+                  equipeNome: selectedEq ? selectedEq.nome : prev?.equipeNome,
+                  encarregadoNome: selectedEq?.encarregados?.[0] || prev?.encarregadoNome,
+                  garisAlocados: selectedEq?.membrosCount || prev?.garisAlocados || 4
+                }))
+              }}
+              className="w-full bg-muted/40 border border-border/50 rounded-2xl p-3 text-xs font-bold text-foreground outline-none focus:border-primary/50"
+            >
+              <option value="">Selecione uma Equipe Cadastrada</option>
+              {dbEquipes.map(eq => (
+                <option key={eq.id} value={eq.id}>{eq.nome} ({eq.membrosCount} membros)</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
             <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Setor de Varrição *</label>
             <select
               value={editingRua?.setorId || ''}
@@ -1246,26 +1337,6 @@ export function OrganizacaoVarricaoPage() {
                 <option value="3x por Semana">3x por Semana</option>
                 <option value="2x por Semana">2x por Semana</option>
               </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Equipe Responsável</label>
-              <Input
-                placeholder="Ex: Equipe Alfa"
-                value={editingRua?.equipeNome || ''}
-                onChange={e => setEditingRua(prev => ({ ...prev, equipeNome: e.target.value }))}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Encarregado</label>
-              <Input
-                placeholder="Ex: Carlos Eduardo"
-                value={editingRua?.encarregadoNome || ''}
-                onChange={e => setEditingRua(prev => ({ ...prev, encarregadoNome: e.target.value }))}
-              />
             </div>
           </div>
 
