@@ -467,18 +467,34 @@ export function EscalaLocalidadePage() {
   const { data: dbSetoresEquipes = {} } = useConfiguracao<Record<string, string[]>>('setores_equipes', {})
   const { data: plataformaNome = '7Locar' } = useConfiguracao('plataforma_nome', '7Locar')
   const setores = useMemo(() => {
+    let list: string[] = []
     if (teamInfo?.isRestricted) {
       const allowedIds = teamInfo.teamIds || []
       // Mostra todos os setores de todas as equipes do encarregado
       const teamSectors = allowedIds.flatMap(id => dbSetoresEquipes[id] || [])
-      return Array.from(new Set(teamSectors))
-    }
-    if (selectedTeamId) {
+      list = Array.from(new Set(teamSectors))
+    } else if (selectedTeamId) {
       const teamSectors = dbSetoresEquipes[selectedTeamId] || []
-      if (teamSectors.length > 0) return teamSectors
+      if (teamSectors.length > 0) list = teamSectors
+      else list = dbSetores
+    } else {
+      list = dbSetores
     }
-    return dbSetores
-  }, [dbSetores, selectedTeamId, dbSetoresEquipes, teamInfo])
+    // Garante que qualquer setor presente nas localidades cadastradas também seja incluído
+    const locSectors = dbLocalidades.map(l => l.setor).filter(Boolean)
+    const allSetoresSet = new Set([...list, ...locSectors])
+
+    // Ordem dos setores: padrão principal primeiro ('Varrição', 'Orla', 'Porta a Porta'), depois alfabética/numérica
+    const defaultOrder = ['Varrição', 'Orla', 'Porta a Porta']
+    return Array.from(allSetoresSet).sort((a, b) => {
+      const idxA = defaultOrder.indexOf(a)
+      const idxB = defaultOrder.indexOf(b)
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB
+      if (idxA !== -1) return -1
+      if (idxB !== -1) return 1
+      return a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' })
+    })
+  }, [dbSetores, selectedTeamId, dbSetoresEquipes, teamInfo, dbLocalidades])
 
   const visibleSetores = useMemo(() => {
     if (!filterSetor) return setores
@@ -500,14 +516,23 @@ export function EscalaLocalidadePage() {
     } else {
       result = dbLocalidades
     }
+
     return [...result].sort((a, b) => {
       const teamA = allTeams.find(t => t.id === a.equipe_id)
       const teamB = allTeams.find(t => t.id === b.equipe_id)
-      const nameA = teamA ? teamA.nome : 'ZZZZZ'
-      const nameB = teamB ? teamB.nome : 'ZZZZZ'
-      const comp = nameA.localeCompare(nameB)
-      if (comp !== 0) return comp
-      return a.nome.localeCompare(b.nome)
+      
+      // Se apenas a tiver equipe vinculada, vem antes
+      if (teamA && !teamB) return -1
+      if (!teamA && teamB) return 1
+      
+      // Se ambas tiverem equipe vinculada, compara os nomes das equipes numericamente
+      if (teamA && teamB) {
+        const teamComp = teamA.nome.localeCompare(teamB.nome, 'pt-BR', { numeric: true, sensitivity: 'base' })
+        if (teamComp !== 0) return teamComp
+      }
+      
+      // Se estiverem na mesma equipe (ou ambas sem equipe), compara o nome da localidade numericamente
+      return a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true, sensitivity: 'base' })
     })
   }, [dbLocalidades, selectedTeamId, teamInfo, dbSetoresEquipes, allTeams])
   const { data: feriados = [] } = useConfiguracao<any[]>('feriados', [])
