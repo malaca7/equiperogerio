@@ -41,6 +41,7 @@ import { cn } from '../lib/utils'
 import { Modal } from '../components/ui/Modal'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { LOCALIDADES, Localidade } from '../lib/localidades'
 
 // Interface Definitions
 export interface SetorVarricao {
@@ -251,6 +252,18 @@ const INITIAL_RUAS: RuaVarricao[] = [
   }
 ]
 
+const LOCALIDADE_MAP_COORDS: Record<string, [number, number][]> = {
+  'Suape': [[-8.3400, -34.9600], [-8.3450, -34.9650], [-8.3500, -34.9700]],
+  'Av Laura Cavalcante': [[-8.3245, -34.9450], [-8.3220, -34.9480], [-8.3200, -34.9520]],
+  'Enseadas': [[-8.3050, -34.9420], [-8.3080, -34.9430], [-8.3120, -34.9440]],
+  'Itapuama': [[-8.2900, -34.9400], [-8.2950, -34.9410], [-8.3000, -34.9420]],
+  'Estrada Velha': [[-8.2800, -35.0200], [-8.2900, -35.0100], [-8.3000, -35.0000]],
+  'Anel Viário': [[-8.2950, -35.0300], [-8.2900, -35.0320], [-8.2850, -35.0350]],
+  'Xaréu': [[-8.3100, -34.9450], [-8.3130, -34.9460], [-8.3160, -34.9470]],
+  'PE-28 Gaibu': [[-8.3150, -34.9700], [-8.3180, -34.9650], [-8.3200, -34.9580]],
+  'Gaibu': [[-8.3280, -34.9430], [-8.3250, -34.9440], [-8.3210, -34.9445]],
+}
+
 export function OrganizacaoVarricaoPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -292,25 +305,119 @@ export function OrganizacaoVarricaoPage() {
     }
   })
 
-  // Platform Sectors <-> Teams Config
+  // Platform Sectors <-> Teams Config & Meta/Rota Localidades
   const { data: dbSetoresEquipes = {} } = useConfiguracao<Record<string, string[]>>('setores_equipes', {})
+  const { data: platformLocalidades = LOCALIDADES } = useConfiguracao<Localidade[]>('localidades', LOCALIDADES)
+  const { data: platformSetores = ['Varrição', 'Orla', 'Porta a Porta'] } = useConfiguracao<string[]>('setores', ['Varrição', 'Orla', 'Porta a Porta'])
 
   // Persistent Configuration from DB / Local
   const { data: dbSetores } = useConfiguracao<SetorVarricao[]>('varricao_setores', INITIAL_SETORES)
   const { data: dbRuas } = useConfiguracao<RuaVarricao[]>('varricao_ruas', INITIAL_RUAS)
   const updateConfig = useUpdateConfiguracao()
 
-  const [setores, setSetores] = useState<SetorVarricao[]>(dbSetores || INITIAL_SETORES)
-  const [ruas, setRuas] = useState<RuaVarricao[]>(dbRuas || INITIAL_RUAS)
+  // Compute merged Setores based on platform Setores + dbSetores
+  const sectoresMerged = useMemo(() => {
+    const baseSetores = dbSetores || INITIAL_SETORES
+    const setList: SetorVarricao[] = [...baseSetores]
+
+    const allMetaSetores = Array.from(new Set([
+      ...platformSetores,
+      ...(platformLocalidades || []).map(l => l.setor).filter(Boolean)
+    ]))
+
+    const colors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4']
+
+    allMetaSetores.forEach((sName, idx) => {
+      const exists = setList.some(s => s.nome.toLowerCase() === sName.toLowerCase())
+      if (!exists) {
+        const setorId = `setor-${sName.toLowerCase().replace(/\s+/g, '-')}`
+        setList.push({
+          id: setorId,
+          codigo: `SET-${sName.substring(0, 4).toUpperCase()}`,
+          nome: sName,
+          descricao: `Setor de ${sName} (Integrado de Meta e Rota)`,
+          cor: colors[idx % colors.length],
+          equipeNome: 'Equipes do Setor',
+          encarregadoNome: 'Encarregado do Setor',
+          centroLat: -8.2863 + (idx * 0.01),
+          centroLng: -35.0354 + (idx * 0.01),
+          areaKm2: 10.0,
+          poligono: [
+            [-8.2600 + (idx * 0.01), -35.0500],
+            [-8.2550 + (idx * 0.01), -35.0000],
+            [-8.3100 + (idx * 0.01), -35.0000],
+            [-8.3150 + (idx * 0.01), -35.0550],
+          ]
+        })
+      }
+    })
+
+    return setList
+  }, [dbSetores, platformSetores, platformLocalidades])
+
+  // Compute merged Ruas based on platform Localidades + dbRuas
+  const ruasMerged = useMemo(() => {
+    const baseRuas = dbRuas || INITIAL_RUAS
+    const ruaList: RuaVarricao[] = [...baseRuas]
+
+    ;(platformLocalidades || []).forEach((loc, idx) => {
+      const existingRuaIndex = ruaList.findIndex(r => 
+        r.id === loc.id || 
+        r.nome.toLowerCase() === loc.nome.toLowerCase()
+      )
+
+      const targetTeam = loc.equipe_id ? dbEquipes.find(eq => eq.id === loc.equipe_id) : null
+      const matchedSetor = sectoresMerged.find(s => s.nome.toLowerCase() === (loc.setor || '').toLowerCase()) || sectoresMerged[0]
+
+      const coordList = LOCALIDADE_MAP_COORDS[loc.nome] || [
+        [-8.2863 + (idx * 0.005), -35.0354 + (idx * 0.005)],
+        [-8.2880 + (idx * 0.005), -35.0380 + (idx * 0.005)],
+        [-8.2900 + (idx * 0.005), -35.0400 + (idx * 0.005)]
+      ]
+
+      if (existingRuaIndex >= 0) {
+        const existing = ruaList[existingRuaIndex]
+        ruaList[existingRuaIndex] = {
+          ...existing,
+          setorId: matchedSetor ? matchedSetor.id : existing.setorId,
+          equipeId: loc.equipe_id || existing.equipeId,
+          equipeNome: targetTeam ? targetTeam.nome : existing.equipeNome,
+          encarregadoNome: targetTeam?.encarregados?.[0] || existing.encarregadoNome
+        }
+      } else {
+        ruaList.push({
+          id: loc.id || `rua-${Date.now()}-${idx}`,
+          setorId: matchedSetor ? matchedSetor.id : sectoresMerged[0]?.id || 'setor-varricao',
+          nome: loc.nome,
+          trecho: `Área de Atuação - ${loc.nome}`,
+          extensaoKm: 2.5,
+          frequencia: 'Diária - Diurno',
+          turno: 'Diurno',
+          equipeId: loc.equipe_id || null,
+          equipeNome: targetTeam ? targetTeam.nome : 'Equipe de Varrição',
+          encarregadoNome: targetTeam?.encarregados?.[0] || 'Rogerio',
+          garisAlocados: targetTeam?.membrosCount || 6,
+          prioridade: 'Alta',
+          status: 'Em Varrição',
+          pontosRota: coordList
+        })
+      }
+    })
+
+    return ruaList
+  }, [dbRuas, platformLocalidades, dbEquipes, sectoresMerged])
+
+  const [setores, setSetores] = useState<SetorVarricao[]>(sectoresMerged)
+  const [ruas, setRuas] = useState<RuaVarricao[]>(ruasMerged)
 
   // Sync DB config
   useEffect(() => {
-    if (dbSetores) setSetores(dbSetores)
-  }, [dbSetores])
+    setSetores(sectoresMerged)
+  }, [sectoresMerged])
 
   useEffect(() => {
-    if (dbRuas) setRuas(dbRuas)
-  }, [dbRuas])
+    setRuas(ruasMerged)
+  }, [ruasMerged])
 
   // Filters & State
   const [searchTerm, setSearchTerm] = useState('')
