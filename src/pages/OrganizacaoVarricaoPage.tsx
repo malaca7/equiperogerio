@@ -41,7 +41,7 @@ import { cn } from '../lib/utils'
 import { Modal } from '../components/ui/Modal'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { LOCALIDADES, Localidade } from '../lib/localidades'
+import { LOCALIDADES, type Localidade } from '../lib/localidades'
 
 // Interface Definitions
 export interface SetorVarricao {

@@ -3,6 +3,7 @@ export interface Localidade {
   id: string
   nome: string
   setor: string
+  equipe_id?: string | null
 }
 
 export const LOCALIDADES: Localidade[] = [
