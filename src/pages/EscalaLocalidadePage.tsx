@@ -2058,24 +2058,85 @@ export function EscalaLocalidadePage() {
       }
 
       const activeFuncs = filteredFuncionarios.filter(f => f.cargo?.toLowerCase() !== 'encarregado')
-      const preview: { funcionarioId: string; funcionarioNome: string; localidadeNome: string }[] = []
+      
+      // Structure for allocations per locality (max 2 per locality)
+      const locAllocations: Record<string, { funcionarioId: string; funcionarioNome: string; count: number }[]> = {}
+      localidadesConfig.forEach(l => {
+        locAllocations[l.nome] = []
+      })
 
-      activeFuncs.forEach(f => {
-        const hist = employeeHistory[f.id]
-        let bestLoc = ''
-        if (hist) {
-          const sorted = Object.entries(hist).sort((a, b) => b[1] - a[1])
-          if (sorted.length > 0) {
-            bestLoc = sorted[0][0]
+      // Helper function to try allocating an employee based on history
+      const tryAllocateEmployee = (funcId: string, funcName: string, excludeLocs: Set<string> = new Set()): boolean => {
+        const hist = employeeHistory[funcId]
+        if (!hist) return false // Nunca aloca colaboradores sem registro nos ultimos 10 dias
+
+        // Candidate localities sorted by historical frequency count descending
+        const candidates = Object.entries(hist)
+          .filter(([locName, count]) => count > 0 && !excludeLocs.has(locName) && localidadesConfig.some(l => l.nome === locName))
+          .sort((a, b) => b[1] - a[1])
+
+        for (const [locName, count] of candidates) {
+          const current = locAllocations[locName] || []
+
+          // Se a localidade possui menos de 2 pessoas, aloca diretamente
+          if (current.length < 2) {
+            locAllocations[locName] = [...current, { funcionarioId: funcId, funcionarioNome: funcName, count }]
+            return true
+          }
+
+          // Se a localidade ja possui 2 pessoas (nunca alocar 3), verifica se este colaborador tem frequencia maior que o menor frequente
+          if (current.length >= 2) {
+            const minPerson = current.reduce((min, p) => p.count < min.count ? p : min, current[0])
+            if (count > minPerson.count) {
+              // Substitui o menos frequente nesta localidade
+              locAllocations[locName] = current.filter(p => p.funcionarioId !== minPerson.funcionarioId).concat({ funcionarioId: funcId, funcionarioNome: funcName, count })
+              
+              // Realoca o colaborador menos frequente em outra localidade/setor disponivel
+              const nextExclude = new Set(excludeLocs)
+              nextExclude.add(locName)
+              tryAllocateEmployee(minPerson.funcionarioId, minPerson.funcionarioNome, nextExclude)
+              return true
+            }
           }
         }
-        if (bestLoc) {
-          preview.push({
-            funcionarioId: f.id,
-            funcionarioNome: f.apelido || f.nome,
-            localidadeNome: bestLoc
-          })
+
+        // Se nao couber em nenhuma localidade primaria com historico, tenta outra localidade de setor diferente que tenha vaga (<2)
+        const histSectors = new Set(Object.keys(hist).map(locName => {
+          const lObj = localidadesConfig.find(l => l.nome === locName)
+          return lObj?.setor
+        }).filter(Boolean))
+
+        const alternativeLoc = localidadesConfig.find(l => 
+          !excludeLocs.has(l.nome) && 
+          !histSectors.has(l.setor) && 
+          (locAllocations[l.nome]?.length || 0) < 2
+        )
+
+        if (alternativeLoc) {
+          if (!locAllocations[alternativeLoc.nome]) locAllocations[alternativeLoc.nome] = []
+          locAllocations[alternativeLoc.nome].push({ funcionarioId: funcId, funcionarioNome: funcName, count: 0 })
+          return true
         }
+
+        return false
+      }
+
+      // Process all active employees with history
+      activeFuncs.forEach(f => {
+        const funcName = f.apelido || f.nome
+        tryAllocateEmployee(f.id, funcName)
+      })
+
+      // Convert allocations map to flat preview list
+      const preview: { funcionarioId: string; funcionarioNome: string; localidadeNome: string }[] = []
+      Object.entries(locAllocations).forEach(([locName, list]) => {
+        list.forEach(item => {
+          preview.push({
+            funcionarioId: item.funcionarioId,
+            funcionarioNome: item.funcionarioNome,
+            localidadeNome: locName
+          })
+        })
       })
 
       if (preview.length === 0) {
