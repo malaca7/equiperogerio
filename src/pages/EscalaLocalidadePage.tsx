@@ -448,6 +448,36 @@ export function EscalaLocalidadePage() {
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
   const [previewMode, setPreviewMode] = useState<'completo' | 'enxuto' | 'tipo_equipe' | 'demandas_realizadas'>('completo')
 
+  // Google Maps Geocoding Autocomplete State
+  const [googleAddressSuggestions, setGoogleAddressSuggestions] = useState<Record<string, any[]>>({})
+  const [isSearchingGoogleMap, setIsSearchingGoogleMap] = useState<Record<string, boolean>>({})
+
+  const handleSearchGoogleMap = useCallback(async (locId: string, query: string) => {
+    if (!query || query.trim().length < 2) {
+      setGoogleAddressSuggestions(prev => ({ ...prev, [locId]: [] }))
+      return
+    }
+
+    setIsSearchingGoogleMap(prev => ({ ...prev, [locId]: true }))
+    try {
+      const queryTerm = query.toLowerCase().includes('cabo')
+        ? query
+        : `${query}, Cabo de Santo Agostinho, PE`
+
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryTerm)}&limit=4&addressdetails=1`
+      )
+      if (res.ok) {
+        const data = await res.json()
+        setGoogleAddressSuggestions(prev => ({ ...prev, [locId]: data || [] }))
+      }
+    } catch (err) {
+      console.warn('Geocoding autocomplete search error:', err)
+    } finally {
+      setIsSearchingGoogleMap(prev => ({ ...prev, [locId]: false }))
+    }
+  }, [])
+
 
   useEffect(() => {
     if (isPrinting) {
@@ -3153,20 +3183,27 @@ export function EscalaLocalidadePage() {
                                             <div className="relative flex-1">
                                               <input
                                                 type="text"
-                                                placeholder="🔍 Vincular demanda..."
+                                                placeholder="📍 Vincular demanda / Rua no Google Maps..."
                                                 value={demandSearchQuery[loc.id] || ''}
-                                                onFocus={() => setFocusedLocId(loc.id)}
+                                                onFocus={() => {
+                                                  setFocusedLocId(loc.id)
+                                                  if (demandSearchQuery[loc.id]) {
+                                                    handleSearchGoogleMap(loc.id, demandSearchQuery[loc.id])
+                                                  }
+                                                }}
                                                 onChange={(e) => {
+                                                  const val = e.target.value
                                                   setDemandSearchQuery(prev => ({
                                                     ...prev,
-                                                    [loc.id]: e.target.value
+                                                    [loc.id]: val
                                                   }))
+                                                  handleSearchGoogleMap(loc.id, val)
                                                 }}
                                                 className="w-full bg-background border border-border/40 rounded-xl px-3 py-2 text-xs font-bold focus:border-primary/50 outline-none transition-all uppercase placeholder:text-[10px]"
                                               />
 
                                               {/* Autocomplete Dropdown overlay */}
-                                              {isFocused && (filteredSuggestions.length > 0 || query.trim()) && (
+                                              {isFocused && (filteredSuggestions.length > 0 || (googleAddressSuggestions[loc.id] && googleAddressSuggestions[loc.id].length > 0) || query.trim()) && (
                                                 <>
                                                   {/* Backdrop to close list when clicking outside */}
                                                   <div 
@@ -3174,7 +3211,8 @@ export function EscalaLocalidadePage() {
                                                     onClick={() => setFocusedLocId(null)}
                                                   />
                                                   
-                                                  <div className="absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-card border border-border/50 rounded-xl shadow-xl z-[9999] divide-y divide-border/10 py-1">
+                                                  <div className="absolute left-0 right-0 mt-1 max-h-64 overflow-y-auto bg-card border border-border/50 rounded-xl shadow-xl z-[9999] divide-y divide-border/10 py-1">
+                                                    {/* Existing System Demands */}
                                                     {filteredSuggestions.map(d => (
                                                       <button
                                                         key={d.id}
@@ -3185,11 +3223,7 @@ export function EscalaLocalidadePage() {
                                                             await handleUpdateMeta(loc.id, { demandas: [...currentDemandIds, d.id] })
                                                             toast('Demanda vinculada com sucesso!', 'success')
                                                           }
-                                                          // Clear query and focus
-                                                          setDemandSearchQuery(prev => ({
-                                                            ...prev,
-                                                            [loc.id]: ''
-                                                          }))
+                                                          setDemandSearchQuery(prev => ({ ...prev, [loc.id]: '' }))
                                                           setFocusedLocId(null)
                                                         }}
                                                         className="w-full text-left px-3 py-2 text-xs font-bold hover:bg-muted/85 text-foreground uppercase flex items-center justify-between cursor-pointer"
@@ -3205,6 +3239,58 @@ export function EscalaLocalidadePage() {
                                                         </span>
                                                       </button>
                                                     ))}
+
+                                                    {/* Google Maps Geocoded Street Suggestions */}
+                                                    {googleAddressSuggestions[loc.id] && googleAddressSuggestions[loc.id].length > 0 && (
+                                                      <div className="bg-emerald-500/5 py-1">
+                                                        <div className="px-3 py-1 text-[9px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                                          <MapPin className="w-3 h-3" /> Sugestões do Google Maps
+                                                        </div>
+                                                        {googleAddressSuggestions[loc.id].map((item: any, idx: number) => {
+                                                          const gTitle = (item.name || item.address?.road || item.display_name.split(',')[0]).toUpperCase()
+                                                          const gSubtitle = item.display_name
+                                                          return (
+                                                            <button
+                                                              key={`g-${idx}`}
+                                                              type="button"
+                                                              onClick={async () => {
+                                                                // Check if demand title already exists globally
+                                                                const existingDem = globalDemandas.find(gd => gd.titulo.toLowerCase() === gTitle.toLowerCase())
+                                                                let demId = existingDem?.id
+
+                                                                if (!demId) {
+                                                                  demId = safeUUID()
+                                                                  const newDem = {
+                                                                    id: demId,
+                                                                    titulo: gTitle,
+                                                                    tipo: 'check' as const,
+                                                                    concluido: false
+                                                                  }
+                                                                  const updatedDemandas = [...globalDemandas, newDem]
+                                                                  await updateConfigMut({ chave: 'demandas', valor: updatedDemandas })
+                                                                }
+
+                                                                const currentDemandIds = equipesMeta[loc.id]?.demandas || []
+                                                                if (!currentDemandIds.includes(demId)) {
+                                                                  await handleUpdateMeta(loc.id, { demandas: [...currentDemandIds, demId] })
+                                                                }
+
+                                                                toast(`Localização "${gTitle}" geocodificada do Google Maps vinculada!`, 'success')
+                                                                setDemandSearchQuery(prev => ({ ...prev, [loc.id]: '' }))
+                                                                setFocusedLocId(null)
+                                                              }}
+                                                              className="w-full text-left px-3 py-2 text-xs font-bold hover:bg-emerald-500/10 text-foreground flex items-start gap-2 cursor-pointer"
+                                                            >
+                                                              <MapPin className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                                                              <div className="flex-1 min-w-0">
+                                                                <p className="font-black text-xs text-foreground truncate">{gTitle}</p>
+                                                                <p className="text-[9px] font-medium text-muted-foreground truncate">{gSubtitle}</p>
+                                                              </div>
+                                                            </button>
+                                                          )
+                                                        })}
+                                                      </div>
+                                                    )}
 
                                                     {query.trim() && (
                                                       <button
@@ -3226,10 +3312,7 @@ export function EscalaLocalidadePage() {
                                                           }
                                                           
                                                           toast(`Demanda "${newDemand.titulo}" criada e vinculada!`, 'success')
-                                                          setDemandSearchQuery(prev => ({
-                                                            ...prev,
-                                                            [loc.id]: ''
-                                                          }))
+                                                          setDemandSearchQuery(prev => ({ ...prev, [loc.id]: '' }))
                                                           setFocusedLocId(null)
                                                         }}
                                                         className="w-full text-left px-3 py-2.5 text-xs font-black text-primary hover:bg-primary/5 dark:hover:bg-primary/10 border-t border-border/20 flex items-center gap-1.5 cursor-pointer bg-primary/[0.02]"
