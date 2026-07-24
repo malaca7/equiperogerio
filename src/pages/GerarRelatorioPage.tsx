@@ -545,6 +545,49 @@ export function GerarRelatorioPage() {
     }
   }
 
+  const getSectorColors = (setor?: string) => {
+    const s = (setor || '').toLowerCase()
+    if (s.includes('op') || s.includes('prod') || s.includes('fabr') || s.includes('varr')) {
+      return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' } // blue
+    }
+    if (s.includes('adm') || s.includes('escrit') || s.includes('finan') || s.includes('rh') || s.includes('gest')) {
+      return { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' } // green
+    }
+    if (s.includes('limp') || s.includes('serv') || s.includes('conserv') || s.includes('geral')) {
+      return { bg: '#faf5ff', text: '#7e22ce', border: '#e9d5ff' } // purple
+    }
+    return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' } // gray
+  }
+
+  const getSectorIcon = (setor?: string) => {
+    const s = (setor || '').toLowerCase()
+    if (s.includes('varr') || s.includes('limp') || s.includes('serv')) return Sparkles
+    if (s.includes('adm') || s.includes('gest')) return Briefcase
+    if (s.includes('op') || s.includes('mecan')) return Hammer
+    return User
+  }
+
+  const getMemberAttendanceStatus = (memberId: string) => {
+    const freq = frequencias.find(f => f.funcionario_id === memberId)
+    if (!freq) return { label: 'Sem Registro', color: 'text-gray-400 bg-gray-100 dark:bg-gray-800 print-badge-default' }
+    
+    switch (freq.status) {
+      case 'presente':
+      case 'trabalhou':
+        return { label: 'Presente', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 print-badge-presente' }
+      case 'falta':
+        return { label: 'Falta', color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20 print-badge-falta' }
+      case 'folga':
+        return { label: 'Folga', color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 print-badge-folga' }
+      case 'atestado':
+        return { label: 'Atestado', color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20 print-badge-atestado' }
+      case 'ferias':
+        return { label: 'Férias', color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 print-badge-ferias' }
+      default:
+        return { label: freq.status, color: 'text-gray-600 bg-gray-50 print-badge-default' }
+    }
+  }
+
   // Generate formatted WhatsApp report text with emojis & markdown formatting
   const generateWhatsAppText = useMemo(() => {
     const currentTeam = equipes.find(eq => eq.id === selectedTeamId)
@@ -652,49 +695,6 @@ export function GerarRelatorioPage() {
   const handleSendWhatsApp = () => {
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(generateWhatsAppText)}`
     window.open(url, '_blank')
-  }
-
-  const getSectorColors = (setor?: string) => {
-    const s = (setor || '').toLowerCase()
-    if (s.includes('op') || s.includes('prod') || s.includes('fabr') || s.includes('varr')) {
-      return { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' } // blue
-    }
-    if (s.includes('adm') || s.includes('escrit') || s.includes('finan') || s.includes('rh') || s.includes('gest')) {
-      return { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' } // green
-    }
-    if (s.includes('limp') || s.includes('serv') || s.includes('conserv') || s.includes('geral')) {
-      return { bg: '#faf5ff', text: '#7e22ce', border: '#e9d5ff' } // purple
-    }
-    return { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' } // gray
-  }
-
-  const getSectorIcon = (setor?: string) => {
-    const s = (setor || '').toLowerCase()
-    if (s.includes('varr') || s.includes('limp') || s.includes('serv')) return Sparkles
-    if (s.includes('adm') || s.includes('gest')) return Briefcase
-    if (s.includes('op') || s.includes('mecan')) return Hammer
-    return User
-  }
-
-  const getMemberAttendanceStatus = (memberId: string) => {
-    const freq = frequencias.find(f => f.funcionario_id === memberId)
-    if (!freq) return { label: 'Sem Registro', color: 'text-gray-400 bg-gray-100 dark:bg-gray-800 print-badge-default' }
-    
-    switch (freq.status) {
-      case 'presente':
-      case 'trabalhou':
-        return { label: 'Presente', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 print-badge-presente' }
-      case 'falta':
-        return { label: 'Falta', color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20 print-badge-falta' }
-      case 'folga':
-        return { label: 'Folga', color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20 print-badge-folga' }
-      case 'atestado':
-        return { label: 'Atestado', color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20 print-badge-atestado' }
-      case 'ferias':
-        return { label: 'Férias', color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 print-badge-ferias' }
-      default:
-        return { label: freq.status, color: 'text-gray-600 bg-gray-50 print-badge-default' }
-    }
   }
 
   if (isLoadingTeamInfo || isLoadingEquipes || isLoadingMembros) {
