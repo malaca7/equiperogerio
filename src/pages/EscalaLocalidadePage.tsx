@@ -2726,8 +2726,8 @@ export function EscalaLocalidadePage() {
                   <button onClick={() => setViewMode('weekly')} className={cn("flex-1 md:flex-none px-6 py-3 sm:py-3.5 text-[10px] font-black uppercase tracking-widest rounded-[1.25rem] transition-all flex items-center justify-center gap-2 min-w-[120px]", viewMode === 'weekly' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}>
                     <Layers className="w-4 h-4" /> Semanal
                   </button>
-                  <Link to="/escala/organizacao-varricao" className="flex-1 md:flex-none px-5 py-3 sm:py-3.5 text-[10px] font-black uppercase tracking-widest rounded-[1.25rem] transition-all flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400 hover:bg-card hover:shadow-sm">
-                    <Route className="w-4 h-4" /> Varrição
+                  <Link to="/escala/mapeamento" className="flex-1 md:flex-none px-5 py-3 sm:py-3.5 text-[10px] font-black uppercase tracking-widest rounded-[1.25rem] transition-all flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400 hover:bg-card hover:shadow-sm">
+                    <Route className="w-4 h-4" /> Mapeamento
                   </Link>
                 </div>
               </div>

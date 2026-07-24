@@ -213,7 +213,7 @@ export const DEFAULT_MENU_CONFIG: MenuConfig = {
       { id: 'escala', label: 'Escala', rota: '/escala', icone: 'CalendarDays', ordem: 4 },
       { id: 'modelos_escala', label: 'Modelos', rota: '/escala/modelos', icone: 'CalendarDays', ordem: 5 },
       { id: 'localidades', label: 'Meta e Rota', rota: '/escala/localidades', icone: 'Navigation2', ordem: 6 },
-      { id: 'organizacao_varricao', label: 'Varrição e Setores', rota: '/escala/organizacao-varricao', icone: 'MapPin', ordem: 6.7 },
+      { id: 'organizacao_varricao', label: 'Mapeamento', rota: '/escala/mapeamento', icone: 'Map', ordem: 6.7 },
       { id: 'demandas', label: 'Demandas', rota: '/escala/demandas', icone: 'FileText', ordem: 6.8 },
       { id: 'frequencia', label: 'Chamada', rota: '/frequencia', icone: 'Clock', ordem: 7 },
       { id: 'observacoes', label: 'Observações', rota: '/observacoes', icone: 'FileText', ordem: 8 },

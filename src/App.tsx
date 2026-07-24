@@ -158,8 +158,9 @@ function ProtectedLayout() {
           <Route path="/frequencia" element={<RouteGuard page="frequencia"><FrequenciaPage /></RouteGuard>} />
           <Route path="/escala" element={<RouteGuard page="escala"><EscalaPage /></RouteGuard>} />
           <Route path="/escala/modelos" element={<RouteGuard page="modelos_escala"><ModelosEscalaPage /></RouteGuard>} />
-          <Route path="/escala/localidades" element={<RouteGuard page="localidades"><EscalaLocalidadePage /></RouteGuard>} />
-          <Route path="/escala/organizacao-varricao" element={<RouteGuard page="organizacao_varricao"><OrganizacaoVarricaoPage /></RouteGuard>} />
+          {/* Mapeamento Operacional */}
+          <Route path="/escala/mapeamento" element={<RouteGuard page="organizacao_varricao"><OrganizacaoVarricaoPage /></RouteGuard>} />
+          <Route path="/escala/organizacao-varricao" element={<Navigate to="/escala/mapeamento" replace />} />
           <Route path="/escala/demandas" element={<RouteGuard page="demandas"><DemandasPage /></RouteGuard>} />
           <Route path="/escala/imprimir-semanal" element={<RouteGuard page="escala"><EscalaSemanalPrint /></RouteGuard>} />
           <Route path="/escala/imprimir-mensal" element={<RouteGuard page="escala"><EscalaMensalPrint /></RouteGuard>} />

@@ -801,7 +801,7 @@ export function EquipesPage() {
                       </Button>
                     )}
                     <Link
-                      to={`/escala/organizacao-varricao?equipeId=${eq.id}`}
+                      to={`/escala/mapeamento?equipeId=${eq.id}`}
                       className="flex-1 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-black text-[11px] uppercase tracking-wider hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1.5"
                     >
                       <Route className="w-3.5 h-3.5" /> Varrição

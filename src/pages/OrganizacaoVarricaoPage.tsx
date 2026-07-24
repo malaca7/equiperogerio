@@ -439,10 +439,53 @@ export function OrganizacaoVarricaoPage() {
   const [isModalRuaOpen, setIsModalRuaOpen] = useState(false)
   const [editingRua, setEditingRua] = useState<Partial<RuaVarricao> | null>(null)
 
+  // Map Layer & Autocomplete States
+  const [mapTileLayer, setMapTileLayer] = useState<'google_streets' | 'google_satellite' | 'osm'>('google_streets')
+  const tileLayerRef = useRef<any>(null)
+
+  // Address Autocomplete States
+  const [autocompleteQuery, setAutocompleteQuery] = useState('')
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<any[]>([])
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+
   // Map Container Ref & Leaflet Instance
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const leafletMapRef = useRef<any>(null)
   const [leafletLoaded, setLeafletLoaded] = useState(false)
+
+  // Debounced Address Search for Google Maps / Nominatim Geocoding
+  useEffect(() => {
+    if (!autocompleteQuery || autocompleteQuery.length < 2) {
+      setAutocompleteSuggestions([])
+      setIsSearchingAddress(false)
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingAddress(true)
+      try {
+        const queryTerm = autocompleteQuery.toLowerCase().includes('cabo') 
+          ? autocompleteQuery 
+          : `${autocompleteQuery}, Cabo de Santo Agostinho, PE`
+        
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryTerm)}&limit=6&addressdetails=1`
+        )
+        if (res.ok) {
+          const data = await res.json()
+          setAutocompleteSuggestions(data || [])
+          setShowSuggestions(true)
+        }
+      } catch (err) {
+        console.warn('Geocoding autocomplete search error:', err)
+      } finally {
+        setIsSearchingAddress(false)
+      }
+    }, 350)
+
+    return () => clearTimeout(timer)
+  }, [autocompleteQuery])
 
   // Filtered List calculation
   const filteredRuas = useMemo(() => {
@@ -534,9 +577,22 @@ export function OrganizacaoVarricaoPage() {
 
     leafletMapRef.current = map
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors | Gestão de Varrição',
-      maxZoom: 18
+    let initialTileUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'
+    let initialAttr = '&copy; Google Maps'
+    let initialMaxZoom = 20
+
+    if (mapTileLayer === 'google_satellite') {
+      initialTileUrl = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
+      initialAttr = '&copy; Google Maps Satélite'
+    } else if (mapTileLayer === 'osm') {
+      initialTileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+      initialAttr = '&copy; OpenStreetMap'
+      initialMaxZoom = 19
+    }
+
+    tileLayerRef.current = L.tileLayer(initialTileUrl, {
+      attribution: initialAttr,
+      maxZoom: initialMaxZoom
     }).addTo(map)
 
     // Render Sector Polygons
@@ -613,6 +669,35 @@ export function OrganizacaoVarricaoPage() {
     }
   }, [leafletLoaded, activeTab, filteredRuas, setores, hoveredRuaId])
 
+  // Dynamic Map Tile Switcher Effect
+  useEffect(() => {
+    if (!leafletMapRef.current || !(window as any).L) return
+    const L = (window as any).L
+
+    if (tileLayerRef.current) {
+      try {
+        leafletMapRef.current.removeLayer(tileLayerRef.current)
+      } catch (_) {}
+    }
+
+    let tileUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'
+    let maxZoom = 20
+    let attribution = '&copy; Google Maps'
+
+    if (mapTileLayer === 'google_satellite') {
+      tileUrl = 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
+      attribution = '&copy; Google Maps Satélite'
+    } else if (mapTileLayer === 'osm') {
+      tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+      maxZoom = 19
+      attribution = '&copy; OpenStreetMap'
+    }
+
+    const newLayer = L.tileLayer(tileUrl, { maxZoom, attribution })
+    newLayer.addTo(leafletMapRef.current)
+    tileLayerRef.current = newLayer
+  }, [mapTileLayer])
+
   // Save changes to DB
   const saveRuasToDb = async (newRuas: RuaVarricao[]) => {
     setRuas(newRuas)
@@ -688,7 +773,7 @@ export function OrganizacaoVarricaoPage() {
 
   return (
     <div className="min-h-screen bg-background pb-12 font-sans selection:bg-primary/20">
-      <TopHeader title="Organização da Varrição" subtitle="Setores operacionais, equipes alocadas e mapeamento de ruas" />
+      <TopHeader title="Mapeamento Operacional" subtitle="Visualização em tempo real das rotas, ruas e localidades sincronizadas com Meta e Rota" />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
 
@@ -696,8 +781,8 @@ export function OrganizacaoVarricaoPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card/60 backdrop-blur-md border border-border/60 rounded-3xl p-6 shadow-sm">
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-500/20">
-                Operação de Limpeza Urbana Integredada
+              <span className="px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-500/20 flex items-center gap-1">
+                <Compass className="w-3 h-3" /> Mapeamento em Tempo Real (Google Maps)
               </span>
               {queryEquipeId && (
                 <span className="px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full border border-blue-500/20">
@@ -707,10 +792,10 @@ export function OrganizacaoVarricaoPage() {
             </div>
             <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
               <Route className="w-7 h-7 text-primary" />
-              Mapeamento & Cobertura de Varrição
+              Mapeamento Operacional & Rotas
             </h1>
             <p className="text-xs font-medium text-muted-foreground">
-              Sincronizado com as Equipes do Supabase e com a página de Meta e Rota (Localidades).
+              Visualização em tempo real sincronizada com as Equipes e com os setores de Meta e Rota.
             </p>
           </div>
 
@@ -964,14 +1049,44 @@ export function OrganizacaoVarricaoPage() {
             <div className="lg:col-span-2 bg-card/70 border border-border/50 rounded-3xl overflow-hidden shadow-lg relative min-h-[550px] flex flex-col">
               
               {/* Map Title Overlay Header */}
-              <div className="bg-card/90 backdrop-blur-md px-5 py-3 border-b border-border/50 flex items-center justify-between z-10">
+              <div className="bg-card/90 backdrop-blur-md px-5 py-3 border-b border-border/50 flex flex-wrap items-center justify-between gap-3 z-10">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs font-black uppercase tracking-wider text-foreground">Mapa Operacional de Varrição</span>
+                  <span className="text-xs font-black uppercase tracking-wider text-foreground">Mapa Operacional de Rotas</span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-muted-foreground">Exibindo {filteredRuas.length} ruas</span>
+                {/* Google Maps Layer Switcher */}
+                <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-xl border border-border/40">
+                  <button
+                    type="button"
+                    onClick={() => setMapTileLayer('google_streets')}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1",
+                      mapTileLayer === 'google_streets' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Compass className="w-3 h-3" /> Google Streets
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapTileLayer('google_satellite')}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1",
+                      mapTileLayer === 'google_satellite' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Layers className="w-3 h-3" /> Satélite
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMapTileLayer('osm')}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1",
+                      mapTileLayer === 'osm' ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <MapPin className="w-3 h-3" /> OpenStreetMap
+                  </button>
                 </div>
               </div>
 
@@ -1295,6 +1410,72 @@ export function OrganizacaoVarricaoPage() {
         title={editingRua?.id ? 'Editar Rua / Trecho de Varrição' : 'Cadastrar Nova Rua no Itinerário'}
       >
         <form onSubmit={handleSaveRua} className="space-y-4 pt-2">
+
+          {/* Google Maps Street Autocomplete Search */}
+          <div className="space-y-1 relative">
+            <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+              <span>Buscar Logradouro no Google Maps (Autocomplete)</span>
+              <span className="text-emerald-500 font-bold flex items-center gap-1">
+                <MapPin className="w-3 h-3" /> Geocodificação
+              </span>
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={autocompleteQuery}
+                onChange={e => {
+                  setAutocompleteQuery(e.target.value)
+                  setShowSuggestions(true)
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                placeholder="Digite o nome da rua ou local (ex: Av. Laura Cavalcante, Gaibu...)"
+                className="w-full pl-10 pr-10 py-3 bg-muted/40 border border-border/50 rounded-2xl text-xs font-bold text-foreground outline-none focus:border-emerald-500/50"
+              />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              {isSearchingAddress && (
+                <RotateCw className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500 animate-spin" />
+              )}
+            </div>
+
+            {/* Dropdown Suggestions */}
+            {showSuggestions && autocompleteSuggestions.length > 0 && (
+              <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-card border border-border/60 rounded-2xl shadow-xl overflow-hidden max-h-56 overflow-y-auto scrollbar-thin divide-y divide-border/30 animate-scale-in">
+                {autocompleteSuggestions.map((item, i) => {
+                  const title = item.name || item.address?.road || item.display_name.split(',')[0]
+                  const subtitle = item.display_name
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        const lat = parseFloat(item.lat)
+                        const lon = parseFloat(item.lon)
+                        setEditingRua(prev => ({
+                          ...prev,
+                          nome: title,
+                          trecho: subtitle,
+                          pontosRota: [[lat, lon], [lat + 0.0015, lon + 0.0015]]
+                        }))
+                        setAutocompleteQuery(title)
+                        setShowSuggestions(false)
+                        toast(`Localização "${title}" selecionada no mapa!`, 'success')
+                        if (leafletMapRef.current) {
+                          leafletMapRef.current.flyTo([lat, lon], 16)
+                        }
+                      }}
+                      className="w-full text-left p-3 hover:bg-muted/60 transition-colors flex items-start gap-2.5"
+                    >
+                      <MapPin className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-black text-foreground truncate">{title}</p>
+                        <p className="text-[10px] font-medium text-muted-foreground truncate">{subtitle}</p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
           
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Equipe Responsável (Vincular Supabase) *</label>
