@@ -53,7 +53,8 @@ import {
   FileText,
   XCircle,
   AlertCircle,
-  Route
+  Route,
+  Sparkles
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { TopHeader } from '../components/layout/TopHeader'
