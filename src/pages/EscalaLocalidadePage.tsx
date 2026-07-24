@@ -437,6 +437,7 @@ export function EscalaLocalidadePage() {
 
   // Copy from day modal
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false)
+  const [copyType, setCopyType] = useState<'identico' | 'media_10_dias'>('identico')
   const [copySourceDate, setCopySourceDate] = useState('')
   const [copyIncludeLocalities, setCopyIncludeLocalities] = useState<boolean>(true)
   const [copyPreview, setCopyPreview] = useState<{ funcionarioId: string; funcionarioNome: string; localidadeNome: string }[] | null>(null)
@@ -2023,6 +2024,70 @@ export function EscalaLocalidadePage() {
     }
   }
 
+  const handlePreview10DayAverage = async () => {
+    setIsCopyLoading(true)
+    try {
+      const targetDate = parseLocalDate(dateStr)
+      const tenDaysAgo = subDays(targetDate, 10)
+      const yesterday = subDays(targetDate, 1)
+
+      const tenDaysAgoStr = format(tenDaysAgo, 'yyyy-MM-dd')
+      const yesterdayStr = format(yesterday, 'yyyy-MM-dd')
+
+      const { data: historyData, error } = await supabase
+        .from('escalas')
+        .select('funcionario_id, localidade, data')
+        .gte('data', tenDaysAgoStr)
+        .lte('data', yesterdayStr)
+        .not('localidade', 'is', null)
+
+      if (error) throw error
+
+      // Count occurrences of localidade for each employee over last 10 days
+      const employeeHistory: Record<string, Record<string, number>> = {}
+      if (historyData) {
+        historyData.forEach((row: any) => {
+          if (!row.funcionario_id || !row.localidade) return
+          if (!employeeHistory[row.funcionario_id]) {
+            employeeHistory[row.funcionario_id] = {}
+          }
+          const loc = row.localidade
+          employeeHistory[row.funcionario_id][loc] = (employeeHistory[row.funcionario_id][loc] || 0) + 1
+        })
+      }
+
+      const activeFuncs = filteredFuncionarios.filter(f => f.cargo?.toLowerCase() !== 'encarregado')
+      const preview: { funcionarioId: string; funcionarioNome: string; localidadeNome: string }[] = []
+
+      activeFuncs.forEach(f => {
+        const hist = employeeHistory[f.id]
+        let bestLoc = ''
+        if (hist) {
+          const sorted = Object.entries(hist).sort((a, b) => b[1] - a[1])
+          if (sorted.length > 0) {
+            bestLoc = sorted[0][0]
+          }
+        }
+        if (bestLoc) {
+          preview.push({
+            funcionarioId: f.id,
+            funcionarioNome: f.apelido || f.nome,
+            localidadeNome: bestLoc
+          })
+        }
+      })
+
+      if (preview.length === 0) {
+        return toast('Nenhum histórico de alocações encontrado nos últimos 10 dias.', 'info')
+      }
+      setCopyPreview(preview)
+    } catch (err: any) {
+      toast('Erro ao calcular média das 10 últimas escalas: ' + err.message, 'error')
+    } finally {
+      setIsCopyLoading(false)
+    }
+  }
+
   const handleConfirmCopyFromDay = async () => {
     if (!copyPreview) return
     try {
@@ -2040,8 +2105,8 @@ export function EscalaLocalidadePage() {
       })
       await batchMutation.mutateAsync({ items: inserts, skipFreqSync: true })
 
-      // 2. Fetch the source day metadata configuration (only if copying localities)
-      if (copyIncludeLocalities) {
+      // 2. Fetch the source day metadata configuration (only if copying localities & identical mode)
+      if (copyIncludeLocalities && copyType === 'identico' && copySourceDate) {
         const { data: sourceConfigData, error: sourceConfigError } = await supabase
           .from('configuracoes')
           .select('valor')
@@ -2089,14 +2154,15 @@ export function EscalaLocalidadePage() {
       await queryClient.invalidateQueries({ queryKey: ['frequencia'] })
       await queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       
+      const tipoNome = copyType === 'identico' ? 'Modelo idêntico' : 'Média das 10 últimas escalas'
       const modoTexto = copyIncludeLocalities ? 'com localidades' : 'sem localidades'
-      toast(`Modelo copiado (${modoTexto}) com sucesso! ${inserts.length} colaboradores alocados.`, 'success')
+      toast(`${tipoNome} (${modoTexto}) aplicado com sucesso! ${inserts.length} colaboradores alocados.`, 'success')
       setCopyPreview(null)
       setIsCopyModalOpen(false)
       setCopySourceDate('')
       clearSearch()
     } catch (err: any) {
-      toast('Erro ao copiar modelo: ' + err.message, 'error')
+      toast('Erro ao aplicar modelo: ' + err.message, 'error')
     }
   }
 
@@ -4274,31 +4340,88 @@ export function EscalaLocalidadePage() {
             </div>
           </div>
 
-          {/* Date Picker */}
+          {/* Mode Tabs: Identico vs 10-day Average */}
           <div className="flex flex-col gap-2">
-            <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Dia de Origem</label>
-            <div className="flex gap-3">
-              <input
-                type="date"
-                value={copySourceDate}
-                max={format(subDays(currentDate, 1), 'yyyy-MM-dd')}
-                onChange={e => { setCopySourceDate(e.target.value); setCopyPreview(null) }}
-                className="flex-1 bg-muted/40 border border-border/40 rounded-2xl px-4 h-14 text-sm font-bold focus:border-violet-500/50 outline-none transition-all text-foreground"
-              />
+            <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Tipo de Modelo</label>
+            <div className="grid grid-cols-2 p-1.5 bg-muted/50 rounded-2xl border border-border/40 gap-1.5">
               <button
-                onClick={handlePreviewCopyFromDay}
-                disabled={!copySourceDate || isCopyLoading}
-                className="h-14 px-5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-[10px] uppercase tracking-wider shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center gap-2 shrink-0"
+                type="button"
+                onClick={() => { setCopyType('identico'); setCopyPreview(null) }}
+                className={cn(
+                  "py-2.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2",
+                  copyType === 'identico' 
+                    ? "bg-card text-violet-600 dark:text-violet-400 shadow-sm" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <ClipboardCopy className="w-3.5 h-3.5" /> Modelo Idêntico
+              </button>
+              <button
+                type="button"
+                onClick={() => { setCopyType('media_10_dias'); setCopyPreview(null) }}
+                className={cn(
+                  "py-2.5 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2",
+                  copyType === 'media_10_dias' 
+                    ? "bg-card text-violet-600 dark:text-violet-400 shadow-sm" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Média dos 10 Dias
+              </button>
+            </div>
+          </div>
+
+          {copyType === 'identico' ? (
+            /* Date Picker for Identical Day Copy */
+            <div className="flex flex-col gap-2">
+              <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Dia de Origem</label>
+              <div className="flex gap-3">
+                <input
+                  type="date"
+                  value={copySourceDate}
+                  max={format(subDays(currentDate, 1), 'yyyy-MM-dd')}
+                  onChange={e => { setCopySourceDate(e.target.value); setCopyPreview(null) }}
+                  className="flex-1 bg-muted/40 border border-border/40 rounded-2xl px-4 h-14 text-sm font-bold focus:border-violet-500/50 outline-none transition-all text-foreground"
+                />
+                <button
+                  onClick={handlePreviewCopyFromDay}
+                  disabled={!copySourceDate || isCopyLoading}
+                  className="h-14 px-5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-[10px] uppercase tracking-wider shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 active:scale-95 transition-all disabled:opacity-40 disabled:pointer-events-none flex items-center gap-2 shrink-0"
+                >
+                  {isCopyLoading ? (
+                    <Clock className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4" />
+                  )}
+                  Ver
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* 10-day Average Action Card */
+            <div className="bg-violet-500/5 border border-violet-500/20 rounded-2xl p-4 flex flex-col gap-3">
+              <div className="flex items-center gap-2 text-violet-600 dark:text-violet-400">
+                <Sparkles className="w-4 h-4" />
+                <span className="text-xs font-black uppercase tracking-wider">Histórico Frequencial dos Últimos 10 Dias</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Calcula a localidade mais frequente de cada colaborador nos últimos 10 dias de trabalho e sugere a alocação ideal de forma inteligente.
+              </p>
+              <button
+                type="button"
+                onClick={handlePreview10DayAverage}
+                disabled={isCopyLoading}
+                className="h-12 px-5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-black text-[10px] uppercase tracking-wider shadow-md shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
               >
                 {isCopyLoading ? (
                   <Clock className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Search className="w-4 h-4" />
+                  <Sparkles className="w-4 h-4" />
                 )}
-                Ver
+                Calcular Média dos 10 Dias
               </button>
             </div>
-          </div>
+          )}
 
           {/* Mode Option: With or Without Localities */}
           <div className="flex flex-col gap-2">
@@ -4352,7 +4475,10 @@ export function EscalaLocalidadePage() {
                   Prévia — {copyPreview.length} alocações encontradas
                 </span>
                 <span className="text-[9px] font-black text-violet-500 uppercase tracking-wider">
-                  {format(parseLocalDate(copySourceDate), "dd/MM/yyyy", { locale: ptBR })}
+                  {copyType === 'identico' && copySourceDate 
+                    ? format(parseLocalDate(copySourceDate), "dd/MM/yyyy", { locale: ptBR })
+                    : 'Média dos 10 Dias'
+                  }
                 </span>
               </div>
               <div className="max-h-[35vh] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
