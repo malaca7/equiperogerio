@@ -438,6 +438,7 @@ export function EscalaLocalidadePage() {
   // Copy from day modal
   const [isCopyModalOpen, setIsCopyModalOpen] = useState(false)
   const [copySourceDate, setCopySourceDate] = useState('')
+  const [copyIncludeLocalities, setCopyIncludeLocalities] = useState<boolean>(true)
   const [copyPreview, setCopyPreview] = useState<{ funcionarioId: string; funcionarioNome: string; localidadeNome: string }[] | null>(null)
   const [isCopyLoading, setIsCopyLoading] = useState(false)
   const [hasAutoRouted, setHasAutoRouted] = useState(false)
@@ -2033,46 +2034,47 @@ export function EscalaLocalidadePage() {
           funcionario_id: item.funcionarioId,
           data: dateStr,
           tipo: existingEscala?.tipo || 'presente',
-          localidade: item.localidadeNome,
+          localidade: copyIncludeLocalities ? item.localidadeNome : null,
           turno: existingEscala?.turno || 'integral'
         }
       })
       await batchMutation.mutateAsync({ items: inserts, skipFreqSync: true })
 
-      // 2. Fetch the source day metadata configuration
-      const { data: sourceConfigData, error: sourceConfigError } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', `equipes_meta_${copySourceDate}`)
-        .maybeSingle()
+      // 2. Fetch the source day metadata configuration (only if copying localities)
+      if (copyIncludeLocalities) {
+        const { data: sourceConfigData, error: sourceConfigError } = await supabase
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', `equipes_meta_${copySourceDate}`)
+          .maybeSingle()
 
-      if (sourceConfigError) throw sourceConfigError
+        if (sourceConfigError) throw sourceConfigError
 
-      if (sourceConfigData?.valor) {
-        const sourceMeta = sourceConfigData.valor as Record<string, { ruas?: string; lider_id?: string; locais?: string[]; funcoes?: Record<string, string> }>
-        
-        // Clean source metadata: copy leaders & functions, omit locales/ruas
-        const cleanedMeta: Record<string, { lider_id?: string; funcoes?: Record<string, string> }> = {}
-        Object.entries(sourceMeta).forEach(([locId, value]) => {
-          cleanedMeta[locId] = {
-            lider_id: value.lider_id,
-            funcoes: value.funcoes
-          }
-        })
+        if (sourceConfigData?.valor) {
+          const sourceMeta = sourceConfigData.valor as Record<string, { ruas?: string; lider_id?: string; locais?: string[]; funcoes?: Record<string, string> }>
+          
+          // Clean source metadata: copy leaders & functions, omit locales/ruas
+          const cleanedMeta: Record<string, { lider_id?: string; funcoes?: Record<string, string> }> = {}
+          Object.entries(sourceMeta).forEach(([locId, value]) => {
+            cleanedMeta[locId] = {
+              lider_id: value.lider_id,
+              funcoes: value.funcoes
+            }
+          })
 
-        // Merge into target day metadata config
-        const mergedMeta = { ...equipesMeta }
-        Object.entries(cleanedMeta).forEach(([locId, value]) => {
-          mergedMeta[locId] = {
-            ...mergedMeta[locId],
-            lider_id: value.lider_id,
-            funcoes: value.funcoes
-            // Note: we omit value.locais and value.ruas
-          }
-        })
+          // Merge into target day metadata config
+          const mergedMeta = { ...equipesMeta }
+          Object.entries(cleanedMeta).forEach(([locId, value]) => {
+            mergedMeta[locId] = {
+              ...mergedMeta[locId],
+              lider_id: value.lider_id,
+              funcoes: value.funcoes
+            }
+          })
 
-        // Update database configuration for the target date
-        await updateConfig({ chave: dateKey, valor: mergedMeta })
+          // Update database configuration for the target date
+          await updateConfig({ chave: dateKey, valor: mergedMeta })
+        }
       }
 
       // Deletar os registros de frequencia correspondentes aos funcionarios copiados
@@ -2086,7 +2088,9 @@ export function EscalaLocalidadePage() {
       await queryClient.refetchQueries({ queryKey: ['escalas'] })
       await queryClient.invalidateQueries({ queryKey: ['frequencia'] })
       await queryClient.invalidateQueries({ queryKey: ['dashboard'] })
-      toast(`Modelo copiado com sucesso! ${inserts.length} alocações aplicadas.`, 'success')
+      
+      const modoTexto = copyIncludeLocalities ? 'com localidades' : 'sem localidades'
+      toast(`Modelo copiado (${modoTexto}) com sucesso! ${inserts.length} colaboradores alocados.`, 'success')
       setCopyPreview(null)
       setIsCopyModalOpen(false)
       setCopySourceDate('')
@@ -4292,6 +4296,50 @@ export function EscalaLocalidadePage() {
                   <Search className="w-4 h-4" />
                 )}
                 Ver
+              </button>
+            </div>
+          </div>
+
+          {/* Mode Option: With or Without Localities */}
+          <div className="flex flex-col gap-2">
+            <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Formato da Cópia</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setCopyIncludeLocalities(true)}
+                className={cn(
+                  "p-3.5 rounded-2xl border text-left flex flex-col gap-1 transition-all duration-300 relative",
+                  copyIncludeLocalities 
+                    ? "bg-violet-500/10 border-violet-500/50 text-violet-700 dark:text-violet-300 ring-2 ring-violet-500/20" 
+                    : "bg-muted/30 border-border/40 text-muted-foreground hover:border-border"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider">Com Localidades</span>
+                  <CheckCircle2 className={cn("w-4 h-4", copyIncludeLocalities ? "text-violet-500" : "opacity-0")} />
+                </div>
+                <span className="text-[9px] font-medium opacity-80 leading-tight">
+                  Aloca os colaboradores mantendo exatamente seus locais e ruas de origem
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCopyIncludeLocalities(false)}
+                className={cn(
+                  "p-3.5 rounded-2xl border text-left flex flex-col gap-1 transition-all duration-300 relative",
+                  !copyIncludeLocalities 
+                    ? "bg-violet-500/10 border-violet-500/50 text-violet-700 dark:text-violet-300 ring-2 ring-violet-500/20" 
+                    : "bg-muted/30 border-border/40 text-muted-foreground hover:border-border"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider">Sem Localidades</span>
+                  <CheckCircle2 className={cn("w-4 h-4", !copyIncludeLocalities ? "text-violet-500" : "opacity-0")} />
+                </div>
+                <span className="text-[9px] font-medium opacity-80 leading-tight">
+                  Copia a presença dos colaboradores, mas deixa os locais em branco para alocar
+                </span>
               </button>
             </div>
           </div>
