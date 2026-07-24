@@ -62,6 +62,8 @@ export function GerarRelatorioPage() {
   const [isSavingTemplate, setIsSavingTemplate] = useState(false)
   const [isSavingNew, setIsSavingNew] = useState(false)
   const [saveModalOpen, setSaveModalOpen] = useState(false)
+  const [whatsappModalOpen, setWhatsappModalOpen] = useState(false)
+  const [copiedText, setCopiedText] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const shareSquareRef = useRef<HTMLDivElement>(null)
 
@@ -543,6 +545,115 @@ export function GerarRelatorioPage() {
     }
   }
 
+  // Generate formatted WhatsApp report text with emojis & markdown formatting
+  const generateWhatsAppText = useMemo(() => {
+    const currentTeam = equipes.find(eq => eq.id === selectedTeamId)
+    const teamName = currentTeam?.nome || 'Equipe'
+    const dateFormatted = format(parseISO(selectedDate), "dd/MM/yyyy", { locale: ptBR })
+
+    let lines: string[] = []
+
+    // Header
+    lines.push(`📋 *${(reportTitle || 'RELATÓRIO DIÁRIO OPERACIONAL').toUpperCase()}*`)
+    lines.push(`📅 *Data:* ${dateFormatted}`)
+    lines.push(`👥 *Equipe:* ${teamName}`)
+    lines.push(``)
+
+    // Metrics (if showMetrics enabled)
+    if (showMetrics) {
+      lines.push(`📊 *RESUMO DE PRESENÇA*`)
+      lines.push(`• *Efetivo Total:* ${stats.total} colaboradores`)
+      lines.push(`• ✅ *Presentes:* ${stats.present} (${stats.rate}%)`)
+      lines.push(`• ❌ *Ausentes/Divergências:* ${stats.absent}`)
+      lines.push(``)
+    }
+
+    lines.push(`─────────────────────────────`)
+
+    // Sectors & Members
+    Object.entries(membersBySector).forEach(([sector, funcs]) => {
+      let sectorEmoji = '🧹'
+      const sLower = sector.toLowerCase()
+      if (sLower.includes('orla') || sLower.includes('praia')) sectorEmoji = '🌊'
+      else if (sLower.includes('porta') || sLower.includes('coleta')) sectorEmoji = '🚛'
+      else if (sLower.includes('adm') || sLower.includes('gest')) sectorEmoji = '💼'
+      else if (sLower.includes('capin') || sLower.includes('roçad')) sectorEmoji = '🌾'
+
+      lines.push(``)
+      lines.push(`${sectorEmoji} *${sector.toUpperCase()}*`)
+
+      funcs.forEach(m => {
+        const statusInfo = getMemberAttendanceStatus(m.id)
+        const escala = escalas.find(e => e.funcionario_id === m.id)
+        const obs = observations[m.id]
+
+        let statusIcon = '✅'
+        if (statusInfo.label === 'Falta') statusIcon = '❌'
+        else if (statusInfo.label === 'Folga') statusIcon = '🏖️'
+        else if (statusInfo.label === 'Atestado') statusIcon = '🏥'
+        else if (statusInfo.label === 'Férias') statusIcon = '✈️'
+        else if (statusInfo.label === 'Sem Registro') statusIcon = '⚪'
+
+        let memberLine = `${statusIcon} *${m.apelido || m.nome}*`
+
+        if (showRoles && m.cargo) {
+          memberLine += ` _(${m.cargo})_`
+        }
+
+        if (showLocalities && escala?.localidade) {
+          memberLine += ` 📍 *${escala.localidade}*`
+        }
+
+        if (statusInfo.label !== 'Presente' && statusInfo.label !== 'Sem Registro') {
+          memberLine += ` ~[${statusInfo.label}]~`
+        }
+
+        lines.push(memberLine)
+
+        if (showObservations && obs) {
+          lines.push(`   📝 _Obs: ${obs}_`)
+        }
+      })
+    })
+
+    // Divergences / Absences Summary Section
+    const absentMembers = filteredMembros.filter(m => {
+      const st = getMemberAttendanceStatus(m.id).label
+      return st !== 'Presente' && st !== 'Sem Registro'
+    })
+
+    if (absentMembers.length > 0) {
+      lines.push(``)
+      lines.push(`─────────────────────────────`)
+      lines.push(`⚠️ *OCORRÊNCIAS / AUSÊNCIAS DIÁRIAS*`)
+      absentMembers.forEach(m => {
+        const st = getMemberAttendanceStatus(m.id)
+        let icon = '❌'
+        if (st.label === 'Folga') icon = '🏖️'
+        else if (st.label === 'Atestado') icon = '🏥'
+        else if (st.label === 'Férias') icon = '✈️'
+        lines.push(`${icon} *${m.apelido || m.nome}* — *${st.label.toUpperCase()}*`)
+      })
+    }
+
+    lines.push(``)
+    lines.push(`📱 _Gerado via 7Locar - Gestão de Equipes_`)
+
+    return lines.join('\n')
+  }, [selectedTeamId, selectedDate, reportTitle, showMetrics, showLocalities, showObservations, showRoles, stats, membersBySector, filteredMembros, equipes, escalas, observations, frequencias])
+
+  const handleCopyWhatsAppText = () => {
+    navigator.clipboard.writeText(generateWhatsAppText)
+    setCopiedText(true)
+    toast('Relatório em formato de texto com emojis copiado para a área de transferência!', 'success')
+    setTimeout(() => setCopiedText(false), 3000)
+  }
+
+  const handleSendWhatsApp = () => {
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(generateWhatsAppText)}`
+    window.open(url, '_blank')
+  }
+
   const getSectorColors = (setor?: string) => {
     const s = (setor || '').toLowerCase()
     if (s.includes('op') || s.includes('prod') || s.includes('fabr') || s.includes('varr')) {
@@ -871,13 +982,32 @@ export function GerarRelatorioPage() {
                   <Plus className="w-3.5 h-3.5" /> Salvar como Novo Modelo
                 </button>
               )}
+              {/* WhatsApp Text Buttons */}
+              <button
+                type="button"
+                onClick={() => setWhatsappModalOpen(true)}
+                className="h-10 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-500/20 transition-all flex items-center gap-1.5"
+              >
+                <MessageSquare className="w-3.5 h-3.5" /> Texto WhatsApp
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyWhatsAppText}
+                className="h-10 px-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5"
+                title="Copiar texto com emojis para WhatsApp"
+              >
+                {copiedText ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedText ? 'Copiado!' : 'Copiar Texto'}
+              </button>
+
               {typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? (
                 <button
                   onClick={() => handleExport('share')}
                   disabled={isExporting}
                   className="h-10 px-5 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-wider hover:bg-primary-hover shadow-md transition-all flex items-center gap-1.5 animate-fade-in"
                 >
-                  <Share2 className="w-3.5 h-3.5" /> Compartilhar
+                  <Share2 className="w-3.5 h-3.5" /> Compartilhar PNG
                 </button>
               ) : (
                 <button
@@ -1122,6 +1252,55 @@ export function GerarRelatorioPage() {
             >
               Salvar Modelo
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Texto com Emojis para WhatsApp */}
+      <Modal
+        open={whatsappModalOpen}
+        onClose={() => setWhatsappModalOpen(false)}
+        title="Relatório Formatado para WhatsApp"
+        size="lg"
+      >
+        <div className="flex flex-col space-y-5 py-2 animate-scale-in">
+          {/* Header info */}
+          <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black uppercase text-foreground">Texto Formatado com Emojis</h4>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Pronto para copiar e enviar pelo WhatsApp</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopyWhatsAppText}
+                className="h-10 px-4 rounded-xl bg-card hover:bg-muted text-foreground font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 border border-border/40 shadow-sm"
+              >
+                {copiedText ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedText ? 'Copiado!' : 'Copiar Texto'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSendWhatsApp}
+                className="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+              >
+                <Share2 className="w-3.5 h-3.5" /> Enviar no WhatsApp
+              </button>
+            </div>
+          </div>
+
+          {/* Pre-formatted text area container */}
+          <div className="relative">
+            <textarea
+              readOnly
+              value={generateWhatsAppText}
+              className="w-full h-[450px] p-5 rounded-2xl bg-zinc-950 text-emerald-400 font-mono text-xs leading-relaxed border border-zinc-800 focus:outline-none scrollbar-thin resize-none selection:bg-emerald-500/30 selection:text-white"
+            />
           </div>
         </div>
       </Modal>
