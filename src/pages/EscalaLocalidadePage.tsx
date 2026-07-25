@@ -138,14 +138,16 @@ const DEFAULT_FUNCOES = [
 
 export function EscalaLocalidadePage() {
   const { toast } = useToast()
-  const { hasPermission } = useAuth()
-  const canEdit = hasPermission('localidades', 'editar')
-  const canAdmin = hasPermission('localidades', 'administrar')
+  const { hasPermission, user } = useAuth()
+  const { data: teamInfo, isLoading: loadTeam } = useUserTeam()
+
+  const isEncarregadoUser = teamInfo?.isRestricted || user?.cargo?.nome === 'ENCARREGADO' || user?.papel === 'gerente' || user?.perfil === 'ENCARREGADO'
+  const canEdit = hasPermission('localidades', 'editar') || hasPermission('localidades', 'gerenciar') || hasPermission('escala', 'gerenciar') || isEncarregadoUser || user?.isAdmin
+  const canAdmin = hasPermission('localidades', 'administrar') || hasPermission('localidades', 'gerenciar') || isEncarregadoUser || user?.isAdmin
   const queryClient = useQueryClient()
   const [demandSearchQuery, setDemandSearchQuery] = useState<Record<string, string>>({})
   const [focusedLocId, setFocusedLocId] = useState<string | null>(null)
 
-  const { data: teamInfo, isLoading: loadTeam } = useUserTeam()
   const { activePanel, selectedTeamId, setSelectedTeamId } = useAuth()
 
   const { data: allTeams = [] } = useQuery<any[]>({

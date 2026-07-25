@@ -81,19 +81,15 @@ function useFuncionariosAtivos() {
 export function EquipesPage() {
   const { toast } = useToast()
   const qc = useQueryClient()
-  const { hasPermission } = useAuth()
-  const canEdit = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'editar') || hasPermission('funcionarios', 'gerenciar')
-  const canAdmin = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'administrar') || hasPermission('funcionarios', 'gerenciar')
-
-  const { data: equipes = [], isLoading: isLoadingEquipes } = useEquipes()
-  const { data: regioes = [], isLoading: isLoadingRegioes } = useRegioes()
-  const { data: funcionarios = [] } = useFuncionariosAtivos()
-  const { data: profilesList = [] } = useProfiles()
-
+  const { hasPermission, user } = useAuth()
   const { data: userTeam, isLoading: isLoadingUserTeam } = useUserTeam()
-  // Se o usuário é restrito, ele é considerado encarregado
-  const isEncarregado = userTeam?.isRestricted ?? false
+  
+  // Se o usuário é restrito ou encarregado, tem permissão de gestão de suas equipes
+  const isEncarregado = (userTeam?.isRestricted ?? false) || user?.cargo?.nome === 'ENCARREGADO' || user?.papel === 'gerente' || user?.perfil === 'ENCARREGADO'
   const userTeamIds = userTeam?.teamIds ?? []
+
+  const canEdit = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'editar') || hasPermission('funcionarios', 'gerenciar') || isEncarregado
+  const canAdmin = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'administrar') || hasPermission('funcionarios', 'gerenciar') || isEncarregado
 
   // Setores & localidades config
   const { data: allSetores = [] } = useConfiguracao<string[]>('setores', [])
