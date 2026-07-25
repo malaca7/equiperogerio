@@ -84,12 +84,17 @@ export function EquipesPage() {
   const { hasPermission, user } = useAuth()
   const { data: userTeam, isLoading: isLoadingUserTeam } = useUserTeam()
   
-  // Se o usuário é restrito ou encarregado, tem permissão de gestão de suas equipes
-  const isEncarregado = (userTeam?.isRestricted ?? false) || user?.cargo?.nome === 'ENCARREGADO' || user?.papel === 'gerente' || user?.perfil === 'ENCARREGADO'
+  const userRoleStr = (user?.user_metadata?.cargo || user?.role || '').toUpperCase()
+  const isEncarregado = (userTeam?.isRestricted ?? false) || userRoleStr.includes('ENCARREGADO')
   const userTeamIds = userTeam?.teamIds ?? []
 
   const canEdit = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'editar') || hasPermission('funcionarios', 'gerenciar') || isEncarregado
   const canAdmin = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'administrar') || hasPermission('funcionarios', 'gerenciar') || isEncarregado
+
+  const { data: equipes = [], isLoading: isLoadingEquipes } = useEquipes()
+  const { data: regioes = [], isLoading: isLoadingRegioes } = useRegioes()
+  const { data: funcionarios = [] } = useFuncionariosAtivos()
+  const { data: profilesList = [] } = useProfiles()
 
   // Setores & localidades config
   const { data: allSetores = [] } = useConfiguracao<string[]>('setores', [])

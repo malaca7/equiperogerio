@@ -141,9 +141,10 @@ export function EscalaLocalidadePage() {
   const { hasPermission, user } = useAuth()
   const { data: teamInfo, isLoading: loadTeam } = useUserTeam()
 
-  const isEncarregadoUser = teamInfo?.isRestricted || user?.cargo?.nome === 'ENCARREGADO' || user?.papel === 'gerente' || user?.perfil === 'ENCARREGADO'
-  const canEdit = hasPermission('localidades', 'editar') || hasPermission('localidades', 'gerenciar') || hasPermission('escala', 'gerenciar') || isEncarregadoUser || user?.isAdmin
-  const canAdmin = hasPermission('localidades', 'administrar') || hasPermission('localidades', 'gerenciar') || isEncarregadoUser || user?.isAdmin
+  const userRoleStr = (user?.user_metadata?.cargo || user?.role || '').toUpperCase()
+  const isEncarregadoUser = (teamInfo?.isRestricted ?? false) || userRoleStr.includes('ENCARREGADO')
+  const canEdit = hasPermission('localidades', 'editar') || hasPermission('localidades', 'gerenciar') || hasPermission('escala', 'gerenciar') || isEncarregadoUser || !!user?.isAdmin
+  const canAdmin = hasPermission('localidades', 'administrar') || hasPermission('localidades', 'gerenciar') || isEncarregadoUser || !!user?.isAdmin
   const queryClient = useQueryClient()
   const [demandSearchQuery, setDemandSearchQuery] = useState<Record<string, string>>({})
   const [focusedLocId, setFocusedLocId] = useState<string | null>(null)
