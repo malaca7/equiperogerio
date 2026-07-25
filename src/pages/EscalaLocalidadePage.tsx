@@ -1033,7 +1033,7 @@ export function EscalaLocalidadePage() {
     }
 
     if (mode === 'apenas_localidades') {
-      let text = `📍 *LOCALIDADES E COLABORADORES ALOCADOS* 📍\n`
+      let text = `📍 *LOCALIDADES E COLABORADORES* 📍\n`
       text += `📅 *DATA:* ${dateText}\n`
       text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
 
@@ -1046,16 +1046,14 @@ export function EscalaLocalidadePage() {
 
         totalSectionsCount++
 
-        text += `📍 *LOCALIDADE: ${loc.nome.toUpperCase()}*\n`
-        text += `👥 *COLABORADORES (${activeMembers.length}):*\n`
-
-        activeMembers.forEach((m: any) => {
+        const namesList = activeMembers.map((m: any) => {
           const isLider = m.id === equipesMeta[loc.id]?.lider_id
           const name = getEmployeeDisplayName(m)
-          text += `  • ${name}${isLider ? ' (LÍDER)' : ''}\n`
-        })
+          return `${name}${isLider ? ' (LÍDER)' : ''}`
+        }).join(' / ')
 
-        text += `\n`
+        text += `📍 *${loc.nome.toUpperCase()}*\n`
+        text += `👥 ${namesList}\n\n`
       })
 
       if (totalSectionsCount === 0) {
