@@ -84,7 +84,7 @@ export function EquipesPage() {
   const { hasPermission, user } = useAuth()
   const { data: userTeam, isLoading: isLoadingUserTeam } = useUserTeam()
   
-  const isEncarregado = (userTeam?.isRestricted ?? false) || (user?.roles?.some(r => r.nome.toUpperCase().includes('ENCARREGADO')) ?? false) || user?.profile?.perfil === 'gerente'
+  const isEncarregado = (userTeam?.isRestricted ?? false) || (user?.roles?.some(r => r.nome.toUpperCase().includes('ENCARREGADO')) ?? false)
   const userTeamIds = userTeam?.teamIds ?? []
 
   const canEdit = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'editar') || hasPermission('funcionarios', 'gerenciar') || isEncarregado

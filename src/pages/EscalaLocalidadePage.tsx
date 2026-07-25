@@ -141,7 +141,7 @@ export function EscalaLocalidadePage() {
   const { hasPermission, user } = useAuth()
   const { data: teamInfo, isLoading: loadTeam } = useUserTeam()
 
-  const isEncarregadoUser = (teamInfo?.isRestricted ?? false) || (user?.roles?.some(r => r.nome.toUpperCase().includes('ENCARREGADO')) ?? false) || user?.profile?.perfil === 'gerente'
+  const isEncarregadoUser = (teamInfo?.isRestricted ?? false) || (user?.roles?.some(r => r.nome.toUpperCase().includes('ENCARREGADO')) ?? false)
   const canEdit = hasPermission('localidades', 'editar') || hasPermission('localidades', 'gerenciar') || hasPermission('escala', 'gerenciar') || isEncarregadoUser || !!user?.isAdmin
   const canAdmin = hasPermission('localidades', 'administrar') || hasPermission('localidades', 'gerenciar') || isEncarregadoUser || !!user?.isAdmin
   const queryClient = useQueryClient()
