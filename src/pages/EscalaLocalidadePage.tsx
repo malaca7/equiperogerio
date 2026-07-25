@@ -447,7 +447,7 @@ export function EscalaLocalidadePage() {
   const [hasAutoRouted, setHasAutoRouted] = useState(false)
 
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
-  const [previewMode, setPreviewMode] = useState<'completo' | 'enxuto' | 'tipo_equipe' | 'demandas_realizadas'>('completo')
+  const [previewMode, setPreviewMode] = useState<'completo' | 'enxuto' | 'apenas_localidades' | 'tipo_equipe' | 'demandas_realizadas'>('completo')
 
   // Google Maps Geocoding Autocomplete State
   const [googleAddressSuggestions, setGoogleAddressSuggestions] = useState<Record<string, any[]>>({})
@@ -1023,13 +1023,47 @@ export function EscalaLocalidadePage() {
     return baseShortName
   }, [allFuncionarios, dailyDistribution])
 
-  const getDailyMessageText = useCallback((mode: 'completo' | 'enxuto' | 'tipo_equipe' | 'demandas_realizadas' = 'completo') => {
+  const getDailyMessageText = useCallback((mode: 'completo' | 'enxuto' | 'apenas_localidades' | 'tipo_equipe' | 'demandas_realizadas' = 'completo') => {
     let dateText = ''
     try {
       const parsedDate = parseLocalDate(dateStr)
       dateText = `${format(parsedDate, "dd/MM/yyyy")} (${format(parsedDate, "eeee", { locale: ptBR })})`
     } catch {
       dateText = dateStr
+    }
+
+    if (mode === 'apenas_localidades') {
+      let text = `📍 *LOCALIDADES E COLABORADORES ALOCADOS* 📍\n`
+      text += `📅 *DATA:* ${dateText}\n`
+      text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
+
+      let totalSectionsCount = 0
+
+      localidadesConfig.forEach(loc => {
+        const members = dailyDistribution[loc.id] || []
+        const activeMembers = members.filter((m: any) => m.tipo !== 'falta')
+        if (activeMembers.length === 0) return
+
+        totalSectionsCount++
+
+        text += `📍 *LOCALIDADE: ${loc.nome.toUpperCase()}*\n`
+        text += `👥 *COLABORADORES (${activeMembers.length}):*\n`
+
+        activeMembers.forEach((m: any) => {
+          const isLider = m.id === equipesMeta[loc.id]?.lider_id
+          const name = getEmployeeDisplayName(m)
+          text += `  • ${name}${isLider ? ' (LÍDER)' : ''}\n`
+        })
+
+        text += `\n`
+      })
+
+      if (totalSectionsCount === 0) {
+        text += `⚠️ NENHUMA ALOCAÇÃO ATIVA HOJE.\n\n`
+      }
+
+      text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+      return text.toUpperCase()
     }
 
     if (mode === 'tipo_equipe') {
@@ -4738,6 +4772,17 @@ export function EscalaLocalidadePage() {
                   Texto Enxuto
                 </button>
                 <button
+                  onClick={() => setPreviewMode('apenas_localidades')}
+                  className={cn(
+                    "flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer border-none min-w-[80px]",
+                    previewMode === 'apenas_localidades' 
+                      ? "bg-card text-primary shadow-sm" 
+                      : "text-muted-foreground hover:text-foreground bg-transparent"
+                  )}
+                >
+                  Localidade & Efetivo
+                </button>
+                <button
                   onClick={() => setPreviewMode('tipo_equipe')}
                   className={cn(
                     "flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer border-none min-w-[80px]",
@@ -4772,7 +4817,7 @@ export function EscalaLocalidadePage() {
                 />
                 <div className="absolute top-3 right-3 flex items-center gap-2">
                   <span className="text-[8px] font-bold uppercase tracking-wider bg-primary/10 border border-primary/20 text-primary px-2 py-0.5 rounded">
-                    {previewMode === 'completo' ? 'Completo' : previewMode === 'enxuto' ? 'Enxuto' : previewMode === 'tipo_equipe' ? 'Setor' : 'Realizações'}
+                    {previewMode === 'completo' ? 'Completo' : previewMode === 'enxuto' ? 'Enxuto' : previewMode === 'apenas_localidades' ? 'Localidade & Efetivo' : previewMode === 'tipo_equipe' ? 'Setor' : 'Realizações'}
                   </span>
                 </div>
               </div>
