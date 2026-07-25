@@ -1053,7 +1053,7 @@ export function EscalaLocalidadePage() {
         }).join(' / ')
 
         text += `📍 *${loc.nome.toUpperCase()}*\n`
-        text += `👥 ${namesList}\n\n`
+        text += `${namesList}\n\n`
       })
 
       if (totalSectionsCount === 0) {
