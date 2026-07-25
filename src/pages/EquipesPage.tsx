@@ -394,6 +394,7 @@ export function EquipesPage() {
   
   const [tab, setTab] = useState<'membros' | 'encarregados' | 'setores' | 'localidades'>('membros')
   const [memSearch, setMemSearch] = useState('')
+  const [newSectorName, setNewSectorName] = useState('')
   const [newLocName, setNewLocName] = useState('')
   const [newLocSector, setNewLocSector] = useState('')
   const [newLocSchedule, setNewLocSchedule] = useState<'segunda_sabado' | 'domingo_feriado' | 'todos'>('segunda_sabado')
