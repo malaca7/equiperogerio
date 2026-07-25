@@ -904,11 +904,12 @@ export function EscalaLocalidadePage() {
       tipo = isDomingo ? 'repouso' : 'presente'
     }
 
-    // An employee is "allocated" only if they have an escala record with a non-null localidade
-    const isAlocado = !isDesligado && !!(e && e.localidade)
+    // An employee is "allocated" only if they have an escala record with a VALID existing localidade
+    const isValidLocality = !!(e && e.localidade && localidadesConfig.some(l => l.nome.trim().toLowerCase() === e.localidade.trim().toLowerCase()))
+    const isAlocado = !isDesligado && isValidLocality
 
-    return { isTrabalhando, tipo, escala: e, isAlocado }
-  }, [escalaMap, allFuncionarios])
+    return { isTrabalhando, tipo, escala: e, isAlocado, hasOrphanedLocality: !!(e && e.localidade && !isValidLocality) }
+  }, [escalaMap, allFuncionarios, localidadesConfig])
 
   // Logic for daily view: locality -> employees
   const dailyDistribution = useMemo(() => {
@@ -2017,6 +2018,31 @@ export function EscalaLocalidadePage() {
     }
     setHasAutoRouted(true)
   }, [loadF, loadE, loadTeam, hasAutoRouted, currentDate, escalas, filteredFuncionarios, escalaMap, selectedTeamId, selectedTeamMembers, teamInfo])
+
+  // ── AUTO-CLEAN ORPHANED LOCALITIES (e.g. when a locality/sector was deleted) ──
+  useEffect(() => {
+    if (!escalas || escalas.length === 0 || localidadesConfig.length === 0) return
+
+    const orphanedEscalas = (escalas as any[]).filter(e => {
+      if (!e.localidade) return false
+      const locName = e.localidade.trim().toLowerCase()
+      return !localidadesConfig.some(l => l.nome.trim().toLowerCase() === locName)
+    })
+
+    if (orphanedEscalas.length > 0) {
+      console.log(`Auto-cleaning ${orphanedEscalas.length} orphaned escala allocations...`, orphanedEscalas)
+      const updates = orphanedEscalas.map(e => {
+        const { funcionarios, ...cleanData } = e
+        return { ...cleanData, localidade: null }
+      })
+
+      batchMutation.mutateAsync({ items: updates, skipFreqSync: true }).then(() => {
+        queryClient.invalidateQueries({ queryKey: ['escalas'] })
+      }).catch(err => {
+        console.warn('Error auto-cleaning orphaned escalas:', err)
+      })
+    }
+  }, [escalas, localidadesConfig])
 
   // ── COPY FROM DAY HANDLER ──
   const handlePreviewCopyFromDay = async () => {
