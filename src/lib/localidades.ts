@@ -4,6 +4,7 @@ export interface Localidade {
   nome: string
   setor: string
   equipe_id?: string | null
+  dias_operacionais?: 'segunda_sabado' | 'domingo_feriado' | 'todos'
 }
 
 export const LOCALIDADES: Localidade[] = [

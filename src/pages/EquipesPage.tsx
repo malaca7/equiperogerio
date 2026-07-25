@@ -394,9 +394,9 @@ export function EquipesPage() {
   
   const [tab, setTab] = useState<'membros' | 'encarregados' | 'setores' | 'localidades'>('membros')
   const [memSearch, setMemSearch] = useState('')
-  const [newSectorName, setNewSectorName] = useState('')
   const [newLocName, setNewLocName] = useState('')
   const [newLocSector, setNewLocSector] = useState('')
+  const [newLocSchedule, setNewLocSchedule] = useState<'segunda_sabado' | 'domingo_feriado' | 'todos'>('segunda_sabado')
 
   const filtered = equipes
     .filter(eq => isEncarregado ? userTeamIds.includes(eq.id) : true)
@@ -650,7 +650,8 @@ export function EquipesPage() {
       id: `loc_${Date.now()}`,
       nome: locName,
       setor: newLocSector,
-      equipe_id: manageModal.id
+      equipe_id: manageModal.id,
+      dias_operacionais: newLocSchedule
     }
     
     const updatedLocalidades = [...allLocalidades, newLocObj]
@@ -660,6 +661,7 @@ export function EquipesPage() {
       
       setNewLocName('')
       setNewLocSector('')
+      setNewLocSchedule('segunda_sabado')
       toast(`Localidade "${locName}" criada e vinculada com sucesso!`, 'success')
     } catch (err: any) {
       toast('Erro ao criar localidade: ' + err.message, 'error')
@@ -1277,46 +1279,68 @@ export function EquipesPage() {
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
                     {teamLocalidades.map((l: any) => (
-                      <div key={l.id} className="flex items-center justify-between p-3 bg-card border border-border/40 hover:border-border rounded-xl transition-all shadow-sm">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                      <div key={l.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-card border border-border/40 hover:border-border rounded-xl transition-all shadow-sm">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                             <MapPin className="w-4 h-4" />
                           </div>
-                          <div>
-                            <p className="text-xs font-black text-foreground">{l.nome}</p>
-                            <p className="text-[9px] text-muted-foreground uppercase font-black tracking-wider mt-0.5">{l.setor}</p>
+                          <div className="min-w-0">
+                            <p className="text-xs font-black text-foreground truncate">{l.nome}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[9px] text-muted-foreground uppercase font-black tracking-wider">{l.setor}</span>
+                            </div>
                           </div>
                         </div>
-                        {canManageTeam(manageModal.id) && (
-                          <div className="flex gap-1.5">
-                            <button 
-                              onClick={() => {
-                                const newList = allLocalidades.map((x: any) => x.id === l.id ? { ...x, equipe_id: null } : x)
-                                updateConfig.mutate({ chave: 'localidades', valor: newList })
-                                toast(`Localidade "${l.nome}" desvinculada`, 'success')
-                              }}
-                              disabled={updateConfig.isPending}
-                              className="w-7 h-7 rounded-lg text-rose-500 hover:text-white bg-rose-500/5 hover:bg-rose-500 border border-rose-500/10 hover:border-rose-500 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
-                              title="Desvincular da equipe"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                            <button 
-                              onClick={() => {
-                                if (confirm(`Deseja realmente excluir permanentemente a localidade "${l.nome}"?`)) {
-                                  const newList = allLocalidades.filter((x: any) => x.id !== l.id)
+
+                        <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 border-t sm:border-t-0 border-border/20 pt-2 sm:pt-0 mt-1 sm:mt-0">
+                          {/* Schedule Selector */}
+                          <select
+                            value={l.dias_operacionais || 'segunda_sabado'}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              const newList = allLocalidades.map((x: any) => x.id === l.id ? { ...x, dias_operacionais: val } : x)
+                              updateConfig.mutate({ chave: 'localidades', valor: newList })
+                              toast(`Dias operacionais de "${l.nome}" alterados!`, 'success')
+                            }}
+                            disabled={!canManageTeam(manageModal.id) || updateConfig.isPending}
+                            className="text-[9px] font-black uppercase tracking-wider bg-muted/40 border border-border/40 rounded-lg px-2 py-1 outline-none text-foreground cursor-pointer focus:border-primary/40"
+                          >
+                            <option value="segunda_sabado">📅 Seg a Sáb</option>
+                            <option value="domingo_feriado">☀️ Dom & Feriado</option>
+                            <option value="todos">🌐 Todos os Dias</option>
+                          </select>
+
+                          {canManageTeam(manageModal.id) && (
+                            <div className="flex gap-1.5">
+                              <button 
+                                onClick={() => {
+                                  const newList = allLocalidades.map((x: any) => x.id === l.id ? { ...x, equipe_id: null } : x)
                                   updateConfig.mutate({ chave: 'localidades', valor: newList })
-                                  toast(`Localidade "${l.nome}" excluída permanentemente`, 'success')
-                                }
-                              }}
-                              disabled={updateConfig.isPending}
-                              className="w-7 h-7 rounded-lg text-red-600 hover:text-white bg-red-600/5 hover:bg-red-600 border border-red-600/10 hover:border-red-600 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
-                              title="Excluir permanentemente"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
+                                  toast(`Localidade "${l.nome}" desvinculada`, 'success')
+                                }}
+                                disabled={updateConfig.isPending}
+                                className="w-7 h-7 rounded-lg text-rose-500 hover:text-white bg-rose-500/5 hover:bg-rose-500 border border-rose-500/10 hover:border-rose-500 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                                title="Desvincular da equipe"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  if (confirm(`Deseja realmente excluir permanentemente a localidade "${l.nome}"?`)) {
+                                    const newList = allLocalidades.filter((x: any) => x.id !== l.id)
+                                    updateConfig.mutate({ chave: 'localidades', valor: newList })
+                                    toast(`Localidade "${l.nome}" excluída permanentemente`, 'success')
+                                  }
+                                }}
+                                disabled={updateConfig.isPending}
+                                className="w-7 h-7 rounded-lg text-red-600 hover:text-white bg-red-600/5 hover:bg-red-600 border border-red-600/10 hover:border-red-600 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                                title="Excluir permanentemente"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                     {(!teamLocalidades || teamLocalidades.length === 0) && (
@@ -1334,7 +1358,7 @@ export function EquipesPage() {
                       <span className="text-[10px] font-black uppercase text-foreground tracking-widest flex items-center gap-1.5">
                         <Plus className="w-3.5 h-3.5 text-primary" /> Criar Nova Localidade
                       </span>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <input
                           type="text"
                           placeholder="Nome..."
@@ -1351,6 +1375,15 @@ export function EquipesPage() {
                           {sectorsForDropdown.map((s: string) => (
                             <option key={s} value={s}>{s}</option>
                           ))}
+                        </select>
+                        <select
+                          value={newLocSchedule}
+                          onChange={e => setNewLocSchedule(e.target.value as any)}
+                          className="px-2 py-1.5 bg-card border border-border/50 rounded-xl text-xs font-bold outline-none focus:border-primary/30"
+                        >
+                          <option value="segunda_sabado">📅 Seg a Sáb</option>
+                          <option value="domingo_feriado">☀️ Dom & Feriado</option>
+                          <option value="todos">🌐 Todos os Dias</option>
                         </select>
                       </div>
                       <button

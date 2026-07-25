@@ -79,6 +79,7 @@ interface Localidade {
   nome: string
   setor: string
   equipe_id?: string | null
+  dias_operacionais?: 'segunda_sabado' | 'domingo_feriado' | 'todos'
 }
 
 export interface Demanda {
@@ -535,6 +536,8 @@ export function EscalaLocalidadePage() {
     return setores.filter(s => s === filterSetor)
   }, [setores, filterSetor])
 
+  const { data: feriados = [] } = useConfiguracao<any[]>('feriados', [])
+
   const localidadesConfig = useMemo(() => {
     let result = []
     if (teamInfo?.isRestricted) {
@@ -551,7 +554,26 @@ export function EscalaLocalidadePage() {
       result = dbLocalidades
     }
 
-    return [...result].sort((a, b) => {
+    // Filter by operational schedule (Segunda a Sábado vs Domingos e Feriados)
+    const targetDateStr = format(currentDate, 'yyyy-MM-dd')
+    const isSun = isSunday(currentDate)
+    const isFer = feriados.some((f: any) => f.data === targetDateStr)
+    const isSpecialDay = isSun || isFer
+
+    const dayFiltered = result.filter(l => {
+      const schedule = l.dias_operacionais || 'segunda_sabado'
+      if (schedule === 'todos') return true
+      if (isSpecialDay) {
+        return schedule === 'domingo_feriado'
+      } else {
+        return schedule === 'segunda_sabado'
+      }
+    })
+
+    // Use dayFiltered if it has matches, otherwise fallback to result so empty teams are avoided
+    const finalResult = dayFiltered.length > 0 ? dayFiltered : result
+
+    return [...finalResult].sort((a, b) => {
       const teamA = allTeams.find(t => t.id === a.equipe_id)
       const teamB = allTeams.find(t => t.id === b.equipe_id)
       
@@ -568,8 +590,7 @@ export function EscalaLocalidadePage() {
       // Se estiverem na mesma equipe (ou ambas sem equipe), compara o nome da localidade numericamente
       return a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true, sensitivity: 'base' })
     })
-  }, [dbLocalidades, selectedTeamId, teamInfo, dbSetoresEquipes, allTeams])
-  const { data: feriados = [] } = useConfiguracao<any[]>('feriados', [])
+  }, [dbLocalidades, selectedTeamId, teamInfo, dbSetoresEquipes, allTeams, currentDate, feriados])
   const { data: dbTiposEscala } = useConfiguracao<TipoEscala[]>('tipos_escala', DEFAULT_TIPOS_ESCALA)
   const tiposEscala = useMemo(() => {
     const list = [...(dbTiposEscala || DEFAULT_TIPOS_ESCALA)]
