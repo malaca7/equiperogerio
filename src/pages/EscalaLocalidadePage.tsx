@@ -3067,22 +3067,12 @@ export function EscalaLocalidadePage() {
 
                 <div className="flex items-center gap-2 w-full xl:w-auto overflow-x-auto scrollbar-none pb-2 xl:pb-0 hide-scrollbar">
                   {canEdit && (
-                    <>
-                      <button 
-                        onClick={handleRestoreWipedAllocations} 
-                        disabled={isCopyLoading}
-                        className="flex-1 xl:flex-none min-w-[150px] h-12 sm:h-14 px-4 sm:px-6 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
-                        title="Restaurar alocações anteriores de todos os colaboradores"
-                      >
-                        <RotateCcw className="w-4 h-4" /> {isCopyLoading ? 'Restaurando...' : 'Restaurar Alocações'}
-                      </button>
-                      <button 
-                        onClick={() => { setIsCopyModalOpen(true); setCopyPreview(null); setCopySourceDate('') }} 
-                        className="flex-1 xl:flex-none min-w-[150px] h-12 sm:h-14 px-4 sm:px-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
-                      >
-                        <ClipboardCopy className="w-4 h-4" /> Copiar Modelo
-                      </button>
-                    </>
+                    <button 
+                      onClick={() => { setIsCopyModalOpen(true); setCopyPreview(null); setCopySourceDate('') }} 
+                      className="flex-1 xl:flex-none min-w-[150px] h-12 sm:h-14 px-4 sm:px-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
+                    >
+                      <ClipboardCopy className="w-4 h-4" /> Copiar Modelo
+                    </button>
                   )}
                   <button onClick={handlePrint} className="h-12 w-12 sm:h-14 sm:w-14 bg-muted/50 rounded-[1.25rem] flex items-center justify-center hover:bg-card border border-border/30 active:scale-90 transition-all shrink-0" title="Compartilhar Imagem"><Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" /></button>
                   <button 
