@@ -927,12 +927,12 @@ export function EscalaLocalidadePage() {
       tipo = isDomingo ? 'repouso' : 'presente'
     }
 
-    // An employee is "allocated" only if they have an escala record with a VALID existing localidade
-    const isValidLocality = !!(e && e.localidade && localidadesConfig.some(l => l.nome.trim().toLowerCase() === e.localidade.trim().toLowerCase()))
+    // An employee is "allocated" only if they have an escala record with a VALID existing localidade in dbLocalidades
+    const isValidLocality = !!(e && e.localidade && dbLocalidades.some(l => l.nome.trim().toLowerCase() === e.localidade.trim().toLowerCase()))
     const isAlocado = !isDesligado && isValidLocality
 
     return { isTrabalhando, tipo, escala: e, isAlocado, hasOrphanedLocality: !!(e && e.localidade && !isValidLocality) }
-  }, [escalaMap, allFuncionarios, localidadesConfig])
+  }, [escalaMap, allFuncionarios, dbLocalidades])
 
   // Logic for daily view: locality -> employees
   const dailyDistribution = useMemo(() => {
@@ -2074,18 +2074,19 @@ export function EscalaLocalidadePage() {
     setHasAutoRouted(true)
   }, [loadF, loadE, loadTeam, hasAutoRouted, currentDate, escalas, filteredFuncionarios, escalaMap, selectedTeamId, selectedTeamMembers, teamInfo])
 
-  // ── AUTO-CLEAN ORPHANED LOCALITIES (e.g. when a locality/sector was deleted) ──
+  // ── AUTO-CLEAN ORPHANED LOCALITIES (only when a locality was permanently deleted from dbLocalidades) ──
   useEffect(() => {
-    if (!escalas || escalas.length === 0 || localidadesConfig.length === 0) return
+    if (!escalas || escalas.length === 0 || !dbLocalidades || dbLocalidades.length === 0) return
 
     const orphanedEscalas = (escalas as any[]).filter(e => {
       if (!e.localidade) return false
       const locName = e.localidade.trim().toLowerCase()
-      return !localidadesConfig.some(l => l.nome.trim().toLowerCase() === locName)
+      // Only clean up if locality was permanently deleted from dbLocalidades!
+      return !dbLocalidades.some(l => l.nome.trim().toLowerCase() === locName)
     })
 
     if (orphanedEscalas.length > 0) {
-      console.log(`Auto-cleaning ${orphanedEscalas.length} orphaned escala allocations...`, orphanedEscalas)
+      console.log(`Auto-cleaning ${orphanedEscalas.length} orphaned escala allocations for deleted localities...`, orphanedEscalas)
       const updates = orphanedEscalas.map(e => {
         const { funcionarios, ...cleanData } = e
         return { ...cleanData, localidade: null }
@@ -2097,7 +2098,7 @@ export function EscalaLocalidadePage() {
         console.warn('Error auto-cleaning orphaned escalas:', err)
       })
     }
-  }, [escalas, localidadesConfig])
+  }, [escalas, dbLocalidades])
 
   // ── COPY FROM DAY HANDLER ──
   const handlePreviewCopyFromDay = async () => {
