@@ -87,6 +87,7 @@ export function EquipesPage() {
   // Permissão de gerenciamento global (Admin / Gerente Geral)
   const hasGlobalManage = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'administrar') || hasPermission('funcionarios', 'gerenciar') || !!user?.isAdmin
   const isEncarregado = (userTeam?.isRestricted ?? false) || (user?.roles?.some(r => r.nome.toUpperCase().includes('ENCARREGADO')) ?? false)
+  const isEncarregadoOnly = !hasGlobalManage && isEncarregado
   const userTeamIds = userTeam?.teamIds ?? []
 
   const canEdit = hasGlobalManage || isEncarregado
@@ -694,10 +695,10 @@ export function EquipesPage() {
 
   return (
     <div className="space-y-6 animate-fade-in pb-32">
-      <TopHeader title={isEncarregado ? 'Minha Equipe' : 'Equipes e Regiões'} subtitle={isEncarregado ? 'Gerencie os membros da sua equipe' : 'Gerenciamento operacional de equipes'} />
+      <TopHeader title={isEncarregadoOnly ? 'Minha Equipe' : 'Equipes e Regiões'} subtitle={isEncarregadoOnly ? 'Gerencie os membros da sua equipe' : 'Gerenciamento operacional de equipes'} />
 
       {/* Tab Switcher - only for admins */}
-      {!isEncarregado && (
+      {!isEncarregadoOnly && (
         <div className="px-4">
           <div className="flex bg-muted/30 p-1.5 rounded-[1.75rem] border border-border/50 w-full max-w-md">
             <button onClick={() => setActiveTab('equipes')}
@@ -725,7 +726,7 @@ export function EquipesPage() {
               <input type="text" placeholder="Buscar equipe..." value={search} onChange={e => setSearch(e.target.value)}
                 className="w-full pl-11 pr-4 py-3 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold focus:ring-0 focus:border-primary/30 outline-none" />
             </div>
-            {canEdit && !isEncarregado && (
+            {canAdmin && (
               <div className="flex gap-2">
                 <Button onClick={handleSyncAll} loading={syncing}
                   className="h-12 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-xs tracking-wider shadow-lg shadow-emerald-600/20">
@@ -760,18 +761,16 @@ export function EquipesPage() {
                       </div>
                       {eq.descricao && <p className="text-[10px] text-muted-foreground truncate">{eq.descricao}</p>}
                     </div>
-                    {canEdit && !isEncarregado && (
+                    {canAdmin && (
                       <div className="flex gap-1">
                         <button onClick={() => { setForm({ nome: eq.nome || '', descricao: eq.descricao || '', cor: eq.cor || COLORS[0], regiao_id: eq.regiao_id || '' }); setEditModal(eq) }}
-                          className="w-9 h-9 rounded-xl bg-muted/50 text-muted-foreground hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-all">
+                          className="w-9 h-9 rounded-xl bg-muted/50 text-muted-foreground hover:text-primary hover:bg-primary/10 flex items-center justify-center transition-all" title="Editar equipe">
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        {canAdmin && (
-                          <button onClick={() => { if (confirm('Excluir equipe?')) deleteMut.mutate(eq.id) }}
-                            className="w-9 h-9 rounded-xl bg-muted/50 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 flex items-center justify-center transition-all">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button onClick={() => { if (confirm('Excluir equipe?')) deleteMut.mutate(eq.id) }}
+                          className="w-9 h-9 rounded-xl bg-muted/50 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 flex items-center justify-center transition-all" title="Excluir equipe">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     )}
                   </div>
@@ -805,7 +804,7 @@ export function EquipesPage() {
                     {canManageTeam(eq.id) && (
                       <Button onClick={() => { setSelectedEquipeId(eq.id); setTab('membros'); setMemSearch('') }}
                         className="flex-1 h-10 rounded-xl bg-primary/10 text-primary font-black text-[11px] uppercase tracking-wider hover:bg-primary/20 transition-all flex items-center justify-center">
-                        <UserCheck className="w-3.5 h-3.5 mr-1.5" /> {isEncarregado ? "Membros" : "Gerenciar"}
+                        <UserCheck className="w-3.5 h-3.5 mr-1.5" /> {isEncarregadoOnly ? "Membros" : "Gerenciar"}
                       </Button>
                     )}
                     <Link
@@ -985,8 +984,8 @@ export function EquipesPage() {
         >
           <div className="space-y-5">
             {/* Tabs */}
-            <div className={cn("grid gap-1.5 p-1 bg-muted/40 rounded-2xl border border-border/30", isEncarregado ? "grid-cols-3" : "grid-cols-4")}>
-              {(isEncarregado 
+            <div className={cn("grid gap-1.5 p-1 bg-muted/40 rounded-2xl border border-border/30", isEncarregadoOnly ? "grid-cols-3" : "grid-cols-4")}>
+              {(isEncarregadoOnly 
                 ? (['membros', 'setores', 'localidades'] as const)
                 : (['membros', 'encarregados', 'setores', 'localidades'] as const)
               ).map(t => {
@@ -1174,7 +1173,7 @@ export function EquipesPage() {
                             <p className="text-[9px] text-muted-foreground uppercase font-black tracking-wider mt-0.5">Perfil de Usuário</p>
                           </div>
                         </div>
-                        {canManageTeam(manageModal.id) && !isEncarregado && (
+                        {canManageTeam(manageModal.id) && !isEncarregadoOnly && (
                           <button 
                             onClick={() => addEncarregado.mutate({ equipeId: manageModal.id, userId: p.id })}
                             disabled={addEncarregado.isPending}
