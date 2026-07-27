@@ -84,11 +84,20 @@ export function EquipesPage() {
   const { hasPermission, user } = useAuth()
   const { data: userTeam, isLoading: isLoadingUserTeam } = useUserTeam()
   
+  // Permissão de gerenciamento global (Admin / Gerente Geral)
+  const hasGlobalManage = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'administrar') || hasPermission('funcionarios', 'gerenciar') || !!user?.isAdmin
   const isEncarregado = (userTeam?.isRestricted ?? false) || (user?.roles?.some(r => r.nome.toUpperCase().includes('ENCARREGADO')) ?? false)
   const userTeamIds = userTeam?.teamIds ?? []
 
-  const canEdit = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'editar') || hasPermission('funcionarios', 'gerenciar') || isEncarregado
-  const canAdmin = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'administrar') || hasPermission('funcionarios', 'gerenciar') || isEncarregado
+  const canEdit = hasGlobalManage || isEncarregado
+  const canAdmin = hasGlobalManage
+
+  // O cargo com permissão de gerenciamento pode gerenciar todas as equipes.
+  // O cargo com permissão de visualização só gerencia a equipe da qual ele for encarregado.
+  const canManageTeam = (equipeId: string) => {
+    if (hasGlobalManage) return true
+    return userTeamIds.includes(equipeId)
+  }
 
   const { data: equipes = [], isLoading: isLoadingEquipes } = useEquipes()
   const { data: regioes = [], isLoading: isLoadingRegioes } = useRegioes()
@@ -400,17 +409,13 @@ export function EquipesPage() {
   const [newLocSchedule, setNewLocSchedule] = useState<'segunda_sabado' | 'domingo_feriado' | 'todos'>('segunda_sabado')
 
   const filtered = equipes
-    .filter(eq => isEncarregado ? userTeamIds.includes(eq.id) : true)
+    .filter(eq => {
+      if (hasGlobalManage) return true
+      if (isEncarregado && userTeamIds.length > 0) return userTeamIds.includes(eq.id)
+      return true
+    })
     .filter(eq => eq.nome.toLowerCase().includes(search.toLowerCase()))
   const filteredRegioes = regioes.filter(r => r.nome.toLowerCase().includes(searchRegiao.toLowerCase()))
-
-  // Helper: can this user manage a specific team?
-  const canManageTeam = (equipeId: string) => {
-    if (isEncarregado) {
-      return userTeamIds.includes(equipeId)
-    }
-    return canEdit
-  }
 
   // All funcionário IDs already assigned as members in any team
   const assignedMemberIds = new Set(equipes.flatMap(eq => eq.membros.map(m => m.id)))
