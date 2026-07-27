@@ -55,7 +55,8 @@ import {
   XCircle,
   AlertCircle,
   Route,
-  Sparkles
+  Sparkles,
+  RotateCcw
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { TopHeader } from '../components/layout/TopHeader'
@@ -2263,6 +2264,113 @@ export function EscalaLocalidadePage() {
     }
   }
 
+  const handleRestoreWipedAllocations = async () => {
+    setIsCopyLoading(true)
+    try {
+      // 1. Fetch most recent non-null locality for all active employees over past 60 days
+      const { data: historicData, error: histErr } = await supabase
+        .from('escalas')
+        .select('funcionario_id, localidade, data')
+        .not('localidade', 'is', null)
+        .order('data', { ascending: false })
+
+      if (histErr) throw histErr
+
+      const lastKnownLocalityMap: Record<string, string> = {}
+      if (historicData) {
+        historicData.forEach((row: any) => {
+          if (row.funcionario_id && row.localidade && !lastKnownLocalityMap[row.funcionario_id]) {
+            const locExists = dbLocalidades.some(l => l.nome.trim().toLowerCase() === row.localidade.trim().toLowerCase())
+            if (locExists) {
+              lastKnownLocalityMap[row.funcionario_id] = row.localidade
+            }
+          }
+        })
+      }
+
+      // Map team -> localities
+      const teamLocsMap: Record<string, string[]> = {}
+      dbLocalidades.forEach((l: any) => {
+        if (l.equipe_id) {
+          if (!teamLocsMap[l.equipe_id]) teamLocsMap[l.equipe_id] = []
+          teamLocsMap[l.equipe_id].push(l.nome)
+        }
+      })
+
+      // Fetch current week/period's escalas
+      const { data: currentEscalas, error: currErr } = await supabase
+        .from('escalas')
+        .select('*')
+        .gte('data', fetchStart)
+        .lte('data', fetchEnd)
+
+      if (currErr) throw currErr
+
+      const updates: any[] = []
+      let restoredCount = 0
+
+      const currentMap: Record<string, any> = {}
+      if (currentEscalas) {
+        currentEscalas.forEach((e: any) => {
+          currentMap[`${e.funcionario_id}_${e.data}`] = e
+        })
+      }
+
+      const weekDates = eachDayOfInterval({
+        start: parseISO(fetchStart),
+        end: parseISO(fetchEnd)
+      }).map(d => format(d, 'yyyy-MM-dd'))
+
+      filteredFuncionarios.forEach((f: any) => {
+        if (f.cargo?.toLowerCase() === 'encarregado') return
+
+        const empTeam = allTeams.find((t: any) => t.membros?.some((m: any) => m.id === f.id))
+        const empTeamLocs = empTeam?.id ? (teamLocsMap[empTeam.id] || []) : []
+        const targetLocality = lastKnownLocalityMap[f.id] || empTeamLocs[0] || null
+
+        if (!targetLocality) return
+
+        weekDates.forEach(dStr => {
+          const dObj = parseLocalDate(dStr)
+          if (isSunday(dObj)) return // Skip Sundays for auto-restore unless configured
+
+          const existingEscala = currentMap[`${f.id}_${dStr}`]
+          if (existingEscala) {
+            if (!existingEscala.localidade) {
+              const { funcionarios, ...cleanData } = existingEscala
+              updates.push({
+                ...cleanData,
+                localidade: targetLocality
+              })
+              restoredCount++
+            }
+          } else {
+            updates.push({
+              funcionario_id: f.id,
+              data: dStr,
+              tipo: 'presente',
+              localidade: targetLocality
+            })
+            restoredCount++
+          }
+        })
+      })
+
+      if (updates.length === 0) {
+        toast('Nenhuma alocação pendente de restauração para este período.', 'info')
+        return
+      }
+
+      await batchMutation.mutateAsync({ items: updates, skipFreqSync: true })
+      await queryClient.invalidateQueries({ queryKey: ['escalas'] })
+      toast(`Alocações restauradas com sucesso! (${restoredCount} registros recuperados)`, 'success')
+    } catch (err: any) {
+      toast('Erro ao restaurar alocações: ' + err.message, 'error')
+    } finally {
+      setIsCopyLoading(false)
+    }
+  }
+
   const handleConfirmCopyFromDay = async () => {
     if (!copyPreview) return
     try {
@@ -2959,12 +3067,22 @@ export function EscalaLocalidadePage() {
 
                 <div className="flex items-center gap-2 w-full xl:w-auto overflow-x-auto scrollbar-none pb-2 xl:pb-0 hide-scrollbar">
                   {canEdit && (
-                    <button 
-                      onClick={() => { setIsCopyModalOpen(true); setCopyPreview(null); setCopySourceDate('') }} 
-                      className="flex-1 xl:flex-none min-w-[150px] h-12 sm:h-14 px-4 sm:px-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
-                    >
-                      <ClipboardCopy className="w-4 h-4" /> Copiar Modelo
-                    </button>
+                    <>
+                      <button 
+                        onClick={handleRestoreWipedAllocations} 
+                        disabled={isCopyLoading}
+                        className="flex-1 xl:flex-none min-w-[150px] h-12 sm:h-14 px-4 sm:px-6 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
+                        title="Restaurar alocações anteriores de todos os colaboradores"
+                      >
+                        <RotateCcw className="w-4 h-4" /> {isCopyLoading ? 'Restaurando...' : 'Restaurar Alocações'}
+                      </button>
+                      <button 
+                        onClick={() => { setIsCopyModalOpen(true); setCopyPreview(null); setCopySourceDate('') }} 
+                        className="flex-1 xl:flex-none min-w-[150px] h-12 sm:h-14 px-4 sm:px-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
+                      >
+                        <ClipboardCopy className="w-4 h-4" /> Copiar Modelo
+                      </button>
+                    </>
                   )}
                   <button onClick={handlePrint} className="h-12 w-12 sm:h-14 sm:w-14 bg-muted/50 rounded-[1.25rem] flex items-center justify-center hover:bg-card border border-border/30 active:scale-90 transition-all shrink-0" title="Compartilhar Imagem"><Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" /></button>
                   <button 
