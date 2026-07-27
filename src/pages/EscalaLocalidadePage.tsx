@@ -1057,9 +1057,7 @@ export function EscalaLocalidadePage() {
     }
 
     if (mode === 'apenas_localidades') {
-      let text = `📍 *LOCALIDADES E COLABORADORES* 📍\n`
-      text += `📅 *DATA:* ${dateText}\n`
-      text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
+      let text = `📍 ESCALA 📅 ${dateText.toUpperCase()}\n\n`
 
       let totalSectionsCount = 0
 
@@ -1070,22 +1068,24 @@ export function EscalaLocalidadePage() {
 
         totalSectionsCount++
 
-        const namesList = activeMembers.map((m: any) => {
-          const isLider = m.id === equipesMeta[loc.id]?.lider_id
-          const name = getEmployeeDisplayName(m)
-          return `${name}${isLider ? ' (LÍDER)' : ''}`
-        }).join(' / ')
+        const names = activeMembers.map((m: any) => getEmployeeDisplayName(m).toUpperCase())
+        let formattedNames = ''
+        if (names.length === 1) {
+          formattedNames = names[0]
+        } else if (names.length === 2) {
+          formattedNames = `${names[0]} e ${names[1]}`
+        } else if (names.length > 2) {
+          formattedNames = `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`
+        }
 
-        text += `📍 *${loc.nome.toUpperCase()}*\n`
-        text += `${namesList}\n`
+        text += `📍 ${loc.nome}: ${formattedNames}\n`
       })
 
       if (totalSectionsCount === 0) {
-        text += `⚠️ NENHUMA ALOCAÇÃO ATIVA HOJE.\n\n`
+        text += `⚠️ NENHUMA ALOCAÇÃO ATIVA HOJE.\n`
       }
 
-      text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-      return text.toUpperCase()
+      return text
     }
 
     if (mode === 'tipo_equipe') {
