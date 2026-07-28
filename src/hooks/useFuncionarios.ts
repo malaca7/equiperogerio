@@ -23,7 +23,8 @@ export function useFuncionarios(filters?: { setor?: string; status?: string; sea
         query = query.eq('setor', filters.setor)
       }
       if (filters?.search) {
-        query = query.or(`nome.ilike.%${filters.search}%,matricula.ilike.%${filters.search}%`)
+        const s = filters.search.trim()
+        query = query.or(`nome.ilike.%${s}%,apelido.ilike.%${s}%,matricula.ilike.%${s}%,cpf.ilike.%${s}%,cargo.ilike.%${s}%,setor.ilike.%${s}%`)
       }
 
       const { data, error } = await query

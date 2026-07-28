@@ -177,8 +177,19 @@ export function FuncionariosPage() {
   }, [teamInfo])
 
   const filteredFuncionarios = React.useMemo(() => {
-    return funcionarios
-  }, [funcionarios])
+    if (!search || !search.trim()) return funcionarios
+    const q = search.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+    return funcionarios.filter(f => {
+      const matchNome = (f.nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
+      const matchApelido = (f.apelido || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
+      const matchMatricula = (f.matricula || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
+      const matchCpf = (f.cpf || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
+      const matchCargo = (f.cargo || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
+      const matchSetor = (f.setor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
+      return matchNome || matchApelido || matchMatricula || matchCpf || matchCargo || matchSetor
+    })
+  }, [funcionarios, search])
 
   const stats = React.useMemo(() => {
     const total = filteredFuncionarios.length
