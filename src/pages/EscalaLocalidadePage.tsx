@@ -3611,7 +3611,7 @@ export function EscalaLocalidadePage() {
                                                   <span className={cn("text-xs font-black truncate uppercase tracking-tight", 
                                                     m.tipo === 'falta' ? "text-rose-600" : isLider ? "text-amber-500" : textClass
                                                   )}>
-                                                    {m.apelido || m.nome}
+                                                    {m.apelido?.trim() ? m.apelido : m.nome}
                                                   </span>
                                                   {isLider && m.tipo !== 'falta' && (
                                                     <span className="text-[7px] font-black bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/20 uppercase tracking-widest leading-none">

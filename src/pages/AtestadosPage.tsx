@@ -959,7 +959,14 @@ export function AtestadosPage() {
                         {func?.nome?.charAt(0) || '?'}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="text-sm font-black text-foreground truncate tracking-tight">{func?.nome || 'Colaborador'}</h4>
+                        <h4 className="text-sm font-black text-foreground truncate tracking-tight uppercase">
+                          {func?.apelido?.trim() ? func.apelido : (func?.nome || 'Colaborador')}
+                        </h4>
+                        {func?.apelido?.trim() && func.apelido.trim().toLowerCase() !== func.nome?.trim().toLowerCase() && (
+                          <p className="text-[9.5px] font-medium text-muted-foreground/80 truncate leading-tight uppercase">
+                            {func.nome}
+                          </p>
+                        )}
                         <p className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-widest mt-0.5">{func?.setor || 'Sem Setor'}</p>
                       </div>
                     </div>

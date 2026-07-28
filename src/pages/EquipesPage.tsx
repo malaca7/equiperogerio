@@ -1027,7 +1027,10 @@ export function EquipesPage() {
                             {m.nome.charAt(0)}
                           </div>
                           <div>
-                            <p className="text-xs font-black text-foreground">{m.apelido || m.nome}</p>
+                            <p className="text-xs font-black text-foreground">{m.apelido?.trim() ? m.apelido : m.nome}</p>
+                            {m.apelido?.trim() && m.apelido.trim().toLowerCase() !== m.nome.trim().toLowerCase() && (
+                              <p className="text-[9.5px] font-medium text-muted-foreground/80 leading-tight uppercase">{m.nome}</p>
+                            )}
                             <p className="text-[9px] text-muted-foreground uppercase font-black tracking-wider mt-0.5">{m.cargo || 'Funcionário'}</p>
                           </div>
                         </div>

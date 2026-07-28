@@ -1255,7 +1255,14 @@ export function FrequenciaPage() {
                                 </div>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs sm:text-sm font-black text-foreground truncate leading-tight tracking-tight uppercase">{member.apelido || member.nome}</p>
+                                <p className="text-xs sm:text-sm font-black text-foreground truncate leading-tight tracking-tight uppercase">
+                                  {member.apelido?.trim() ? member.apelido : member.nome}
+                                </p>
+                                {member.apelido?.trim() && member.apelido.trim().toLowerCase() !== member.nome.trim().toLowerCase() && (
+                                  <p className="text-[9.5px] font-medium text-muted-foreground/80 truncate leading-tight uppercase">
+                                    {member.nome}
+                                  </p>
+                                )}
                                 <div className="flex flex-wrap items-center gap-1 mt-1">
                                   <Badge variant="default" className="text-[7px] sm:text-[8px] font-black uppercase px-1.5 py-0.5 bg-muted/40 text-muted-foreground/60 border-transparent shrink-0">
                                     {member.cargo}
