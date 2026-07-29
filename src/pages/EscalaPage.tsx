@@ -1159,8 +1159,8 @@ export function EscalaPage() {
       ctx.font = 'bold 9px Arial, Helvetica, sans-serif'
       for (const item of legendItems) {
         const itemId = (item as any).id
-        const letra = itemId === 'repouso' ? 'D' : (item as any).letra
-        const nome = (item as any).nome
+        const letra = itemId === 'repouso' ? 'R/D' : (item as any).letra
+        const nome = itemId === 'repouso' ? 'Repouso (R) / Descanso (D)' : (item as any).nome
         const label = `${letra}: ${nome}`
         const colors = statusColors[itemId] || defaultColor
         const tw = ctx.measureText(label).width + 28 // extra space for color dot
@@ -1329,7 +1329,8 @@ export function EscalaPage() {
           // Badge text
           ctx.fillStyle = colors.text
           ctx.font = 'bold 10px Arial, Helvetica, sans-serif'
-          const badgeText = isInactive ? 'DESL' : (tipo.id === 'repouso' ? 'D' : (tipo as any).letra || tipo.id.substring(0, 2).toUpperCase())
+          const isSunOrFeriado = isSun || !!feriado
+          const badgeText = isInactive ? 'DESL' : (tipo.id === 'repouso' ? (isSunOrFeriado ? 'D' : 'R') : (tipo as any).letra || tipo.id.substring(0, 2).toUpperCase())
           const badgeTextW = ctx.measureText(badgeText).width
           ctx.fillText(badgeText, badgeX + BADGE_SIZE / 2 - badgeTextW / 2, badgeY + BADGE_SIZE / 2 + 4)
 
@@ -1927,7 +1928,7 @@ export function EscalaPage() {
                                     tipo.bg, tipo.text,
                                     "border-black/5 hover:scale-105 active:scale-95"
                                   )}>
-                                    {tipo.id === 'repouso' ? 'D' : tipo.letra}
+                                    {tipo.id === 'repouso' ? ((isSun || feriado) ? 'D' : 'R') : tipo.letra}
                                      {escala?.observacoes?.includes('[ADVERTÊNCIA]') && !isSharing && (
                                        <div 
                                          className={cn(

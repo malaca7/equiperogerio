@@ -397,10 +397,10 @@ export function EscalaSemanalPrint() {
                                       ? `text-xs shadow-md ${cfg.bg} ${cfg.text}` 
                                       : "border-2 border-transparent text-muted-foreground/30"
                                   )}>
-                                    {cfg && resolvedTipoId !== 'presente' 
-                                      ? ((resolvedTipoId === 'repouso' && (isSunday(day) || getFeriado(day))) ? 'D' : cfg.letra)
-                                      : (resolvedTipoId === 'presente' && !isSharing ? '·' : '')
-                                    }
+                                     {cfg && resolvedTipoId !== 'presente' 
+                                       ? ((resolvedTipoId === 'repouso' && (isSunday(day) || getFeriado(day))) ? 'D' : (resolvedTipoId === 'repouso' ? 'R' : cfg.letra))
+                                       : (resolvedTipoId === 'presente' && !isSharing ? '·' : '')
+                                     }
                                     {hasWarning && (
                                       <div className="absolute w-3.5 h-3.5 -bottom-1 -left-1 bg-amber-500 text-white flex items-center justify-center rounded-full border border-white p-[0.5px]">
                                         <AlertTriangle className="w-full h-full" strokeWidth={4} />

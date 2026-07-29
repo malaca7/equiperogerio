@@ -63,7 +63,7 @@ export const DEFAULT_LOCALIDADES: Localidade[] = [
 export const DEFAULT_TIPOS_ESCALA: TipoEscala[] = [
   { id: 'presente', letra: 'T', nome: 'Trabalho', bg: 'bg-blue-500', text: 'text-white', ring: 'ring-blue-400' },
   { id: 'hora_extra', letra: 'HE', nome: 'Hora Extra', bg: 'bg-blue-500', text: 'text-white', ring: 'ring-blue-400' },
-  { id: 'repouso', letra: 'D', nome: 'Descanso', bg: 'bg-amber-400', text: 'text-amber-900', ring: 'ring-amber-300' },
+  { id: 'repouso', letra: 'R', nome: 'Repouso / Descanso', bg: 'bg-amber-400', text: 'text-amber-900', ring: 'ring-amber-300' },
   { id: 'compensar', letra: 'F', nome: 'Folga', bg: 'bg-emerald-500', text: 'text-white', ring: 'ring-emerald-400' },
   { id: 'ferias', letra: 'FE', nome: 'Férias', bg: 'bg-purple-500', text: 'text-white', ring: 'ring-purple-400' },
   { id: 'atestado', letra: 'A', nome: 'Afastamento', bg: 'bg-red-500', text: 'text-white', ring: 'ring-red-400' },

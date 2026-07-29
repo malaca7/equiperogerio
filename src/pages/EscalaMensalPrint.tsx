@@ -393,8 +393,8 @@ export function EscalaMensalPrint() {
                                       : "border border-transparent text-muted-foreground/30 text-[10px]"
                                   )}>
                                     {cfg && resolvedTipoId !== 'presente' 
-                                      ? ((resolvedTipoId === 'repouso' && (isSun || getFeriado(day))) ? 'D' : cfg.letra)
-                                      : (resolvedTipoId === 'presente' && !isSharing ? '·' : '')
+                                       ? ((resolvedTipoId === 'repouso' && (isSun || getFeriado(day))) ? 'D' : (resolvedTipoId === 'repouso' ? 'R' : cfg.letra))
+                                       : (resolvedTipoId === 'presente' && !isSharing ? '·' : '')
                                     }
                                     {hasWarning && (
                                       <div className="absolute w-2.5 h-2.5 -bottom-0.5 -left-0.5 bg-amber-500 text-white flex items-center justify-center rounded-full border border-white p-[0.5px]">
