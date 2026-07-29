@@ -3827,7 +3827,14 @@ export function EscalaLocalidadePage() {
                                 <div className="flex items-center justify-between w-full gap-2">
                                   <div className="flex items-center gap-2 text-[10px] font-black min-w-0 flex-1">
                                     <GripVertical className="w-3.5 h-3.5 text-muted-foreground/45 shrink-0" />
-                                    <span className="truncate">{f.apelido || f.nome}</span>
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                       <span className="truncate text-xs font-black uppercase">{f.apelido?.trim() ? f.apelido : f.nome}</span>
+                                       {f.apelido?.trim() ? (
+                                         <span className="text-[9px] font-semibold text-muted-foreground/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">{f.nome}</span>
+                                       ) : (
+                                         <span className="text-[9px] font-semibold text-primary/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">Apelido: {f.nome.split(' ')[0]}</span>
+                                       )}
+                                     </div>
                                   </div>
                                   {borrowedMembers.some((bm: any) => bm.funcionario_id === f.id) && canEdit && (
                                     <button
@@ -4121,7 +4128,18 @@ export function EscalaLocalidadePage() {
                               {(member.apelido || member.nome).substring(0, 2).toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-black text-foreground truncate uppercase">{member.apelido || member.nome}</p>
+                              <p className="text-xs font-black text-foreground truncate uppercase">
+                                {member.apelido?.trim() ? member.apelido : member.nome}
+                              </p>
+                              {member.apelido?.trim() ? (
+                                <p className="text-[9px] font-semibold text-muted-foreground/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">
+                                  {member.nome}
+                                </p>
+                              ) : (
+                                <p className="text-[9px] font-semibold text-primary/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">
+                                  Apelido: {member.nome.split(' ')[0]}
+                                </p>
+                              )}
                               <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                 <p className={cn("text-[9px] font-black uppercase tracking-tighter mr-2", group.color)}>{member.tipoPlanejado}</p>
                                 {employeeTeamMap[member.id]?.map(t => (
