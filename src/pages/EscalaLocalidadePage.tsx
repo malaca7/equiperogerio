@@ -2160,20 +2160,48 @@ export function EscalaLocalidadePage() {
 
       // Count occurrences of localidade for each employee over last 10 days
       const employeeHistory: Record<string, Record<string, number>> = {}
+      // Group daily allocations per locality to calculate historical average capacity per locality
+      const locDailyCounts: Record<string, Record<string, number>> = {}
+
       if (historyData) {
         historyData.forEach((row: any) => {
           if (!row.funcionario_id || !row.localidade) return
+          const loc = row.localidade.trim()
+          const dStrRow = row.data ? row.data.substring(0, 10) : ''
+
+          // Employee locality history
           if (!employeeHistory[row.funcionario_id]) {
             employeeHistory[row.funcionario_id] = {}
           }
-          const loc = row.localidade
           employeeHistory[row.funcionario_id][loc] = (employeeHistory[row.funcionario_id][loc] || 0) + 1
+
+          // Daily locality headcount history
+          if (dStrRow) {
+            if (!locDailyCounts[loc]) locDailyCounts[loc] = {}
+            locDailyCounts[loc][dStrRow] = (locDailyCounts[loc][dStrRow] || 0) + 1
+          }
         })
       }
 
+      // Calculate average target capacity (number of employees) for each locality over active days
+      const locTargetCapacity: Record<string, number> = {}
+      localidadesConfig.forEach(l => {
+        const locName = l.nome.trim()
+        const dailyMap = locDailyCounts[locName]
+        if (dailyMap && Object.keys(dailyMap).length > 0) {
+          const counts = Object.values(dailyMap)
+          const totalAllocated = counts.reduce((a, b) => a + b, 0)
+          const activeDays = counts.length
+          // Average headcount per active day for this locality (minimum 1)
+          locTargetCapacity[locName] = Math.max(1, Math.round(totalAllocated / activeDays))
+        } else {
+          locTargetCapacity[locName] = 1
+        }
+      })
+
       const activeFuncs = filteredFuncionarios.filter(f => f.cargo?.toLowerCase() !== 'encarregado')
       
-      // Structure for allocations per locality (max 2 per locality)
+      // Structure for allocations per locality (dynamic capacity per locality based on 10-day average)
       const locAllocations: Record<string, { funcionarioId: string; funcionarioNome: string; count: number }[]> = {}
       localidadesConfig.forEach(l => {
         locAllocations[l.nome] = []
@@ -2191,15 +2219,16 @@ export function EscalaLocalidadePage() {
 
         for (const [locName, count] of candidates) {
           const current = locAllocations[locName] || []
+          const cap = locTargetCapacity[locName] || 1
 
-          // Se a localidade possui menos de 2 pessoas, aloca diretamente
-          if (current.length < 2) {
+          // Se a localidade possui menos que sua capacidade média, aloca diretamente
+          if (current.length < cap) {
             locAllocations[locName] = [...current, { funcionarioId: funcId, funcionarioNome: funcName, count }]
             return true
           }
 
-          // Se a localidade ja possui 2 pessoas (nunca alocar 3), verifica se este colaborador tem frequencia maior que o menor frequente
-          if (current.length >= 2) {
+          // Se a localidade já atingiu sua capacidade média, verifica se este colaborador tem frequência maior que o menor frequente
+          if (current.length >= cap && cap > 0) {
             const minPerson = current.reduce((min, p) => p.count < min.count ? p : min, current[0])
             if (count > minPerson.count) {
               // Substitui o menos frequente nesta localidade
@@ -2214,7 +2243,7 @@ export function EscalaLocalidadePage() {
           }
         }
 
-        // Se nao couber em nenhuma localidade primaria com historico, tenta outra localidade de setor diferente que tenha vaga (<2)
+        // Se nao couber em nenhuma localidade primaria com historico, tenta outra localidade de setor diferente que tenha vaga (< cap)
         const histSectors = new Set(Object.keys(hist).map(locName => {
           const lObj = localidadesConfig.find(l => l.nome === locName)
           return lObj?.setor
@@ -2223,7 +2252,7 @@ export function EscalaLocalidadePage() {
         const alternativeLoc = localidadesConfig.find(l => 
           !excludeLocs.has(l.nome) && 
           !histSectors.has(l.setor) && 
-          (locAllocations[l.nome]?.length || 0) < 2
+          (locAllocations[l.nome]?.length || 0) < (locTargetCapacity[l.nome] || 1)
         )
 
         if (alternativeLoc) {
