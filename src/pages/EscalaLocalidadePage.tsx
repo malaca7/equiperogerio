@@ -2183,17 +2183,24 @@ export function EscalaLocalidadePage() {
         })
       }
 
-      // Calculate average target capacity (number of employees) for each locality over active days
+      // Calculate median target capacity (number of employees) for each locality over active days
       const locTargetCapacity: Record<string, number> = {}
       localidadesConfig.forEach(l => {
         const locName = l.nome.trim()
         const dailyMap = locDailyCounts[locName]
         if (dailyMap && Object.keys(dailyMap).length > 0) {
-          const counts = Object.values(dailyMap)
-          const totalAllocated = counts.reduce((a, b) => a + b, 0)
-          const activeDays = counts.length
-          // Average headcount per active day for this locality (minimum 1)
-          locTargetCapacity[locName] = Math.max(1, Math.round(totalAllocated / activeDays))
+          const counts = Object.values(dailyMap).sort((a, b) => a - b)
+          const n = counts.length
+          let median = 1
+          if (n % 2 === 1) {
+            median = counts[Math.floor(n / 2)]
+          } else {
+            const mid1 = counts[(n / 2) - 1]
+            const mid2 = counts[n / 2]
+            median = Math.round((mid1 + mid2) / 2)
+          }
+          // Median headcount per active day for this locality (minimum 1)
+          locTargetCapacity[locName] = Math.max(1, median)
         } else {
           locTargetCapacity[locName] = 1
         }
