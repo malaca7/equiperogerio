@@ -3660,6 +3660,15 @@ export function EscalaLocalidadePage() {
                                                     </span>
                                                   )}
                                                 </div>
+                                                {m.apelido?.trim() ? (
+                                                  <span className="text-[9px] font-semibold text-muted-foreground/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">
+                                                    {m.nome}
+                                                  </span>
+                                                ) : (
+                                                  <span className="text-[9px] font-semibold text-primary/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">
+                                                    Apelido: {m.nome.split(' ')[0]}
+                                                  </span>
+                                                )}
                                                 {funcaoConfig && (
                                                   <div className="mt-0.5 flex flex-wrap gap-1 items-center">
                                                     <span className={cn("text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border inline-block leading-none", 
