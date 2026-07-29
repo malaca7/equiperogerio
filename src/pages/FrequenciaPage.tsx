@@ -366,11 +366,16 @@ export function FrequenciaPage() {
     return [...result].sort((a, b) => {
       const teamA = allTeams.find(t => t.id === a.equipe_id)
       const teamB = allTeams.find(t => t.id === b.equipe_id)
-      const nameA = teamA ? teamA.nome : 'ZZZZZ'
-      const nameB = teamB ? teamB.nome : 'ZZZZZ'
-      const comp = nameA.localeCompare(nameB)
-      if (comp !== 0) return comp
-      return a.nome.localeCompare(b.nome)
+      
+      if (teamA && !teamB) return -1
+      if (!teamA && teamB) return 1
+      
+      if (teamA && teamB) {
+        const teamComp = teamA.nome.localeCompare(teamB.nome, 'pt-BR', { numeric: true, sensitivity: 'base' })
+        if (teamComp !== 0) return teamComp
+      }
+
+      return a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true, sensitivity: 'base' })
     })
   }, [dbLocalidades, selectedTeamId, teamInfo, dbSetoresEquipes, allTeams])
 

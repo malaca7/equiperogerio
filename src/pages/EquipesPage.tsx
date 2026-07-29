@@ -690,7 +690,11 @@ export function EquipesPage() {
 
   // Setores/localidades for the managed team
   const teamSetores = manageModal ? (setoresEquipes[manageModal.id] || []) : []
-  const teamLocalidades = manageModal ? allLocalidades.filter((l: any) => l.equipe_id === manageModal.id) : []
+  const teamLocalidades = manageModal 
+    ? allLocalidades.filter((l: any) => l.equipe_id === manageModal.id).sort((a: any, b: any) => 
+        (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { numeric: true, sensitivity: 'base' })
+      ) 
+    : []
   const sectorsForDropdown = teamSetores.length > 0 ? teamSetores : allSetores
 
   return (
