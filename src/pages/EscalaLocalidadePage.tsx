@@ -466,7 +466,9 @@ export function EscalaLocalidadePage() {
       coWorkerDays: number
       reason: string
     }[]>
-  }>({ recommendations: {} })
+  empLocHist?: Record<string, Record<string, number>>
+    pairHist?: Record<string, Record<string, number>>
+  }>({ recommendations: {}, empLocHist: {}, pairHist: {} })
   const [previewMode, setPreviewMode] = useState<'completo' | 'enxuto' | 'apenas_localidades' | 'tipo_equipe' | 'demandas_realizadas'>('completo')
 
   // Google Maps Geocoding Autocomplete State
@@ -1581,7 +1583,7 @@ export function EscalaLocalidadePage() {
         recs[fId].sort((a, b) => b.score - a.score)
       })
 
-      setAssistantData({ recommendations: recs })
+      setAssistantData({ recommendations: recs, empLocHist, pairHist })
     } catch (err) {
       console.error('Erro na assistência de alocação:', err)
     } finally {
@@ -1592,6 +1594,64 @@ export function EscalaLocalidadePage() {
   useEffect(() => {
     calculateAssistantRecommendations()
   }, [calculateAssistantRecommendations])
+
+  
+  const getBestCandidateForLocality = useCallback((locName: string, allocatedMembers: any[]) => {
+    if (!filteredAvailableFuncs || filteredAvailableFuncs.length === 0) return null
+
+    const allocatedIds = new Set(allocatedMembers.map(m => m.id))
+
+    let bestFunc: any = null
+    let maxScore = -1
+
+    filteredAvailableFuncs.forEach(f => {
+      if (allocatedIds.has(f.id)) return
+
+      const locDays = assistantData.empLocHist?.[f.id]?.[locName] || 0
+      
+      let coWorkerDays = 0
+      let topPartnerName: string | null = null
+      let topPartnerDays = 0
+
+      allocatedMembers.forEach(m => {
+        const daysTogether = assistantData.pairHist?.[f.id]?.[m.id] || 0
+        if (daysTogether > 0) {
+          coWorkerDays += daysTogether
+          if (daysTogether > topPartnerDays) {
+            topPartnerDays = daysTogether
+            topPartnerName = m.apelido || m.nome
+          }
+        }
+      })
+
+      const score = (locDays * 3) + (coWorkerDays * 5)
+
+      if (score > maxScore && (score > 0 || locDays > 0 || topPartnerDays > 0)) {
+        maxScore = score
+        const funcName = f.apelido || f.nome
+        let reason = ''
+        if (topPartnerName && topPartnerDays > 0 && locDays > 0) {
+          reason = `Trabalhou ${locDays}x aqui e ${topPartnerDays}x com ${topPartnerName}`
+        } else if (topPartnerName && topPartnerDays > 0) {
+          reason = `Trabalhou ${topPartnerDays}x em dupla com ${topPartnerName}`
+        } else if (locDays > 0) {
+          reason = `Trabalhou ${locDays}x nesta rota nos últimos 30 dias`
+        } else {
+          reason = `Disponível para alocação`
+        }
+
+        bestFunc = {
+          id: f.id,
+          name: funcName,
+          score,
+          reason
+        }
+      }
+    })
+
+    return bestFunc
+  }, [filteredAvailableFuncs, assistantData])
+
 
   const handleAutoAllocateAllWithAssistant = async () => {
     if (!filteredAvailableFuncs || filteredAvailableFuncs.length === 0) {
@@ -3156,6 +3216,48 @@ export function EscalaLocalidadePage() {
 
         {/* Headers Wrapper (Scrolls with content) */}
         <div className="space-y-4 mb-10">
+          {/* AI Copilot Intelligence Banner */}
+          <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 dark:from-amber-500/10 dark:to-orange-500/5 border border-amber-500/30 rounded-[2rem] p-4 sm:p-5 shadow-lg flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative overflow-hidden mb-6">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/25">
+                <Sparkles className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                    🤖 Copiloto IA de Alocação
+                  </span>
+                  <span className="text-[9px] font-bold text-muted-foreground uppercase hidden sm:inline">
+                    • Histórico de 30 dias & Duplas Frequentes
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm font-black text-foreground mt-1 uppercase tracking-tight">
+                  {filteredAvailableFuncs.length} Efetivos Avulsos • {localidadesConfig.filter(l => (dailyDistribution[l.id] || []).length === 0).length} Localidades Sem Alocação
+                </p>
+              </div>
+            </div>
+
+            {canEdit && filteredAvailableFuncs.length > 0 && (
+              <div className="flex items-center gap-2.5 w-full lg:w-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={handleAutoAllocateAllWithAssistant}
+                  disabled={assistantLoading}
+                  className="flex-1 lg:flex-none px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" /> Escalar Tudo com IA (1-Clique)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAssistantModalOpen(true)}
+                  className="px-5 py-3.5 rounded-2xl bg-card border border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shrink-0 cursor-pointer"
+                >
+                  Ver Recomendações
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Card de Filtros e Configurações */}
           <div className="bg-card/85 dark:bg-card/45 border border-border/40 rounded-[2rem] sm:rounded-[2.5rem] p-4 sm:p-6 shadow-xl cyber-scanline cyber-glow-primary relative z-20">
             <div className="flex flex-col gap-4 sm:gap-6">
@@ -3485,6 +3587,37 @@ export function EscalaLocalidadePage() {
                                       </button>
                                     </div>
                                   )}
+                                </div>
+                              )
+                            })()}
+
+                            {/* AI Recommendation Box for this locality */}
+                            {canEdit && (() => {
+                              const bestCandidate = getBestCandidateForLocality(loc.nome, members)
+                              if (!bestCandidate) return null
+                              return (
+                                <div className="mx-4 my-2.5 p-3 rounded-2xl bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/25 flex items-center justify-between gap-2 text-xs shadow-xs">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <Sparkles className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" />
+                                    <div className="min-w-0">
+                                      <p className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 tracking-wider truncate">
+                                        💡 Dica IA: <strong>{bestCandidate.name}</strong>
+                                      </p>
+                                      <p className="text-[8.5px] font-semibold text-muted-foreground truncate">
+                                        {bestCandidate.reason}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await handleMove(bestCandidate.id, loc.nome)
+                                      toast(`${bestCandidate.name} alocado em "${loc.nome}"!`, 'success')
+                                    }}
+                                    className="px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-[9px] uppercase tracking-wider transition-all shrink-0 active:scale-95 shadow-xs cursor-pointer"
+                                  >
+                                    + Adicionar
+                                  </button>
                                 </div>
                               )
                             })()}
