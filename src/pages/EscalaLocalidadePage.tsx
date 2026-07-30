@@ -451,6 +451,22 @@ export function EscalaLocalidadePage() {
   const [hasAutoRouted, setHasAutoRouted] = useState(false)
 
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
+
+  // Smart Allocation Assistant State
+  const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false)
+  const [assistantLoading, setAssistantLoading] = useState(false)
+  const [assistantData, setAssistantData] = useState<{
+    recommendations: Record<string, {
+      locId: string
+      topLocalityName: string
+      score: number
+      matchPercent: number
+      localityDays: number
+      coWorkerPartnerName: string | null
+      coWorkerDays: number
+      reason: string
+    }[]>
+  }>({ recommendations: {} })
   const [previewMode, setPreviewMode] = useState<'completo' | 'enxuto' | 'apenas_localidades' | 'tipo_equipe' | 'demandas_realizadas'>('completo')
 
   // Google Maps Geocoding Autocomplete State
@@ -1444,6 +1460,187 @@ export function EscalaLocalidadePage() {
       return !!matches
     }).slice(0, 5)
   }, [allFuncionarios, searchTerm])
+
+  // ── Smart Allocation Assistant Engine ──
+  const calculateAssistantRecommendations = useCallback(async () => {
+    setAssistantLoading(true)
+    try {
+      const targetDate = parseLocalDate(dateStr)
+      const thirtyDaysAgo = subDays(targetDate, 30)
+      const yesterday = subDays(targetDate, 1)
+
+      const startStr = format(thirtyDaysAgo, 'yyyy-MM-dd')
+      const endStr = format(yesterday, 'yyyy-MM-dd')
+
+      const { data: historyData, error } = await supabase
+        .from('escalas')
+        .select('funcionario_id, localidade, data')
+        .gte('data', startStr)
+        .lte('data', endStr)
+        .not('localidade', 'is', null)
+
+      if (error) throw error
+
+      const empLocHist: Record<string, Record<string, number>> = {}
+      const dailyLocMembers: Record<string, Set<string>> = {}
+
+      if (historyData) {
+        historyData.forEach((row: any) => {
+          if (!row.funcionario_id || !row.localidade) return
+          const fId = row.funcionario_id
+          const locName = row.localidade.trim()
+          const dStrRow = row.data ? row.data.substring(0, 10) : ''
+
+          if (!empLocHist[fId]) empLocHist[fId] = {}
+          empLocHist[fId][locName] = (empLocHist[fId][locName] || 0) + 1
+
+          if (dStrRow) {
+            const key = `${dStrRow}_${locName}`
+            if (!dailyLocMembers[key]) dailyLocMembers[key] = new Set()
+            dailyLocMembers[key].add(fId)
+          }
+        })
+      }
+
+      const pairHist: Record<string, Record<string, number>> = {}
+      Object.values(dailyLocMembers).forEach(memberSet => {
+        const membersArr = Array.from(memberSet)
+        for (let i = 0; i < membersArr.length; i++) {
+          for (let j = i + 1; j < membersArr.length; j++) {
+            const m1 = membersArr[i]
+            const m2 = membersArr[j]
+            if (!pairHist[m1]) pairHist[m1] = {}
+            if (!pairHist[m2]) pairHist[m2] = {}
+            pairHist[m1][m2] = (pairHist[m1][m2] || 0) + 1
+            pairHist[m2][m1] = (pairHist[m2][m1] || 0) + 1
+          }
+        }
+      })
+
+      const recs: Record<string, any[]> = {}
+
+      localidadesConfig.forEach(loc => {
+        const locName = loc.nome.trim()
+        const allocatedToday = dailyDistribution[loc.id] || []
+        const allocatedIdsToday = allocatedToday.map(m => m.id)
+
+        filteredFuncionarios.forEach(f => {
+          if (f.cargo?.toLowerCase() === 'encarregado') return
+
+          const locDays = empLocHist[f.id]?.[locName] || 0
+          let totalCoWorkerDays = 0
+          let topPartnerName: string | null = null
+          let topPartnerDays = 0
+
+          allocatedIdsToday.forEach(colleagueId => {
+            if (colleagueId === f.id) return
+            const daysTogether = pairHist[f.id]?.[colleagueId] || 0
+            if (daysTogether > 0) {
+              totalCoWorkerDays += daysTogether
+              if (daysTogether > topPartnerDays) {
+                topPartnerDays = daysTogether
+                const colleagueObj = allFuncionarios.find(c => c.id === colleagueId)
+                topPartnerName = colleagueObj?.apelido || colleagueObj?.nome || null
+              }
+            }
+          })
+
+          const score = (locDays * 3) + (totalCoWorkerDays * 5)
+
+          if (score > 0 || locDays > 0) {
+            if (!recs[f.id]) recs[f.id] = []
+            
+            let reason = ''
+            if (topPartnerName && topPartnerDays > 0 && locDays > 0) {
+              reason = `Trabalhou ${locDays}x nesta localidade e ${topPartnerDays}x em dupla com ${topPartnerName}`
+            } else if (topPartnerName && topPartnerDays > 0) {
+              reason = `Trabalhou ${topPartnerDays}x em dupla com ${topPartnerName}`
+            } else if (locDays > 0) {
+              reason = `Trabalhou ${locDays}x nesta localidade (últimos 30 dias)`
+            } else {
+              reason = `Vaga disponível na localidade`
+            }
+
+            const matchPercent = Math.min(99, Math.max(55, Math.round(55 + (score * 1.5))))
+
+            recs[f.id].push({
+              locId: loc.id,
+              topLocalityName: locName,
+              score,
+              matchPercent,
+              localityDays: locDays,
+              coWorkerPartnerName: topPartnerName,
+              coWorkerDays: topPartnerDays,
+              reason
+            })
+          }
+        })
+      })
+
+      Object.keys(recs).forEach(fId => {
+        recs[fId].sort((a, b) => b.score - a.score)
+      })
+
+      setAssistantData({ recommendations: recs })
+    } catch (err) {
+      console.error('Erro na assistência de alocação:', err)
+    } finally {
+      setAssistantLoading(false)
+    }
+  }, [dateStr, localidadesConfig, dailyDistribution, filteredFuncionarios, allFuncionarios])
+
+  useEffect(() => {
+    calculateAssistantRecommendations()
+  }, [calculateAssistantRecommendations])
+
+  const handleAutoAllocateAllWithAssistant = async () => {
+    if (!filteredAvailableFuncs || filteredAvailableFuncs.length === 0) {
+      return toast('Nenhum colaborador avulso para alocar.', 'info')
+    }
+
+    setAssistantLoading(true)
+    try {
+      const itemsToBatch: { funcionario_id: string; data: string; tipo: string; localidade: string; turno: string }[] = []
+      const locUsageCount: Record<string, number> = {}
+
+      localidadesConfig.forEach(loc => {
+        locUsageCount[loc.nome] = (dailyDistribution[loc.id] || []).length
+      })
+
+      let allocatedCount = 0
+
+      for (const f of filteredAvailableFuncs) {
+        const userRecs = assistantData.recommendations[f.id] || []
+        const bestRec = userRecs.find(r => (locUsageCount[r.topLocalityName] || 0) < 4) || userRecs[0]
+
+        if (bestRec) {
+          itemsToBatch.push({
+            funcionario_id: f.id,
+            data: dateStr,
+            tipo: 'presente',
+            localidade: bestRec.topLocalityName,
+            turno: 'integral'
+          })
+          locUsageCount[bestRec.topLocalityName] = (locUsageCount[bestRec.topLocalityName] || 0) + 1
+          allocatedCount++
+        }
+      }
+
+      if (itemsToBatch.length > 0) {
+        await batchMutation.mutateAsync({ items: itemsToBatch, skipFreqSync: true })
+        await queryClient.invalidateQueries({ queryKey: ['escalas'] })
+        toast(`${allocatedCount} colaboradores alocados automaticamente pelo assistente!`, 'success')
+        setIsAssistantModalOpen(false)
+      } else {
+        toast('Não foi possível sugerir vagas para os colaboradores disponíveis.', 'info')
+      }
+    } catch (err: any) {
+      console.error('Erro na alocação automática:', err)
+      toast('Erro na alocação automática: ' + (err?.message || 'Falha'), 'error')
+    } finally {
+      setAssistantLoading(false)
+    }
+  }
 
   const scrollToEmployee = useCallback((funcId: string) => {
     setHighlightedEmployeeId(funcId)
@@ -3103,12 +3300,21 @@ export function EscalaLocalidadePage() {
 
                 <div className="flex items-center gap-2 w-full xl:w-auto overflow-x-auto scrollbar-none pb-2 xl:pb-0 hide-scrollbar">
                   {canEdit && (
-                    <button 
-                      onClick={() => { setIsCopyModalOpen(true); setCopyPreview(null); setCopySourceDate('') }} 
-                      className="flex-1 xl:flex-none min-w-[150px] h-12 sm:h-14 px-4 sm:px-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
-                    >
-                      <ClipboardCopy className="w-4 h-4" /> Copiar Modelo
-                    </button>
+                    <>
+                      <button 
+                        onClick={() => setIsAssistantModalOpen(true)} 
+                        className="flex-1 xl:flex-none min-w-[160px] h-12 sm:h-14 px-4 sm:px-5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0 group cursor-pointer"
+                        title="Assistente Inteligente de Alocação de Membros"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-200 group-hover:rotate-12 transition-transform" /> Assistente IA
+                      </button>
+                      <button 
+                        onClick={() => { setIsCopyModalOpen(true); setCopyPreview(null); setCopySourceDate('') }} 
+                        className="flex-1 xl:flex-none min-w-[150px] h-12 sm:h-14 px-4 sm:px-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
+                      >
+                        <ClipboardCopy className="w-4 h-4" /> Copiar Modelo
+                      </button>
+                    </>
                   )}
                   <button onClick={handlePrint} className="h-12 w-12 sm:h-14 sm:w-14 bg-muted/50 rounded-[1.25rem] flex items-center justify-center hover:bg-card border border-border/30 active:scale-90 transition-all shrink-0" title="Compartilhar Imagem"><Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" /></button>
                   <button 
@@ -3834,6 +4040,26 @@ export function EscalaLocalidadePage() {
                                        ) : (
                                          <span className="text-[9px] font-semibold text-primary/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">Apelido: {f.nome.split(' ')[0]}</span>
                                        )}
+                                       {(() => {
+                                         const rec = assistantData.recommendations[f.id]?.[0];
+                                         if (!rec) return null;
+                                         return (
+                                           <button
+                                             type="button"
+                                             onClick={(evt) => {
+                                               evt.stopPropagation();
+                                               handleMove(f.id, rec.topLocalityName);
+                                               toast(`Alocado em "${rec.topLocalityName}" por sugestão do assistente!`, 'success');
+                                             }}
+                                             className="mt-1.5 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500 text-amber-600 dark:text-amber-400 hover:text-white border border-amber-500/20 text-[8px] font-black uppercase tracking-wider transition-all cursor-pointer group/pill shadow-xs"
+                                             title={rec.reason}
+                                           >
+                                             <Sparkles className="w-3 h-3 text-amber-500 group-hover/pill:text-white shrink-0" />
+                                             <span className="truncate">💡 Sugestão: {rec.topLocalityName}</span>
+                                             <span className="text-[7px] font-bold opacity-80 shrink-0">({rec.matchPercent}%)</span>
+                                           </button>
+                                         );
+                                       })()}
                                      </div>
                                   </div>
                                   {borrowedMembers.some((bm: any) => bm.funcionario_id === f.id) && canEdit && (
@@ -5147,6 +5373,121 @@ export function EscalaLocalidadePage() {
           )}
         </div>
       )}
+
+
+      {/* Smart Allocation Assistant Modal */}
+      <Modal
+        open={isAssistantModalOpen}
+        onClose={() => setIsAssistantModalOpen(false)}
+        title="✨ Assistente de Alocação de Membros"
+        size="lg"
+      >
+        <div className="space-y-6 py-2">
+          {/* Subtitle / Explanation Banner */}
+          <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 p-5 rounded-3xl border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                <Sparkles className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black uppercase text-foreground tracking-wider">Recomendações Baseadas no Histórico</h4>
+                <p className="text-[10px] text-muted-foreground font-bold leading-relaxed mt-0.5">
+                  Analisa os últimos 30 dias: localidades mais frequentadas e históricos de duplas/equipes que já trabalharam juntas.
+                </p>
+              </div>
+            </div>
+
+            {filteredAvailableFuncs && filteredAvailableFuncs.length > 0 && (
+              <button
+                type="button"
+                onClick={handleAutoAllocateAllWithAssistant}
+                disabled={assistantLoading}
+                className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" /> Alocar Todos Avulsos com IA
+              </button>
+            )}
+          </div>
+
+          {/* Assistant List of Unallocated Employees */}
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 scrollbar-thin">
+            {!filteredAvailableFuncs || filteredAvailableFuncs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 border border-dashed border-border/40 rounded-3xl text-center space-y-3 bg-muted/5">
+                <CheckCircle2 className="w-10 h-10 text-emerald-500 opacity-80" />
+                <p className="text-xs font-black uppercase text-foreground tracking-wide">Todos os colaboradores já estão alocados!</p>
+                <p className="text-[10px] text-muted-foreground">Nenhum efetivo avulso restante para hoje.</p>
+              </div>
+            ) : (
+              filteredAvailableFuncs.map(f => {
+                const userRecs = assistantData.recommendations[f.id] || []
+                const topRec = userRecs[0]
+
+                return (
+                  <div key={f.id} className="p-4 bg-card border border-border/40 hover:border-amber-500/40 rounded-3xl transition-all shadow-xs space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black text-xs">
+                          {(f.apelido || f.nome).charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-foreground uppercase tracking-tight">{f.apelido || f.nome}</p>
+                          <p className="text-[9px] font-medium text-muted-foreground uppercase">{f.nome} • {f.cargo || 'Funcionário'}</p>
+                        </div>
+                      </div>
+
+                      {topRec && (
+                        <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[9px] font-black uppercase tracking-wider">
+                          ✨ {topRec.matchPercent}% Afinação
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Recommendations per employee */}
+                    <div className="space-y-2 pt-2 border-t border-border/10">
+                      {userRecs.length === 0 ? (
+                        <p className="text-[10px] text-muted-foreground italic">Sem histórico recente acumulado nos últimos 30 dias.</p>
+                      ) : (
+                        userRecs.slice(0, 3).map((rec: any, idx: number) => (
+                          <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-muted/20 hover:bg-muted/40 transition-colors border border-border/20 text-xs">
+                            <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                              <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-black flex items-center justify-center shrink-0">
+                                #{idx + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-xs font-black text-foreground uppercase truncate">📍 {rec.topLocalityName}</p>
+                                <p className="text-[9.5px] font-medium text-muted-foreground mt-0.5 leading-tight truncate">
+                                  {rec.reason}
+                                </p>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await handleMove(f.id, rec.topLocalityName)
+                                toast(`${f.apelido || f.nome} alocado em "${rec.topLocalityName}"!`, 'success')
+                              }}
+                              className="px-3 py-2 rounded-xl bg-primary text-white hover:bg-primary/90 text-[9.5px] font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer shadow-xs"
+                            >
+                              Alocar
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-border/10">
+            <Button variant="secondary" onClick={() => setIsAssistantModalOpen(false)} className="h-11 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest">
+              Fechar
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Borrow Employee Modal */}
       <Modal
