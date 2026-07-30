@@ -4627,10 +4627,44 @@ export function EscalaLocalidadePage() {
                     )
                   }
  
+                  // AI Sorting: Sort candidates by score for currentAssign.locName
+                  const currentLocMembers = dailyDistribution[currentAssign.locId] || []
+                  const sortedList = [...list].sort((a, b) => {
+                    const locDaysA = assistantData.empLocHist?.[a.id]?.[currentAssign.locName] || 0
+                    const locDaysB = assistantData.empLocHist?.[b.id]?.[currentAssign.locName] || 0
+                    
+                    let pairDaysA = 0
+                    let pairDaysB = 0
+                    currentLocMembers.forEach(m => {
+                      pairDaysA += assistantData.pairHist?.[a.id]?.[m.id] || 0
+                      pairDaysB += assistantData.pairHist?.[b.id]?.[m.id] || 0
+                    })
+
+                    const scoreA = (locDaysA * 3) + (pairDaysA * 5)
+                    const scoreB = (locDaysB * 3) + (pairDaysB * 5)
+
+                    return scoreB - scoreA
+                  })
+
                   return (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {list.map(f => {
+                      {sortedList.map((f, idx) => {
                         const isSuccess = successAllocatedIds[f.id]
+                        const locDays = assistantData.empLocHist?.[f.id]?.[currentAssign.locName] || 0
+                        
+                        let topPartnerName: string | null = null
+                        let topPartnerDays = 0
+                        currentLocMembers.forEach(m => {
+                          const dTogether = assistantData.pairHist?.[f.id]?.[m.id] || 0
+                          if (dTogether > topPartnerDays) {
+                            topPartnerDays = dTogether
+                            topPartnerName = m.apelido || m.nome
+                          }
+                        })
+
+                        const score = (locDays * 3) + (topPartnerDays * 5)
+                        const isTopAi = idx === 0 && score > 0
+
                         return (
                           <button 
                             key={f.id} 
@@ -4646,7 +4680,9 @@ export function EscalaLocalidadePage() {
                               "w-full flex items-center justify-between p-3.5 rounded-[1.25rem] transition-all group disabled:cursor-not-allowed shadow-sm text-left overflow-hidden border relative min-h-[56px]",
                               isSuccess 
                                 ? "animate-cyber-assign" 
-                                : "bg-card/60 dark:bg-card/30 hover:bg-primary/10 border-border/50 hover:border-primary/40 active:scale-[0.98] disabled:opacity-50"
+                                : isTopAi
+                                  ? "bg-amber-500/10 dark:bg-amber-500/5 border-amber-500/40 hover:border-amber-500/70 shadow-md shadow-amber-500/10"
+                                  : "bg-card/60 dark:bg-card/30 hover:bg-primary/10 border-border/50 hover:border-primary/40 active:scale-[0.98] disabled:opacity-50"
                             )}
                           >
                             {/* Normal Content: Cross-fades out smoothly on success */}
@@ -4655,7 +4691,9 @@ export function EscalaLocalidadePage() {
                               isSuccess ? "opacity-0" : "opacity-100"
                             )}>
                               <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-xs font-black text-primary group-hover:bg-primary group-hover:text-white transition-all uppercase shrink-0">
+                                <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black transition-all uppercase shrink-0",
+                                  isTopAi ? "bg-amber-500 text-white" : "bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white"
+                                )}>
                                   {assigningId === f.id ? (
                                     <Clock className="w-3.5 h-3.5 animate-spin text-primary group-hover:text-white" />
                                   ) : (
@@ -4663,9 +4701,21 @@ export function EscalaLocalidadePage() {
                                   )}
                                 </div>
                                 <div className="text-left min-w-0">
-                                  <span className="text-xs sm:text-sm font-black text-foreground uppercase tracking-tight block truncate">
-                                    {f.apelido || f.nome}
-                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs sm:text-sm font-black text-foreground uppercase tracking-tight block truncate">
+                                      {f.apelido || f.nome}
+                                    </span>
+                                    {isTopAi && (
+                                      <span className="text-[7px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 animate-pulse">
+                                        ✨ IA #1
+                                      </span>
+                                    )}
+                                  </div>
+                                  {(locDays > 0 || topPartnerDays > 0) && (
+                                    <span className="text-[8px] font-bold text-amber-600 dark:text-amber-400 block truncate">
+                                      {topPartnerName && topPartnerDays > 0 ? `${locDays}x aqui • ${topPartnerDays}x c/ ${topPartnerName.split(' ')[0]}` : `${locDays}x nesta localidade`}
+                                    </span>
+                                  )}
                                   {f.setor && f.setor !== currentAssign.setor && (
                                     <span className="text-[8px] font-black uppercase tracking-wider text-muted-foreground bg-muted/60 dark:bg-muted/30 px-1.5 py-0.5 rounded-md mt-0.5 inline-block">
                                       {f.setor}
