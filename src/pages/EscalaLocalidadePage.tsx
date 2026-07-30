@@ -1469,10 +1469,10 @@ export function EscalaLocalidadePage() {
     try {
       const targetDate = parseLocalDate(dateStr)
       const thirtyDaysAgo = subDays(targetDate, 30)
-      const yesterday = subDays(targetDate, 1)
 
       const startStr = format(thirtyDaysAgo, 'yyyy-MM-dd')
-      const endStr = format(yesterday, 'yyyy-MM-dd')
+      // Include current day in history — even 1 day of allocation counts as history
+      const endStr = dateStr
 
       const { data: historyData, error } = await supabase
         .from('escalas')
@@ -1520,6 +1520,9 @@ export function EscalaLocalidadePage() {
       })
 
       const recs: Record<string, any[]> = {}
+
+      // Build a map of today's config locality names for fast lookup
+      const todayLocNames = new Set(localidadesConfig.map(l => l.nome.trim()))
 
       localidadesConfig.forEach(loc => {
         const locName = loc.nome.trim()
@@ -1576,6 +1579,78 @@ export function EscalaLocalidadePage() {
               reason
             })
           }
+        })
+      })
+
+      // For employees who have history but ONLY in localities not active today,
+      // generate fallback recommendations to any available locality with vacant spots
+      filteredFuncionarios.forEach(f => {
+        if (f.cargo?.toLowerCase() === 'encarregado') return
+        if (recs[f.id] && recs[f.id].length > 0) return // already has recommendations
+
+        const empHist = empLocHist[f.id]
+        if (!empHist) return // truly no history at all
+
+        // Employee has history but only in localities not in today's config
+        const totalHistDays = Object.values(empHist).reduce((sum, v) => sum + v, 0)
+        if (totalHistDays === 0) return
+
+        // Get the localities they worked in (even if not in today's config) for context
+        const histLocalities = Object.entries(empHist)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([name, count]) => `${name}(${count}x)`)
+          .join(', ')
+
+        // Recommend available localities with vacant spots, prioritizing by sector match
+        if (!recs[f.id]) recs[f.id] = []
+        localidadesConfig.forEach(loc => {
+          const locName = loc.nome.trim()
+          const allocatedToday = dailyDistribution[loc.id] || []
+          
+          // Check for co-worker synergy even without locality history
+          let totalCoWorkerDays = 0
+          let topPartnerName: string | null = null
+          let topPartnerDays = 0
+          
+          allocatedToday.forEach(m => {
+            const daysTogether = pairHist[f.id]?.[m.id] || 0
+            if (daysTogether > 0) {
+              totalCoWorkerDays += daysTogether
+              if (daysTogether > topPartnerDays) {
+                topPartnerDays = daysTogether
+                topPartnerName = m.apelido || m.nome
+              }
+            }
+          })
+
+          const coWorkerScore = totalCoWorkerDays * 5
+          // Sector match bonus
+          const sectorMatch = f.setor && loc.setor && f.setor === loc.setor
+          const sectorBonus = sectorMatch ? 2 : 0
+          const score = coWorkerScore + sectorBonus
+
+          let reason = ''
+          if (topPartnerName && topPartnerDays > 0) {
+            reason = `${topPartnerDays}x em dupla com ${topPartnerName} • Histórico: ${histLocalities}`
+          } else if (sectorMatch) {
+            reason = `Mesmo setor (${f.setor}) • Histórico: ${histLocalities}`
+          } else {
+            reason = `Disponível • Histórico: ${histLocalities}`
+          }
+
+          const matchPercent = Math.min(85, Math.max(40, Math.round(40 + (score * 1.5))))
+
+          recs[f.id].push({
+            locId: loc.id,
+            topLocalityName: locName,
+            score,
+            matchPercent,
+            localityDays: 0,
+            coWorkerPartnerName: topPartnerName,
+            coWorkerDays: topPartnerDays,
+            reason
+          })
         })
       })
 
@@ -5628,7 +5703,7 @@ export function EscalaLocalidadePage() {
                     {/* Recommendations per employee */}
                     <div className="space-y-2 pt-2 border-t border-border/10">
                       {userRecs.length === 0 ? (
-                        <p className="text-[10px] text-muted-foreground italic">Sem histórico recente acumulado nos últimos 30 dias.</p>
+                        <p className="text-[10px] text-muted-foreground italic">🆕 Colaborador novo — pode ser alocado em qualquer localidade disponível.</p>
                       ) : (
                         userRecs.slice(0, 3).map((rec: any, idx: number) => (
                           <div key={idx} className="flex items-center justify-between p-3 rounded-2xl bg-muted/20 hover:bg-muted/40 transition-colors border border-border/20 text-xs">
