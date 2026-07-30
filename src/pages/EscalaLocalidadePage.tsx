@@ -1600,7 +1600,7 @@ export function EscalaLocalidadePage() {
 
     setAssistantLoading(true)
     try {
-      const itemsToBatch: { funcionario_id: string; data: string; tipo: string; localidade: string; turno: string }[] = []
+      const itemsToBatch: { funcionario_id: string; data: string; tipo: string; localidade: string; turno: 'integral' }[] = []
       const locUsageCount: Record<string, number> = {}
 
       localidadesConfig.forEach(loc => {
@@ -1619,7 +1619,7 @@ export function EscalaLocalidadePage() {
             data: dateStr,
             tipo: 'presente',
             localidade: bestRec.topLocalityName,
-            turno: 'integral'
+            turno: 'integral' as const
           })
           locUsageCount[bestRec.topLocalityName] = (locUsageCount[bestRec.topLocalityName] || 0) + 1
           allocatedCount++
