@@ -4713,7 +4713,7 @@ export function EscalaLocalidadePage() {
                                   </div>
                                   {(locDays > 0 || topPartnerDays > 0) && (
                                     <span className="text-[8px] font-bold text-amber-600 dark:text-amber-400 block truncate">
-                                      {topPartnerName && topPartnerDays > 0 ? `${locDays}x aqui • ${topPartnerDays}x c/ ${topPartnerName.split(' ')[0]}` : `${locDays}x nesta localidade`}
+                                      {topPartnerName && topPartnerDays > 0 ? `${locDays}x aqui • ${topPartnerDays}x c/ ${String(topPartnerName).split(' ')[0]}` : `${locDays}x nesta localidade`}
                                     </span>
                                   )}
                                   {f.setor && f.setor !== currentAssign.setor && (
