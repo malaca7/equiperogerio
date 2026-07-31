@@ -1528,8 +1528,8 @@ export function EscalaLocalidadePage() {
       if (allHistoryData) {
         allHistoryData.forEach((row: any) => {
           if (!row.funcionario_id) return
-          const fId = row.funcionario_id
-          const tipo = row.tipo || 'presente'
+          const fId = String(row.funcionario_id).trim()
+          const tipo = row.tipo ? String(row.tipo).toLowerCase().trim() : 'presente'
           const dStrRow = row.data ? row.data.substring(0, 10) : ''
 
           // Initialize behavior tracking
@@ -1544,7 +1544,7 @@ export function EscalaLocalidadePage() {
           
           empBehavior[fId].totalDays++
           
-          if (tipo === 'presente') {
+          if (tipo === 'presente' || tipo === 'escala' || !tipo) {
             empBehavior[fId].presentDays++
           } else if (tipo === 'hora_extra') {
             empBehavior[fId].horaExtraDays++
@@ -1566,9 +1566,10 @@ export function EscalaLocalidadePage() {
             }
           }
 
-          // Only build locality history from records where employee was actually working at a locality
-          if (row.localidade && row.localidade.trim().length > 0 && (tipo === 'presente' || tipo === 'hora_extra')) {
-            const rawLoc = row.localidade.trim()
+          // Count locality history for ANY record that has a localidade assigned and is not an explicit absence
+          const isAbsence = tipo === 'falta' || tipo === 'atestado' || tipo === 'suspensao' || tipo === 'ferias' || tipo === 'repouso' || tipo === 'compensar'
+          if (row.localidade && String(row.localidade).trim().length > 0 && !isAbsence) {
+            const rawLoc = String(row.localidade).trim()
             const keyLoc = normLoc(rawLoc)
             
             if (!locDisplayNames[keyLoc]) locDisplayNames[keyLoc] = rawLoc
@@ -1642,31 +1643,32 @@ export function EscalaLocalidadePage() {
         const locKey = normLoc(locName)
         const locSetor = loc.setor || locToSectorMap[locKey] || ''
         const allocatedToday = dailyDistribution[loc.id] || []
-        const allocatedIdsToday = allocatedToday.map(m => m.id)
+        const allocatedIdsToday = allocatedToday.map(m => String(m.id).trim())
 
         filteredFuncionarios.forEach(f => {
           if (f.cargo?.toLowerCase() === 'encarregado') return
 
-          const locDays = empLocHist[f.id]?.[locKey] || 0
+          const fIdStr = String(f.id).trim()
+          const locDays = empLocHist[fIdStr]?.[locKey] || 0
           let totalCoWorkerDays = 0
           let topPartnerName: string | null = null
           let topPartnerDays = 0
 
           allocatedIdsToday.forEach(colleagueId => {
-            if (colleagueId === f.id) return
-            const daysTogether = pairHist[f.id]?.[colleagueId] || 0
+            if (colleagueId === fIdStr) return
+            const daysTogether = pairHist[fIdStr]?.[colleagueId] || 0
             if (daysTogether > 0) {
               totalCoWorkerDays += daysTogether
               if (daysTogether > topPartnerDays) {
                 topPartnerDays = daysTogether
-                const colleagueObj = allFuncionarios.find(c => c.id === colleagueId)
+                const colleagueObj = allFuncionarios.find(c => String(c.id).trim() === colleagueId)
                 topPartnerName = colleagueObj?.apelido || colleagueObj?.nome || null
               }
             }
           })
 
           // Determine employee primary sector (from profile or history)
-          const histSetores = empSetorHist[f.id]
+          const histSetores = empSetorHist[fIdStr]
           const topHistSetor = histSetores ? Object.entries(histSetores).sort((a,b) => b[1] - a[1])[0]?.[0] : null
           const empPrimarySetor = f.setor || topHistSetor || ''
 
@@ -1675,13 +1677,13 @@ export function EscalaLocalidadePage() {
           if (locSetor && empPrimarySetor) {
             if (normLoc(locSetor) === normLoc(empPrimarySetor)) {
               setorBonus = 20 // Strong bonus for matching sector
-            } else if (empLocHist[f.id] && Object.keys(empLocHist[f.id]).length > 0) {
+            } else if (empLocHist[fIdStr] && Object.keys(empLocHist[fIdStr]).length > 0) {
               setorBonus = -25 // Strong penalty for localities outside employee's historical sector
             }
           }
 
           // Behavior-adjusted scoring
-          const behavior = empBehavior[f.id]
+          const behavior = empBehavior[fIdStr]
           let reliabilityBonus = 0
           let reliabilityPenalty = 0
           
@@ -1709,8 +1711,9 @@ export function EscalaLocalidadePage() {
           const score = Math.max(0, baseScore + reliabilityBonus - reliabilityPenalty)
 
           if (!recs[f.id]) recs[f.id] = []
+          if (!recs[fIdStr]) recs[fIdStr] = recs[f.id]
           
-          const behaviorTag = buildBehaviorTag(f.id)
+          const behaviorTag = buildBehaviorTag(fIdStr)
           const totalEsc = behavior?.totalEscalatedDays || 0
           
           let reason = ''
@@ -1722,6 +1725,8 @@ export function EscalaLocalidadePage() {
             reason = `${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
           } else if (locSetor && empPrimarySetor && normLoc(locSetor) === normLoc(empPrimarySetor)) {
             reason = `Pertence ao setor ${locSetor} (${totalEsc} dias em outras localidades de ${locSetor})${behaviorTag}`
+          } else if (totalEsc > 0) {
+            reason = `Vaga disponível (${totalEsc} dias de histórico em outras localidades)${behaviorTag}`
           } else {
             reason = `Disponível para alocação${behaviorTag}`
           }
