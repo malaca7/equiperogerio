@@ -1486,6 +1486,14 @@ export function EscalaLocalidadePage() {
       // Helper to normalize locality strings for case-insensitive matching
       const normLoc = (s: string) => s.trim().toLowerCase()
 
+      // Map locality normalized names to their sector for fast lookup
+      const locToSectorMap: Record<string, string> = {}
+      dbLocalidades.forEach(l => {
+        if (l.nome && l.setor) {
+          locToSectorMap[normLoc(l.nome)] = l.setor
+        }
+      })
+
       // Fetch ALL records (including faltas, atestados, suspensões) - up to 5000 rows
       const { data: allHistoryData, error } = await supabase
         .from('escalas')
@@ -1498,6 +1506,8 @@ export function EscalaLocalidadePage() {
 
       // Stores normalized locality counts per employee ID
       const empLocHist: Record<string, Record<string, number>> = {}
+      // Stores sector counts per employee ID from history
+      const empSetorHist: Record<string, Record<string, number>> = {}
       // Stores original locality display names per normalized name
       const locDisplayNames: Record<string, string> = {}
       const dailyLocMembers: Record<string, Set<string>> = {}
@@ -1566,6 +1576,13 @@ export function EscalaLocalidadePage() {
             empLocHist[fId][keyLoc] = (empLocHist[fId][keyLoc] || 0) + 1
             empBehavior[fId].totalEscalatedDays++
 
+            // Track sector history
+            const locSetor = locToSectorMap[keyLoc]
+            if (locSetor) {
+              if (!empSetorHist[fId]) empSetorHist[fId] = {}
+              empSetorHist[fId][locSetor] = (empSetorHist[fId][locSetor] || 0) + 1
+            }
+
             if (dStrRow) {
               const key = `${dStrRow}_${keyLoc}`
               if (!dailyLocMembers[key]) dailyLocMembers[key] = new Set()
@@ -1623,6 +1640,7 @@ export function EscalaLocalidadePage() {
       localidadesConfig.forEach(loc => {
         const locName = loc.nome.trim()
         const locKey = normLoc(locName)
+        const locSetor = loc.setor || locToSectorMap[locKey] || ''
         const allocatedToday = dailyDistribution[loc.id] || []
         const allocatedIdsToday = allocatedToday.map(m => m.id)
 
@@ -1646,6 +1664,21 @@ export function EscalaLocalidadePage() {
               }
             }
           })
+
+          // Determine employee primary sector (from profile or history)
+          const histSetores = empSetorHist[f.id]
+          const topHistSetor = histSetores ? Object.entries(histSetores).sort((a,b) => b[1] - a[1])[0]?.[0] : null
+          const empPrimarySetor = f.setor || topHistSetor || ''
+
+          // Sector alignment bonus or penalty
+          let setorBonus = 0
+          if (locSetor && empPrimarySetor) {
+            if (normLoc(locSetor) === normLoc(empPrimarySetor)) {
+              setorBonus = 20 // Strong bonus for matching sector
+            } else if (empLocHist[f.id] && Object.keys(empLocHist[f.id]).length > 0) {
+              setorBonus = -25 // Strong penalty for localities outside employee's historical sector
+            }
+          }
 
           // Behavior-adjusted scoring
           const behavior = empBehavior[f.id]
@@ -1671,7 +1704,8 @@ export function EscalaLocalidadePage() {
             }
           }
 
-          const baseScore = (locDays * 3) + (totalCoWorkerDays * 5)
+          // Locality history weighted 12x, co-workers 6x
+          const baseScore = (locDays * 12) + (totalCoWorkerDays * 6) + setorBonus
           const score = Math.max(0, baseScore + reliabilityBonus - reliabilityPenalty)
 
           if (!recs[f.id]) recs[f.id] = []
@@ -1682,12 +1716,12 @@ export function EscalaLocalidadePage() {
           let reason = ''
           if (topPartnerName && topPartnerDays > 0 && locDays > 0) {
             reason = `Escalado ${locDays}x aqui e ${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
-          } else if (topPartnerName && topPartnerDays > 0) {
-            reason = `${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
           } else if (locDays > 0) {
             reason = `Escalado ${locDays}x nesta localidade (${totalEsc} dias totais)${behaviorTag}`
-          } else if (totalEsc > 0) {
-            reason = `Vaga disponível na rota (${totalEsc} dias de histórico em outras localidades)${behaviorTag}`
+          } else if (topPartnerName && topPartnerDays > 0) {
+            reason = `${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
+          } else if (locSetor && empPrimarySetor && normLoc(locSetor) === normLoc(empPrimarySetor)) {
+            reason = `Pertence ao setor ${locSetor} (${totalEsc} dias em outras localidades de ${locSetor})${behaviorTag}`
           } else {
             reason = `Disponível para alocação${behaviorTag}`
           }
@@ -1698,7 +1732,7 @@ export function EscalaLocalidadePage() {
             reason += ` • 🔄 Retornando de ${absType}`
           }
 
-          const matchPercent = Math.min(99, Math.max(45, Math.round(45 + (score * 2.5))))
+          const matchPercent = Math.min(99, Math.max(40, Math.round(40 + (score * 1.5))))
 
           recs[f.id].push({
             locId: loc.id,
@@ -1724,7 +1758,7 @@ export function EscalaLocalidadePage() {
     } finally {
       setAssistantLoading(false)
     }
-  }, [dateStr, localidadesConfig, dailyDistribution, filteredFuncionarios, allFuncionarios])
+  }, [dateStr, localidadesConfig, dailyDistribution, filteredFuncionarios, allFuncionarios, dbLocalidades])
 
   useEffect(() => {
     calculateAssistantRecommendations()
@@ -1734,6 +1768,10 @@ export function EscalaLocalidadePage() {
   const getBestCandidateForLocality = useCallback((locName: string, allocatedMembers: any[]) => {
     if (!filteredAvailableFuncs || filteredAvailableFuncs.length === 0) return null
 
+    const normLocName = locName.trim().toLowerCase()
+    const locObj = localidadesConfig.find(l => l.nome.trim().toLowerCase() === normLocName)
+    const locSetor = locObj?.setor || ''
+
     const allocatedIds = new Set(allocatedMembers.map(m => m.id))
 
     let bestFunc: any = null
@@ -1742,7 +1780,7 @@ export function EscalaLocalidadePage() {
     filteredAvailableFuncs.forEach(f => {
       if (allocatedIds.has(f.id)) return
 
-      const locDays = assistantData.empLocHist?.[f.id]?.[locName] || 0
+      const locDays = assistantData.empLocHist?.[f.id]?.[normLocName] || 0
       
       let coWorkerDays = 0
       let topPartnerName: string | null = null
@@ -1759,18 +1797,24 @@ export function EscalaLocalidadePage() {
         }
       })
 
-      const score = (locDays * 3) + (coWorkerDays * 5)
+      const empSetor = f.setor || ''
+      const isSameSetor = locSetor && empSetor && locSetor.trim().toLowerCase() === empSetor.trim().toLowerCase()
+      const setorBonus = isSameSetor ? 15 : (empSetor ? -15 : 0)
 
-      if (score > maxScore && (score > 0 || locDays > 0 || topPartnerDays > 0)) {
+      const score = (locDays * 12) + (coWorkerDays * 6) + setorBonus
+
+      if (score > maxScore && (locDays > 0 || topPartnerDays > 0 || isSameSetor)) {
         maxScore = score
         const funcName = f.apelido || f.nome
         let reason = ''
         if (topPartnerName && topPartnerDays > 0 && locDays > 0) {
           reason = `Trabalhou ${locDays}x aqui e ${topPartnerDays}x com ${topPartnerName}`
+        } else if (locDays > 0) {
+          reason = `Trabalhou ${locDays}x nesta localidade`
         } else if (topPartnerName && topPartnerDays > 0) {
           reason = `Trabalhou ${topPartnerDays}x em dupla com ${topPartnerName}`
-        } else if (locDays > 0) {
-          reason = `Trabalhou ${locDays}x nesta rota nos últimos 30 dias`
+        } else if (isSameSetor) {
+          reason = `Pertence ao setor ${locSetor}`
         } else {
           reason = `Disponível para alocação`
         }
