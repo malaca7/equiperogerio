@@ -1650,6 +1650,20 @@ export function EscalaLocalidadePage() {
 
           const fIdStr = String(f.id).trim()
           const locDays = empLocHist[fIdStr]?.[locKey] || 0
+          
+          // Determine employee primary sector (from profile or history)
+          const histSetores = empSetorHist[fIdStr]
+          const topHistSetor = histSetores ? Object.entries(histSetores).sort((a,b) => b[1] - a[1])[0]?.[0] : null
+          const empPrimarySetor = f.setor || topHistSetor || ''
+
+          const empLocMap = empLocHist[fIdStr] || {}
+          const hasLocalityHistory = Object.values(empLocMap).some(v => v > 0)
+
+          // STRICT RULE: If employee has past locality history, ONLY suggest/recommend localities they have actually worked at (locDays > 0)
+          if (hasLocalityHistory && locDays === 0) {
+            return
+          }
+
           let totalCoWorkerDays = 0
           let topPartnerName: string | null = null
           let topPartnerDays = 0
@@ -1667,17 +1681,12 @@ export function EscalaLocalidadePage() {
             }
           })
 
-          // Determine employee primary sector (from profile or history)
-          const histSetores = empSetorHist[fIdStr]
-          const topHistSetor = histSetores ? Object.entries(histSetores).sort((a,b) => b[1] - a[1])[0]?.[0] : null
-          const empPrimarySetor = f.setor || topHistSetor || ''
-
           // Sector alignment bonus or penalty
           let setorBonus = 0
           if (locSetor && empPrimarySetor) {
             if (normLoc(locSetor) === normLoc(empPrimarySetor)) {
               setorBonus = 20 // Strong bonus for matching sector
-            } else if (empLocHist[fIdStr] && Object.keys(empLocHist[fIdStr]).length > 0) {
+            } else if (hasLocalityHistory) {
               setorBonus = -25 // Strong penalty for localities outside employee's historical sector
             }
           }
@@ -1774,25 +1783,26 @@ export function EscalaLocalidadePage() {
     if (!filteredAvailableFuncs || filteredAvailableFuncs.length === 0) return null
 
     const normLocName = locName.trim().toLowerCase()
-    const locObj = localidadesConfig.find(l => l.nome.trim().toLowerCase() === normLocName)
-    const locSetor = locObj?.setor || ''
-
-    const allocatedIds = new Set(allocatedMembers.map(m => m.id))
+    const allocatedIds = new Set(allocatedMembers.map(m => String(m.id).trim()))
 
     let bestFunc: any = null
     let maxScore = -1
 
     filteredAvailableFuncs.forEach(f => {
-      if (allocatedIds.has(f.id)) return
+      const fIdStr = String(f.id).trim()
+      if (allocatedIds.has(fIdStr)) return
 
-      const locDays = assistantData.empLocHist?.[f.id]?.[normLocName] || 0
+      const locDays = assistantData.empLocHist?.[fIdStr]?.[normLocName] || 0
       
+      // STRICT RULE: Only suggest candidate for a locality if they have actually worked at this locality before
+      if (locDays === 0) return
+
       let coWorkerDays = 0
       let topPartnerName: string | null = null
       let topPartnerDays = 0
 
       allocatedMembers.forEach(m => {
-        const daysTogether = assistantData.pairHist?.[f.id]?.[m.id] || 0
+        const daysTogether = assistantData.pairHist?.[fIdStr]?.[String(m.id).trim()] || 0
         if (daysTogether > 0) {
           coWorkerDays += daysTogether
           if (daysTogether > topPartnerDays) {
@@ -1802,26 +1812,16 @@ export function EscalaLocalidadePage() {
         }
       })
 
-      const empSetor = f.setor || ''
-      const isSameSetor = locSetor && empSetor && locSetor.trim().toLowerCase() === empSetor.trim().toLowerCase()
-      const setorBonus = isSameSetor ? 15 : (empSetor ? -15 : 0)
+      const score = (locDays * 12) + (coWorkerDays * 6)
 
-      const score = (locDays * 12) + (coWorkerDays * 6) + setorBonus
-
-      if (score > maxScore && (locDays > 0 || topPartnerDays > 0 || isSameSetor)) {
+      if (score > maxScore) {
         maxScore = score
         const funcName = f.apelido || f.nome
         let reason = ''
-        if (topPartnerName && topPartnerDays > 0 && locDays > 0) {
+        if (topPartnerName && topPartnerDays > 0) {
           reason = `Trabalhou ${locDays}x aqui e ${topPartnerDays}x com ${topPartnerName}`
-        } else if (locDays > 0) {
-          reason = `Trabalhou ${locDays}x nesta localidade`
-        } else if (topPartnerName && topPartnerDays > 0) {
-          reason = `Trabalhou ${topPartnerDays}x em dupla com ${topPartnerName}`
-        } else if (isSameSetor) {
-          reason = `Pertence ao setor ${locSetor}`
         } else {
-          reason = `Disponível para alocação`
+          reason = `Trabalhou ${locDays}x nesta localidade`
         }
 
         bestFunc = {
