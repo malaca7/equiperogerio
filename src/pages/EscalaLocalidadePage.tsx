@@ -1654,14 +1654,32 @@ export function EscalaLocalidadePage() {
           // Determine employee primary sector (from profile or history)
           const histSetores = empSetorHist[fIdStr]
           const topHistSetor = histSetores ? Object.entries(histSetores).sort((a,b) => b[1] - a[1])[0]?.[0] : null
-          const empPrimarySetor = f.setor || topHistSetor || ''
+          const empPrimarySetor = f.setor && f.setor !== 'Geral' ? f.setor : (topHistSetor || f.setor || '')
 
           const empLocMap = empLocHist[fIdStr] || {}
           const hasLocalityHistory = Object.values(empLocMap).some(v => v > 0)
+          const userHistSetores = histSetores ? Object.keys(histSetores).map(normLoc) : []
 
-          // STRICT RULE: If employee has past locality history, ONLY suggest/recommend localities they have actually worked at (locDays > 0)
+          // STRICT SECTOR RULE:
+          // If employee has a primary sector or sector history, ONLY suggest localities in their sector or historical sectors!
+          if (locSetor && empPrimarySetor) {
+            const normLocSetor = normLoc(locSetor)
+            const normEmpSetor = normLoc(empPrimarySetor)
+            const matchesPrimarySetor = normLocSetor === normEmpSetor
+            const matchesHistSetor = userHistSetores.includes(normLocSetor)
+
+            if (!matchesPrimarySetor && !matchesHistSetor && locDays === 0) {
+              return // Filter out localities outside employee's sector!
+            }
+          }
+
+          // STRICT LOCALITY RULE:
+          // If employee has past locality history, ONLY suggest localities they have worked at (locDays > 0) or in their exact same sector
           if (hasLocalityHistory && locDays === 0) {
-            return
+            const isSameSector = locSetor && empPrimarySetor && normLoc(locSetor) === normLoc(empPrimarySetor)
+            if (!isSameSector) {
+              return
+            }
           }
 
           let totalCoWorkerDays = 0
@@ -1685,9 +1703,9 @@ export function EscalaLocalidadePage() {
           let setorBonus = 0
           if (locSetor && empPrimarySetor) {
             if (normLoc(locSetor) === normLoc(empPrimarySetor)) {
-              setorBonus = 20 // Strong bonus for matching sector
-            } else if (hasLocalityHistory) {
-              setorBonus = -25 // Strong penalty for localities outside employee's historical sector
+              setorBonus = 25 // Strong bonus for matching sector
+            } else {
+              setorBonus = -30 // Strong penalty for other sectors
             }
           }
 
@@ -1783,6 +1801,10 @@ export function EscalaLocalidadePage() {
     if (!filteredAvailableFuncs || filteredAvailableFuncs.length === 0) return null
 
     const normLocName = locName.trim().toLowerCase()
+    const locObj = localidadesConfig.find(l => l.nome.trim().toLowerCase() === normLocName)
+    const locSetor = locObj?.setor || ''
+    const normLocSetor = locSetor ? locSetor.trim().toLowerCase() : ''
+
     const allocatedIds = new Set(allocatedMembers.map(m => String(m.id).trim()))
 
     let bestFunc: any = null
@@ -1793,9 +1815,13 @@ export function EscalaLocalidadePage() {
       if (allocatedIds.has(fIdStr)) return
 
       const locDays = assistantData.empLocHist?.[fIdStr]?.[normLocName] || 0
-      
-      // STRICT RULE: Only suggest candidate for a locality if they have actually worked at this locality before
-      if (locDays === 0) return
+      const empSetor = f.setor || ''
+      const normEmpSetor = empSetor ? empSetor.trim().toLowerCase() : ''
+
+      // STRICT SECTOR RULE: Candidate MUST belong to the locality's sector OR have worked at this locality before
+      if (normLocSetor && normEmpSetor && normLocSetor !== normEmpSetor && locDays === 0) {
+        return // Filter out candidates from mismatched sectors!
+      }
 
       let coWorkerDays = 0
       let topPartnerName: string | null = null
@@ -1812,9 +1838,10 @@ export function EscalaLocalidadePage() {
         }
       })
 
-      const score = (locDays * 12) + (coWorkerDays * 6)
+      const isSameSetor = normLocSetor && normEmpSetor && normLocSetor === normEmpSetor
+      const score = (locDays * 12) + (coWorkerDays * 6) + (isSameSetor ? 15 : 0)
 
-      if (score > maxScore) {
+      if (score > maxScore && (locDays > 0 || isSameSetor)) {
         maxScore = score
         const funcName = f.apelido || f.nome
         let reason = ''
