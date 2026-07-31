@@ -1651,32 +1651,30 @@ export function EscalaLocalidadePage() {
           const fIdStr = String(f.id).trim()
           const locDays = empLocHist[fIdStr]?.[locKey] || 0
           
-          // Determine employee primary sector (from profile or history)
+          // Determine employee allowed sectors (registered sector + historical sectors worked in)
           const histSetores = empSetorHist[fIdStr]
-          const topHistSetor = histSetores ? Object.entries(histSetores).sort((a,b) => b[1] - a[1])[0]?.[0] : null
-          const empPrimarySetor = f.setor && f.setor !== 'Geral' ? f.setor : (topHistSetor || f.setor || '')
+          const profileSetorKey = f.setor && f.setor !== 'Geral' ? normLoc(f.setor) : ''
+          const userHistSetorKeys = histSetores ? Object.keys(histSetores).map(normLoc) : []
+
+          const allowedSectors = new Set<string>()
+          if (profileSetorKey) allowedSectors.add(profileSetorKey)
+          userHistSetorKeys.forEach(s => allowedSectors.add(s))
+
+          const normLocSetorKey = locSetor ? normLoc(locSetor) : ''
+
+          // ABSOLUTE STRICT SECTOR RULE:
+          // Never suggest or recommend a locality in a sector the employee has NEVER worked in or registered for!
+          if (normLocSetorKey && allowedSectors.size > 0 && !allowedSectors.has(normLocSetorKey)) {
+            return // Strictly filter out any locality outside employee's worked/registered sectors!
+          }
 
           const empLocMap = empLocHist[fIdStr] || {}
           const hasLocalityHistory = Object.values(empLocMap).some(v => v > 0)
-          const userHistSetores = histSetores ? Object.keys(histSetores).map(normLoc) : []
-
-          // STRICT SECTOR RULE:
-          // If employee has a primary sector or sector history, ONLY suggest localities in their sector or historical sectors!
-          if (locSetor && empPrimarySetor) {
-            const normLocSetor = normLoc(locSetor)
-            const normEmpSetor = normLoc(empPrimarySetor)
-            const matchesPrimarySetor = normLocSetor === normEmpSetor
-            const matchesHistSetor = userHistSetores.includes(normLocSetor)
-
-            if (!matchesPrimarySetor && !matchesHistSetor && locDays === 0) {
-              return // Filter out localities outside employee's sector!
-            }
-          }
 
           // STRICT LOCALITY RULE:
           // If employee has past locality history, ONLY suggest localities they have worked at (locDays > 0) or in their exact same sector
           if (hasLocalityHistory && locDays === 0) {
-            const isSameSector = locSetor && empPrimarySetor && normLoc(locSetor) === normLoc(empPrimarySetor)
+            const isSameSector = normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey
             if (!isSameSector) {
               return
             }
@@ -1699,14 +1697,10 @@ export function EscalaLocalidadePage() {
             }
           })
 
-          // Sector alignment bonus or penalty
+          // Sector alignment bonus
           let setorBonus = 0
-          if (locSetor && empPrimarySetor) {
-            if (normLoc(locSetor) === normLoc(empPrimarySetor)) {
-              setorBonus = 25 // Strong bonus for matching sector
-            } else {
-              setorBonus = -30 // Strong penalty for other sectors
-            }
+          if (normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey) {
+            setorBonus = 25
           }
 
           // Behavior-adjusted scoring
@@ -1715,19 +1709,15 @@ export function EscalaLocalidadePage() {
           let reliabilityPenalty = 0
           
           if (behavior) {
-            // Bonus for employees with zero faltas — they are reliable
             if (behavior.faltaDays === 0 && behavior.suspensaoDays === 0 && behavior.presentDays > 0) {
               reliabilityBonus = Math.min(5, Math.floor(behavior.presentDays / 3))
             }
-            // Bonus for hora extra — shows dedication
             if (behavior.horaExtraDays > 0) {
               reliabilityBonus += Math.min(3, behavior.horaExtraDays)
             }
-            // Penalty for many faltas or suspensão
             if (behavior.faltaDays >= 3 || behavior.suspensaoDays > 0) {
               reliabilityPenalty = Math.min(5, behavior.faltaDays + (behavior.suspensaoDays * 2))
             }
-            // If returning from absence, boost familiar locality
             if (behavior.daysAwayBeforeReturn <= 3 && behavior.daysAwayBeforeReturn > 0 && locDays > 0) {
               reliabilityBonus += 4
             }
@@ -1750,7 +1740,7 @@ export function EscalaLocalidadePage() {
             reason = `Escalado ${locDays}x nesta localidade (${totalEsc} dias totais)${behaviorTag}`
           } else if (topPartnerName && topPartnerDays > 0) {
             reason = `${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
-          } else if (locSetor && empPrimarySetor && normLoc(locSetor) === normLoc(empPrimarySetor)) {
+          } else if (normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey) {
             reason = `Pertence ao setor ${locSetor} (${totalEsc} dias em outras localidades de ${locSetor})${behaviorTag}`
           } else if (totalEsc > 0) {
             reason = `Vaga disponível (${totalEsc} dias de histórico em outras localidades)${behaviorTag}`
@@ -1815,12 +1805,24 @@ export function EscalaLocalidadePage() {
       if (allocatedIds.has(fIdStr)) return
 
       const locDays = assistantData.empLocHist?.[fIdStr]?.[normLocName] || 0
-      const empSetor = f.setor || ''
-      const normEmpSetor = empSetor ? empSetor.trim().toLowerCase() : ''
+      const empSetor = f.setor && f.setor !== 'Geral' ? f.setor.trim().toLowerCase() : ''
 
-      // STRICT SECTOR RULE: Candidate MUST belong to the locality's sector OR have worked at this locality before
-      if (normLocSetor && normEmpSetor && normLocSetor !== normEmpSetor && locDays === 0) {
-        return // Filter out candidates from mismatched sectors!
+      const histSetores = assistantData.empBehavior?.[fIdStr] ? assistantData.empLocHist?.[fIdStr] : null
+      
+      // Build candidate's allowed sectors
+      const candidateSectors = new Set<string>()
+      if (empSetor) candidateSectors.add(empSetor)
+      if (histSetores) {
+        Object.keys(histSetores).forEach(lKey => {
+          const lObj = localidadesConfig.find(l => l.nome.trim().toLowerCase() === lKey)
+          if (lObj?.setor) candidateSectors.add(lObj.setor.trim().toLowerCase())
+        })
+      }
+
+      // ABSOLUTE STRICT SECTOR RULE:
+      // Candidate MUST have worked in or belong to the locality's sector!
+      if (normLocSetor && candidateSectors.size > 0 && !candidateSectors.has(normLocSetor)) {
+        return // Reject candidates who have never worked in this sector!
       }
 
       let coWorkerDays = 0
@@ -1838,7 +1840,7 @@ export function EscalaLocalidadePage() {
         }
       })
 
-      const isSameSetor = normLocSetor && normEmpSetor && normLocSetor === normEmpSetor
+      const isSameSetor = normLocSetor && empSetor && normLocSetor === empSetor
       const score = (locDays * 12) + (coWorkerDays * 6) + (isSameSetor ? 15 : 0)
 
       if (score > maxScore && (locDays > 0 || isSameSetor)) {
