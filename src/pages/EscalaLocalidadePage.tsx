@@ -1478,22 +1478,28 @@ export function EscalaLocalidadePage() {
     setAssistantLoading(true)
     try {
       const targetDate = parseLocalDate(dateStr)
-      const thirtyDaysAgo = subDays(targetDate, 30)
+      const sixtyDaysAgo = subDays(targetDate, 60)
 
-      const startStr = format(thirtyDaysAgo, 'yyyy-MM-dd')
-      // Include current day in history — even 1 day of allocation counts as history
+      const startStr = format(sixtyDaysAgo, 'yyyy-MM-dd')
       const endStr = dateStr
 
-      // Fetch ALL records (including faltas, atestados, suspensões) to analyze full employee behavior
+      // Helper to normalize locality strings for case-insensitive matching
+      const normLoc = (s: string) => s.trim().toLowerCase()
+
+      // Fetch ALL records (including faltas, atestados, suspensões) - up to 5000 rows
       const { data: allHistoryData, error } = await supabase
         .from('escalas')
         .select('funcionario_id, localidade, data, tipo')
         .gte('data', startStr)
         .lte('data', endStr)
+        .limit(5000)
 
       if (error) throw error
 
+      // Stores normalized locality counts per employee ID
       const empLocHist: Record<string, Record<string, number>> = {}
+      // Stores original locality display names per normalized name
+      const locDisplayNames: Record<string, string> = {}
       const dailyLocMembers: Record<string, Set<string>> = {}
       
       // Track attendance behavior per employee
@@ -1506,6 +1512,7 @@ export function EscalaLocalidadePage() {
         horaExtraDays: number;
         lastAbsenceDate: string | null;
         daysAwayBeforeReturn: number;
+        totalEscalatedDays: number;
       }> = {}
 
       if (allHistoryData) {
@@ -1520,7 +1527,8 @@ export function EscalaLocalidadePage() {
             empBehavior[fId] = { 
               totalDays: 0, presentDays: 0, faltaDays: 0, 
               atestadoDays: 0, suspensaoDays: 0, horaExtraDays: 0,
-              lastAbsenceDate: null, daysAwayBeforeReturn: 0
+              lastAbsenceDate: null, daysAwayBeforeReturn: 0,
+              totalEscalatedDays: 0
             }
           }
           
@@ -1549,14 +1557,17 @@ export function EscalaLocalidadePage() {
           }
 
           // Only build locality history from records where employee was actually working at a locality
-          if (row.localidade && (tipo === 'presente' || tipo === 'hora_extra')) {
-            const locName = row.localidade.trim()
+          if (row.localidade && row.localidade.trim().length > 0 && (tipo === 'presente' || tipo === 'hora_extra')) {
+            const rawLoc = row.localidade.trim()
+            const keyLoc = normLoc(rawLoc)
             
+            if (!locDisplayNames[keyLoc]) locDisplayNames[keyLoc] = rawLoc
             if (!empLocHist[fId]) empLocHist[fId] = {}
-            empLocHist[fId][locName] = (empLocHist[fId][locName] || 0) + 1
+            empLocHist[fId][keyLoc] = (empLocHist[fId][keyLoc] || 0) + 1
+            empBehavior[fId].totalEscalatedDays++
 
             if (dStrRow) {
-              const key = `${dStrRow}_${locName}`
+              const key = `${dStrRow}_${keyLoc}`
               if (!dailyLocMembers[key]) dailyLocMembers[key] = new Set()
               dailyLocMembers[key].add(fId)
             }
@@ -1590,9 +1601,6 @@ export function EscalaLocalidadePage() {
 
       const recs: Record<string, any[]> = {}
 
-      // Build a map of today's config locality names for fast lookup
-      const todayLocNames = new Set(localidadesConfig.map(l => l.nome.trim()))
-
       // Helper to build behavior tag for reasons
       const buildBehaviorTag = (fId: string): string => {
         const b = empBehavior[fId]
@@ -1606,20 +1614,22 @@ export function EscalaLocalidadePage() {
         if (b.horaExtraDays > 0) tags.push(`${b.horaExtraDays} HE`)
         
         if (tags.length === 0) {
-          return ` • ✅ Sem faltas nos últimos 30 dias`
+          return ` • ✅ Ficha Limpa`
         }
         return ` • ⚠️ ${tags.join(', ')}`
       }
 
+      // Loop through all localidades in today's configuration
       localidadesConfig.forEach(loc => {
         const locName = loc.nome.trim()
+        const locKey = normLoc(locName)
         const allocatedToday = dailyDistribution[loc.id] || []
         const allocatedIdsToday = allocatedToday.map(m => m.id)
 
         filteredFuncionarios.forEach(f => {
           if (f.cargo?.toLowerCase() === 'encarregado') return
 
-          const locDays = empLocHist[f.id]?.[locName] || 0
+          const locDays = empLocHist[f.id]?.[locKey] || 0
           let totalCoWorkerDays = 0
           let topPartnerName: string | null = null
           let topPartnerDays = 0
@@ -1651,123 +1661,51 @@ export function EscalaLocalidadePage() {
             if (behavior.horaExtraDays > 0) {
               reliabilityBonus += Math.min(3, behavior.horaExtraDays)
             }
-            // Penalty for many faltas or suspensão — place them with experienced partners
+            // Penalty for many faltas or suspensão
             if (behavior.faltaDays >= 3 || behavior.suspensaoDays > 0) {
               reliabilityPenalty = Math.min(5, behavior.faltaDays + (behavior.suspensaoDays * 2))
             }
-            // If returning from a long absence (atestado/suspensao), prefer familiar localities
+            // If returning from absence, boost familiar locality
             if (behavior.daysAwayBeforeReturn <= 3 && behavior.daysAwayBeforeReturn > 0 && locDays > 0) {
-              reliabilityBonus += 4 // Boost familiar locality for returning employees
+              reliabilityBonus += 4
             }
           }
 
           const baseScore = (locDays * 3) + (totalCoWorkerDays * 5)
           const score = Math.max(0, baseScore + reliabilityBonus - reliabilityPenalty)
 
-          if (score > 0 || locDays > 0 || (behavior && behavior.totalDays > 0)) {
-            if (!recs[f.id]) recs[f.id] = []
-            
-            const behaviorTag = buildBehaviorTag(f.id)
-            
-            let reason = ''
-            if (topPartnerName && topPartnerDays > 0 && locDays > 0) {
-              reason = `Trabalhou ${locDays}x nesta localidade e ${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
-            } else if (topPartnerName && topPartnerDays > 0) {
-              reason = `Trabalhou ${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
-            } else if (locDays > 0) {
-              reason = `Trabalhou ${locDays}x nesta localidade (últimos 30 dias)${behaviorTag}`
-            } else {
-              reason = `Vaga disponível na localidade${behaviorTag}`
-            }
-
-            // If returning from absence, add context
-            if (behavior && behavior.daysAwayBeforeReturn <= 3 && behavior.daysAwayBeforeReturn > 0) {
-              const absType = behavior.suspensaoDays > 0 ? 'suspensão' : behavior.atestadoDays > 0 ? 'atestado' : 'ausência'
-              reason += ` • 🔄 Retornando de ${absType}`
-            }
-
-            const matchPercent = Math.min(99, Math.max(55, Math.round(55 + (score * 1.5))))
-
-            recs[f.id].push({
-              locId: loc.id,
-              topLocalityName: locName,
-              score,
-              matchPercent,
-              localityDays: locDays,
-              coWorkerPartnerName: topPartnerName,
-              coWorkerDays: topPartnerDays,
-              reason
-            })
-          }
-        })
-      })
-
-      // For employees who have history but ONLY in localities not active today,
-      // generate fallback recommendations to any available locality with vacant spots
-      filteredFuncionarios.forEach(f => {
-        if (f.cargo?.toLowerCase() === 'encarregado') return
-        if (recs[f.id] && recs[f.id].length > 0) return // already has recommendations
-
-        const empHist = empLocHist[f.id]
-        const behavior = empBehavior[f.id]
-        if (!empHist && !behavior) return // truly no history at all
-
-        // Get the localities they worked in (even if not in today's config) for context
-        const histLocalities = empHist
-          ? Object.entries(empHist)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 3)
-              .map(([name, count]) => `${name}(${count}x)`)
-              .join(', ')
-          : ''
-
-        const behaviorTag = buildBehaviorTag(f.id)
-
-        // Recommend available localities with vacant spots, prioritizing by sector match
-        if (!recs[f.id]) recs[f.id] = []
-        localidadesConfig.forEach(loc => {
-          const locName = loc.nome.trim()
-          const allocatedToday = dailyDistribution[loc.id] || []
+          if (!recs[f.id]) recs[f.id] = []
           
-          // Check for co-worker synergy even without locality history
-          let totalCoWorkerDays = 0
-          let topPartnerName: string | null = null
-          let topPartnerDays = 0
+          const behaviorTag = buildBehaviorTag(f.id)
+          const totalEsc = behavior?.totalEscalatedDays || 0
           
-          allocatedToday.forEach(m => {
-            const daysTogether = pairHist[f.id]?.[m.id] || 0
-            if (daysTogether > 0) {
-              totalCoWorkerDays += daysTogether
-              if (daysTogether > topPartnerDays) {
-                topPartnerDays = daysTogether
-                topPartnerName = m.apelido || m.nome
-              }
-            }
-          })
-
-          const coWorkerScore = totalCoWorkerDays * 5
-          // Sector match bonus
-          const sectorMatch = f.setor && loc.setor && f.setor === loc.setor
-          const sectorBonus = sectorMatch ? 2 : 0
-          const score = coWorkerScore + sectorBonus
-
           let reason = ''
-          if (topPartnerName && topPartnerDays > 0) {
-            reason = `${topPartnerDays}x em dupla com ${topPartnerName}${histLocalities ? ` • Histórico: ${histLocalities}` : ''}${behaviorTag}`
-          } else if (sectorMatch) {
-            reason = `Mesmo setor (${f.setor})${histLocalities ? ` • Histórico: ${histLocalities}` : ''}${behaviorTag}`
+          if (topPartnerName && topPartnerDays > 0 && locDays > 0) {
+            reason = `Escalado ${locDays}x aqui e ${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
+          } else if (topPartnerName && topPartnerDays > 0) {
+            reason = `${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
+          } else if (locDays > 0) {
+            reason = `Escalado ${locDays}x nesta localidade (${totalEsc} dias totais)${behaviorTag}`
+          } else if (totalEsc > 0) {
+            reason = `Vaga disponível na rota (${totalEsc} dias de histórico em outras localidades)${behaviorTag}`
           } else {
-            reason = `Disponível${histLocalities ? ` • Histórico: ${histLocalities}` : ''}${behaviorTag}`
+            reason = `Disponível para alocação${behaviorTag}`
           }
 
-          const matchPercent = Math.min(85, Math.max(40, Math.round(40 + (score * 1.5))))
+          // If returning from absence, add context
+          if (behavior && behavior.daysAwayBeforeReturn <= 3 && behavior.daysAwayBeforeReturn > 0) {
+            const absType = behavior.suspensaoDays > 0 ? 'suspensão' : behavior.atestadoDays > 0 ? 'atestado' : 'ausência'
+            reason += ` • 🔄 Retornando de ${absType}`
+          }
+
+          const matchPercent = Math.min(99, Math.max(45, Math.round(45 + (score * 2.5))))
 
           recs[f.id].push({
             locId: loc.id,
             topLocalityName: locName,
             score,
             matchPercent,
-            localityDays: 0,
+            localityDays: locDays,
             coWorkerPartnerName: topPartnerName,
             coWorkerDays: topPartnerDays,
             reason
@@ -1775,6 +1713,7 @@ export function EscalaLocalidadePage() {
         })
       })
 
+      // Sort recommendations per employee by score (highest match first)
       Object.keys(recs).forEach(fId => {
         recs[fId].sort((a, b) => b.score - a.score)
       })
