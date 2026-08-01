@@ -1435,14 +1435,26 @@ export function EscalaLocalidadePage() {
 
   // Employees who are working today but NOT allocated to any localidade
   const availableFuncs = useMemo(() => {
+    const isSun = isSunday(parseLocalDate(dateStr))
     return filteredFuncionarios.filter(f => {
       if (f.cargo?.toLowerCase() === 'encarregado') return false
       
-      const { isTrabalhando, tipo, isAlocado } = getEmployeeStatus(f.id, dateStr)
+      const { isTrabalhando, tipo, isAlocado, escala } = getEmployeeStatus(f.id, dateStr)
+      const normTipo = tipo ? String(tipo).toLowerCase().trim() : ''
       
-      // Only "presente" and "hora_extra" count as available for allocation
-      // "falta" employees are shown on the location card but not as available for new allocation
-      if (tipo === 'falta' || tipo === 'repouso' || tipo === 'compensar' || tipo === 'ferias' || tipo === 'atestado') return false
+      // Exclude explicit absences
+      if (['falta', 'ferias', 'atestado', 'suspensao'].includes(normTipo)) return false
+      
+      if (isSun) {
+        if (isAlocado) return false
+        // Exclude if explicitly set to off in DB
+        if ((normTipo === 'repouso' || normTipo === 'compensar') && escala && (!escala.localidade || escala.localidade === 'Sem Local')) {
+          if (escala.tipo === 'repouso' || escala.tipo === 'compensar') return false
+        }
+        return true
+      }
+      
+      if (['repouso', 'compensar'].includes(normTipo)) return false
       
       return isTrabalhando && !isAlocado
     })
@@ -4674,10 +4686,25 @@ export function EscalaLocalidadePage() {
                     // Override to keep employee in the view during checkout animation
                     if (successAllocatedIds[f.id]) return true
                     
-                    const { isTrabalhando, tipo, isAlocado } = getEmployeeStatus(f.id, currentAssign.dateStr)
+                    const { isTrabalhando, tipo, isAlocado, escala } = getEmployeeStatus(f.id, currentAssign.dateStr)
+                    const normTipo = tipo ? String(tipo).toLowerCase().trim() : ''
+                    const isSun = isSunday(parseLocalDate(currentAssign.dateStr))
                     
-                    // Não mostrar quem está com falta, folga, férias, atestado
-                    if (tipo === 'falta' || tipo === 'repouso' || tipo === 'compensar' || tipo === 'ferias' || tipo === 'atestado') return false
+                    // Exclude explicit absences
+                    if (['falta', 'ferias', 'atestado', 'suspensao'].includes(normTipo)) return false
+
+                    // If modal search term is typed, show all active non-absent employees
+                    if (modalSearchTerm.trim()) return true
+                    
+                    if (isSun) {
+                      if (isAlocado) return false
+                      if ((normTipo === 'repouso' || normTipo === 'compensar') && escala && (!escala.localidade || escala.localidade === 'Sem Local')) {
+                        if (escala.tipo === 'repouso' || escala.tipo === 'compensar') return false
+                      }
+                      return true
+                    }
+                    
+                    if (['repouso', 'compensar'].includes(normTipo)) return false
                     
                     return isTrabalhando && !isAlocado
                   }).filter(f => 
