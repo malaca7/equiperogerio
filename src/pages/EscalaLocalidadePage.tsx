@@ -951,23 +951,17 @@ export function EscalaLocalidadePage() {
     } else if (e) {
       // Has an explicit escala record in DB — respect it!
       const normTipo = e.tipo ? String(e.tipo).toLowerCase().trim() : ''
-      const isExplicitOff = normTipo === 'repouso' || normTipo === 'compensar' || normTipo === 'ferias' || normTipo === 'atestado' || normTipo === 'suspensao' || normTipo === 'folga'
+      const isWorkingType = normTipo === 'presente' || normTipo === 'escala' || normTipo === 'hora_extra' || normTipo === 'trabalho' || normTipo === 'alocado'
       const hasAssignedLocality = !!(e.localidade && String(e.localidade).trim().length > 0)
       
-      isTrabalhando = !isExplicitOff || hasAssignedLocality
-      tipo = isExplicitOff && !hasAssignedLocality ? (e.tipo || 'repouso') : (e.tipo || 'presente')
+      isTrabalhando = isWorkingType || hasAssignedLocality
+      tipo = isTrabalhando ? (e.tipo || 'presente') : (e.tipo || 'repouso')
     } else {
       // No record in DB for this date:
-      // If Sunday and there are active localidades configured for today, treat active workforce as available for allocation!
-      const hasActiveSundayLocalities = isDomingo && localidadesConfig.length > 0
-      
-      if (isDomingo && !hasActiveSundayLocalities) {
-        isTrabalhando = false
-        tipo = 'repouso'
-      } else {
-        isTrabalhando = true
-        tipo = 'presente'
-      }
+      // Weekdays default to working ('presente').
+      // Sundays default to off ('repouso') — ONLY employees with explicit working escala records can work on Sunday!
+      isTrabalhando = !isDomingo
+      tipo = isDomingo ? 'repouso' : 'presente'
     }
 
     // An employee is "allocated" if they have an escala record with a localidade that matches dbLocalidades or localidadesConfig
@@ -1999,6 +1993,13 @@ export function EscalaLocalidadePage() {
   const handleAssign = async (funcId: string) => {
     if (!assignModal) return
     
+    const { isTrabalhando, tipo } = getEmployeeStatus(funcId, assignModal.dateStr)
+    if (!isTrabalhando && assignModal.locName !== 'Sem Local') {
+      const statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo.toUpperCase()
+      toast(`Não é possível alocar: colaborador em ${statusLabel} no dia.`, 'error')
+      return
+    }
+    
     // Trigger optimistic morphing animation instantly on touch
     setSuccessAllocatedIds(prev => ({ ...prev, [funcId]: true }))
     setTimeout(() => {
@@ -2216,6 +2217,14 @@ export function EscalaLocalidadePage() {
 
   const handleMove = async (funcId: any, targetLocName: string | null, escalaId?: string) => {
     const fIdStr = String(funcId).trim()
+    const { isTrabalhando, tipo } = getEmployeeStatus(fIdStr, dateStr)
+    
+    if (!isTrabalhando && targetLocName) {
+      const statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo.toUpperCase()
+      toast(`Não é possível alocar: colaborador em ${statusLabel} no dia.`, 'error')
+      return
+    }
+
     const periodKey = ['escalas', 'periodo', fetchStart, fetchEnd]
     const previousEscalas = queryClient.getQueryData<any[]>(periodKey)
 
