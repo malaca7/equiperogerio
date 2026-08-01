@@ -2041,7 +2041,7 @@ export function EscalaLocalidadePage() {
         // Optimistic Update: Add or update escala in cache
         if (previousEscalas) {
           const updatedEscalas = [...previousEscalas]
-          const existingIdx = updatedEscalas.findIndex(e => e.funcionario_id === funcId && e.data.substring(0, 10) === assignModal.dateStr)
+          const existingIdx = updatedEscalas.findIndex(e => String(e.funcionario_id).trim() === String(funcId).trim() && e.data.substring(0, 10) === assignModal.dateStr)
           
           if (existingIdx > -1) {
             updatedEscalas[existingIdx] = {
@@ -2381,10 +2381,10 @@ export function EscalaLocalidadePage() {
         if (!e.localidade) return false
         
         if (teamInfo?.isRestricted) {
-          return teamInfo.teamMemberIds.includes(e.funcionario_id)
+          return teamInfo.teamMemberIds.some((id: any) => String(id).trim() === String(e.funcionario_id).trim())
         }
         if (selectedTeamId) {
-          return selectedTeamMembers.includes(e.funcionario_id)
+          return selectedTeamMembers.some((id: any) => String(id).trim() === String(e.funcionario_id).trim())
         }
         return true
       })
@@ -2394,9 +2394,11 @@ export function EscalaLocalidadePage() {
       // 2. Check if anyone is scheduled/available to work on this day
       const hasWorking = filteredFuncionarios.some(f => {
         if (f.cargo?.toLowerCase() === 'encarregado') return false
-        const e = escalaMap[`${f.id}_${dStr}`]
+        const fIdStr = String(f.id).trim()
+        const e = escalaMap[`${fIdStr}_${dStr}`] || escalaMap[`${f.id}_${dStr}`]
         if (e) {
-          return ['presente', 'hora_extra', 'falta'].includes(e.tipo)
+          const normTipo = e.tipo ? String(e.tipo).toLowerCase().trim() : ''
+          return ['presente', 'escala', 'hora_extra', 'trabalho', 'falta', 'alocado'].includes(normTipo)
         }
         return !isDom
       })
