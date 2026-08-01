@@ -1478,20 +1478,22 @@ export function EscalaLocalidadePage() {
     setAssistantLoading(true)
     try {
       const targetDate = parseLocalDate(dateStr)
-      const sixtyDaysAgo = subDays(targetDate, 60)
+      const ninetyDaysAgo = subDays(targetDate, 90)
 
-      const startStr = format(sixtyDaysAgo, 'yyyy-MM-dd')
-      const endStr = dateStr
+      const startStr = format(ninetyDaysAgo, 'yyyy-MM-dd')
+      const tomorrow = addDays(targetDate, 1)
+      const endStr = format(tomorrow, 'yyyy-MM-dd')
 
-      // Helper to normalize locality strings for case-insensitive matching
-      const normLoc = (s: string) => s.trim().toLowerCase()
+      // Helper to normalize locality strings (accent-insensitive & case-insensitive)
+      const normLoc = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : ""
 
       // Map locality normalized names to their sector for fast lookup
       const locToSectorMap: Record<string, string> = {}
+      localidadesConfig.forEach(l => {
+        if (l.nome && l.setor) locToSectorMap[normLoc(l.nome)] = l.setor
+      })
       dbLocalidades.forEach(l => {
-        if (l.nome && l.setor) {
-          locToSectorMap[normLoc(l.nome)] = l.setor
-        }
+        if (l.nome && l.setor) locToSectorMap[normLoc(l.nome)] = l.setor
       })
 
       // Fetch ALL records (including faltas, atestados, suspensões) - up to 5000 rows
@@ -1504,26 +1506,10 @@ export function EscalaLocalidadePage() {
 
       if (error) throw error
 
-      // Stores normalized locality counts per employee ID
       const empLocHist: Record<string, Record<string, number>> = {}
-      // Stores sector counts per employee ID from history
       const empSetorHist: Record<string, Record<string, number>> = {}
-      // Stores original locality display names per normalized name
-      const locDisplayNames: Record<string, string> = {}
       const dailyLocMembers: Record<string, Set<string>> = {}
-      
-      // Track attendance behavior per employee
-      const empBehavior: Record<string, { 
-        totalDays: number; 
-        presentDays: number; 
-        faltaDays: number; 
-        atestadoDays: number; 
-        suspensaoDays: number; 
-        horaExtraDays: number;
-        lastAbsenceDate: string | null;
-        daysAwayBeforeReturn: number;
-        totalEscalatedDays: number;
-      }> = {}
+      const empBehavior: Record<string, { totalDays: number; presentDays: number; faltaDays: number; atestadoDays: number; suspensaoDays: number; horaExtraDays: number; lastAbsenceDate: string | null; daysAwayBeforeReturn: number; totalEscalatedDays: number }> = {}
 
       if (allHistoryData) {
         allHistoryData.forEach((row: any) => {
@@ -1532,56 +1518,39 @@ export function EscalaLocalidadePage() {
           const tipo = row.tipo ? String(row.tipo).toLowerCase().trim() : 'presente'
           const dStrRow = row.data ? row.data.substring(0, 10) : ''
 
-          // Initialize behavior tracking
           if (!empBehavior[fId]) {
-            empBehavior[fId] = { 
-              totalDays: 0, presentDays: 0, faltaDays: 0, 
-              atestadoDays: 0, suspensaoDays: 0, horaExtraDays: 0,
-              lastAbsenceDate: null, daysAwayBeforeReturn: 0,
-              totalEscalatedDays: 0
-            }
+            empBehavior[fId] = { totalDays: 0, presentDays: 0, faltaDays: 0, atestadoDays: 0, suspensaoDays: 0, horaExtraDays: 0, lastAbsenceDate: null, daysAwayBeforeReturn: 0, totalEscalatedDays: 0 }
           }
-          
           empBehavior[fId].totalDays++
           
-          if (tipo === 'presente' || tipo === 'escala' || !tipo) {
-            empBehavior[fId].presentDays++
-          } else if (tipo === 'hora_extra') {
-            empBehavior[fId].horaExtraDays++
-            empBehavior[fId].presentDays++
-          } else if (tipo === 'falta') {
-            empBehavior[fId].faltaDays++
-            if (!empBehavior[fId].lastAbsenceDate || dStrRow > empBehavior[fId].lastAbsenceDate!) {
-              empBehavior[fId].lastAbsenceDate = dStrRow
-            }
-          } else if (tipo === 'atestado') {
-            empBehavior[fId].atestadoDays++
-            if (!empBehavior[fId].lastAbsenceDate || dStrRow > empBehavior[fId].lastAbsenceDate!) {
-              empBehavior[fId].lastAbsenceDate = dStrRow
-            }
-          } else if (tipo === 'suspensao') {
-            empBehavior[fId].suspensaoDays++
-            if (!empBehavior[fId].lastAbsenceDate || dStrRow > empBehavior[fId].lastAbsenceDate!) {
-              empBehavior[fId].lastAbsenceDate = dStrRow
-            }
+          if (tipo === 'presente' || tipo === 'escala' || !tipo) empBehavior[fId].presentDays++
+          else if (tipo === 'hora_extra') { empBehavior[fId].horaExtraDays++; empBehavior[fId].presentDays++ }
+          else if (['falta', 'atestado', 'suspensao'].includes(tipo)) {
+            empBehavior[fId][`${tipo}Days` as keyof typeof empBehavior[fId]]++
+            if (!empBehavior[fId].lastAbsenceDate || dStrRow > empBehavior[fId].lastAbsenceDate!) empBehavior[fId].lastAbsenceDate = dStrRow
           }
 
-          // Count locality history for ANY record that has a localidade assigned and is not an explicit absence
-          const isAbsence = tipo === 'falta' || tipo === 'atestado' || tipo === 'suspensao' || tipo === 'ferias' || tipo === 'repouso' || tipo === 'compensar'
+          const isAbsence = ['falta', 'atestado', 'suspensao', 'ferias', 'repouso', 'compensar'].includes(tipo)
           if (row.localidade && String(row.localidade).trim().length > 0 && !isAbsence) {
             const rawLoc = String(row.localidade).trim()
             const keyLoc = normLoc(rawLoc)
             
-            if (!locDisplayNames[keyLoc]) locDisplayNames[keyLoc] = rawLoc
             if (!empLocHist[fId]) empLocHist[fId] = {}
             empLocHist[fId][keyLoc] = (empLocHist[fId][keyLoc] || 0) + 1
             empBehavior[fId].totalEscalatedDays++
 
-            // Track sector history
-            const locSetor = locToSectorMap[keyLoc]
+            let locSetor = locToSectorMap[keyLoc]
+            if (!locSetor) {
+              if (keyLoc.includes('varri') || keyLoc.includes('varr')) locSetor = 'Varrição'
+              else if (keyLoc.includes('banheiro')) locSetor = 'Banheiro'
+              else if (keyLoc.includes('feira')) locSetor = 'Feiras'
+              else if (keyLoc.includes('praca') || keyLoc.includes('praca')) locSetor = 'Praças'
+            }
+
             if (locSetor) {
+              const keySetor = normLoc(locSetor)
               if (!empSetorHist[fId]) empSetorHist[fId] = {}
-              empSetorHist[fId][locSetor] = (empSetorHist[fId][locSetor] || 0) + 1
+              empSetorHist[fId][keySetor] = (empSetorHist[fId][keySetor] || 0) + 1
             }
 
             if (dStrRow) {
@@ -1593,12 +1562,10 @@ export function EscalaLocalidadePage() {
         })
       }
 
-      // Calculate days since last absence for each employee
       Object.keys(empBehavior).forEach(fId => {
-        const b = empBehavior[fId]
-        if (b.lastAbsenceDate) {
-          const lastAbs = parseLocalDate(b.lastAbsenceDate)
-          b.daysAwayBeforeReturn = Math.max(0, Math.floor((targetDate.getTime() - lastAbs.getTime()) / (1000 * 60 * 60 * 24)))
+        if (empBehavior[fId].lastAbsenceDate) {
+          const lastAbs = parseLocalDate(empBehavior[fId].lastAbsenceDate!)
+          empBehavior[fId].daysAwayBeforeReturn = Math.max(0, Math.floor((targetDate.getTime() - lastAbs.getTime()) / (1000 * 60 * 60 * 24)))
         }
       })
 
@@ -1607,202 +1574,92 @@ export function EscalaLocalidadePage() {
         const membersArr = Array.from(memberSet)
         for (let i = 0; i < membersArr.length; i++) {
           for (let j = i + 1; j < membersArr.length; j++) {
-            const m1 = membersArr[i]
-            const m2 = membersArr[j]
-            if (!pairHist[m1]) pairHist[m1] = {}
-            if (!pairHist[m2]) pairHist[m2] = {}
-            pairHist[m1][m2] = (pairHist[m1][m2] || 0) + 1
-            pairHist[m2][m1] = (pairHist[m2][m1] || 0) + 1
+            const m1 = membersArr[i]; const m2 = membersArr[j]
+            if (!pairHist[m1]) pairHist[m1] = {}; if (!pairHist[m2]) pairHist[m2] = {}
+            pairHist[m1][m2] = (pairHist[m1][m2] || 0) + 1; pairHist[m2][m1] = (pairHist[m2][m1] || 0) + 1
           }
         }
       })
 
       const recs: Record<string, any[]> = {}
-
-      // Helper to build behavior tag for reasons
       const buildBehaviorTag = (fId: string): string => {
-        const b = empBehavior[fId]
-        if (!b || b.totalDays === 0) return ''
-        
-        const tags: string[] = []
-        
+        const b = empBehavior[fId]; if (!b) return ''
+        const tags = []
         if (b.faltaDays > 0) tags.push(`${b.faltaDays} falta${b.faltaDays > 1 ? 's' : ''}`)
         if (b.atestadoDays > 0) tags.push(`${b.atestadoDays} atestado${b.atestadoDays > 1 ? 's' : ''}`)
         if (b.suspensaoDays > 0) tags.push(`${b.suspensaoDays}d suspenso`)
-        if (b.horaExtraDays > 0) tags.push(`${b.horaExtraDays} HE`)
-        
-        if (tags.length === 0) {
-          return ` • ✅ Ficha Limpa`
-        }
-        return ` • ⚠️ ${tags.join(', ')}`
+        return tags.length > 0 ? ` • ⚠️ ${tags.join(', ')}` : ''
       }
 
-      // Loop through all localidades in today's configuration
       localidadesConfig.forEach(loc => {
-        const locName = loc.nome.trim()
-        const locKey = normLoc(locName)
+        const locName = loc.nome.trim(); const locKey = normLoc(locName)
         const locSetor = loc.setor || locToSectorMap[locKey] || ''
-        const allocatedToday = dailyDistribution[loc.id] || []
-        const allocatedIdsToday = allocatedToday.map(m => String(m.id).trim())
+        const normLocSetorKey = normLoc(locSetor)
+        const allocatedIdsToday = (dailyDistribution[loc.id] || []).map(m => String(m.id).trim())
 
         filteredFuncionarios.forEach(f => {
           if (f.cargo?.toLowerCase() === 'encarregado') return
-
           const fIdStr = String(f.id).trim()
+          const empSetMap = empSetorHist[fIdStr] || {}
           const locDays = empLocHist[fIdStr]?.[locKey] || 0
           
-          const empLocMap = empLocHist[fIdStr] || {}
+          const topHistSetor = Object.entries(empSetMap).sort((a,b) => b[1] - a[1])[0]?.[0] || null
+          const empPrimarySetor = f.setor && f.setor !== 'Geral' ? f.setor : (topHistSetor || f.setor || '')
+          const profileSetorKey = normLoc(empPrimarySetor)
+          const totalEscDays = empBehavior[fIdStr]?.totalEscalatedDays || 0
 
-          // ABSOLUTE STRICT LOCALITY RULE:
-          // ONLY recommend a locality to an employee IF they have ACTUALLY worked in this specific locality before (locDays > 0)!
-          if (locDays <= 0) {
-            return // Unconditionally skip any locality where the employee has 0 past allocations!
-          }
+          const isExactLocality = locDays > 0
+          const isSameSector = normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey
+          const isHistSector = normLocSetorKey && empSetMap[normLocSetorKey] && empSetMap[normLocSetorKey] > 0
 
-          let totalCoWorkerDays = 0
-          let topPartnerName: string | null = null
-          let topPartnerDays = 0
+          if (totalEscDays > 0 && !isExactLocality && !isSameSector && !isHistSector) return
 
-          allocatedIdsToday.forEach(colleagueId => {
-            if (colleagueId === fIdStr) return
-            const daysTogether = pairHist[fIdStr]?.[colleagueId] || 0
-            if (daysTogether > 0) {
-              totalCoWorkerDays += daysTogether
-              if (daysTogether > topPartnerDays) {
-                topPartnerDays = daysTogether
-                const colleagueObj = allFuncionarios.find(c => String(c.id).trim() === colleagueId)
-                topPartnerName = colleagueObj?.apelido || colleagueObj?.nome || null
-              }
+          let totalCoWorkerDays = 0; let topPartnerName = null; let topPartnerDays = 0
+          allocatedIdsToday.forEach(cId => {
+            const d = pairHist[fIdStr]?.[cId] || 0
+            if (d > 0) {
+              totalCoWorkerDays += d
+              if (d > topPartnerDays) { topPartnerDays = d; const col = allFuncionarios.find(x => String(x.id).trim() === cId); topPartnerName = col?.apelido || col?.nome }
             }
           })
 
-          // Sector alignment bonus
-          const normLocSetorKey = locSetor ? normLoc(locSetor) : ''
-          const profileSetorKey = f.setor && f.setor !== 'Geral' ? normLoc(f.setor) : ''
-          let setorBonus = 0
-          if (normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey) {
-            setorBonus = 25
-          }
-
-          // Behavior-adjusted scoring
-          const behavior = empBehavior[fIdStr]
-          let reliabilityBonus = 0
-          let reliabilityPenalty = 0
-          
-          if (behavior) {
-            if (behavior.faltaDays === 0 && behavior.suspensaoDays === 0 && behavior.presentDays > 0) {
-              reliabilityBonus = Math.min(5, Math.floor(behavior.presentDays / 3))
-            }
-            if (behavior.horaExtraDays > 0) {
-              reliabilityBonus += Math.min(3, behavior.horaExtraDays)
-            }
-            if (behavior.faltaDays >= 3 || behavior.suspensaoDays > 0) {
-              reliabilityPenalty = Math.min(5, behavior.faltaDays + (behavior.suspensaoDays * 2))
-            }
-            if (behavior.daysAwayBeforeReturn <= 3 && behavior.daysAwayBeforeReturn > 0 && locDays > 0) {
-              reliabilityBonus += 4
-            }
-          }
-
-          // Locality history weighted 12x, co-workers 6x
-          const baseScore = (locDays * 12) + (totalCoWorkerDays * 6) + setorBonus
-          const score = Math.max(0, baseScore + reliabilityBonus - reliabilityPenalty)
+          const setorBonus = isSameSector ? 30 : (isHistSector ? 15 : 0)
+          const reliabilityBonus = empBehavior[fIdStr]?.daysAwayBeforeReturn <= 3 ? 4 : 0
+          const score = Math.max(0, (locDays * 20) + (topPartnerDays * 8) + setorBonus + reliabilityBonus)
 
           if (!recs[f.id]) recs[f.id] = []
-          if (!recs[fIdStr]) recs[fIdStr] = recs[f.id]
-          
           const behaviorTag = buildBehaviorTag(fIdStr)
-          const totalEsc = behavior?.totalEscalatedDays || 0
-          
-          let reason = ''
-          if (topPartnerName && topPartnerDays > 0 && locDays > 0) {
-            reason = `Escalado ${locDays}x aqui e ${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
-          } else {
-            reason = `Escalado ${locDays}x nesta localidade (${totalEsc} dias totais)${behaviorTag}`
-          }
+          let reason = isExactLocality ? `Escalado ${locDays}x nesta localidade` : (isSameSector ? `Setor ${locSetor}` : 'Disponível')
+          reason += behaviorTag
 
-          // If returning from absence, add context
-          if (behavior && behavior.daysAwayBeforeReturn <= 3 && behavior.daysAwayBeforeReturn > 0) {
-            const absType = behavior.suspensaoDays > 0 ? 'suspensão' : behavior.atestadoDays > 0 ? 'atestado' : 'ausência'
-            reason += ` • 🔄 Retornando de ${absType}`
-          }
-
-          const matchPercent = Math.min(99, Math.max(40, Math.round(40 + (score * 1.5))))
-
-          recs[f.id].push({
-            locId: loc.id,
-            topLocalityName: locName,
-            score,
-            matchPercent,
-            localityDays: locDays,
-            coWorkerPartnerName: topPartnerName,
-            coWorkerDays: topPartnerDays,
-            reason
-          })
+          recs[f.id].push({ locId: loc.id, topLocalityName: locName, score, matchPercent: Math.min(99, Math.round(50 + (score * 1.2))), reason })
         })
       })
-
-      // Sort recommendations per employee by score (highest match first)
-      Object.keys(recs).forEach(fId => {
-        recs[fId].sort((a, b) => b.score - a.score)
-      })
-
+      Object.values(recs).forEach(list => list.sort((a, b) => b.score - a.score))
       setAssistantData({ recommendations: recs, empLocHist, pairHist, empBehavior })
-    } catch (err) {
-      console.error('Erro na assistência de alocação:', err)
-    } finally {
-      setAssistantLoading(false)
-    }
+    } catch (err) { console.error(err) } finally { setAssistantLoading(false) }
   }, [dateStr, localidadesConfig, dailyDistribution, filteredFuncionarios, allFuncionarios, dbLocalidades])
 
-  useEffect(() => {
-    calculateAssistantRecommendations()
-  }, [calculateAssistantRecommendations])
+  useEffect(() => { calculateAssistantRecommendations() }, [calculateAssistantRecommendations])
 
-  
   const getBestCandidateForLocality = useCallback((locName: string, allocatedMembers: any[]) => {
     if (!filteredAvailableFuncs || filteredAvailableFuncs.length === 0) return null
-
-    const normLocName = locName.trim().toLowerCase()
-    const locObj = localidadesConfig.find(l => l.nome.trim().toLowerCase() === normLocName)
-    const locSetor = locObj?.setor || ''
-    const normLocSetor = locSetor ? locSetor.trim().toLowerCase() : ''
-
+    const normLoc = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : ""
+    const normLocName = normLoc(locName)
+    const locObj = localidadesConfig.find(l => normLoc(l.nome) === normLocName)
+    const normLocSetor = normLoc(locObj?.setor || '')
     const allocatedIds = new Set(allocatedMembers.map(m => String(m.id).trim()))
-
-    let bestFunc: any = null
-    let maxScore = -1
+    let bestFunc = null; let maxScore = -1
 
     filteredAvailableFuncs.forEach(f => {
       const fIdStr = String(f.id).trim()
       if (allocatedIds.has(fIdStr)) return
-
       const locDays = assistantData.empLocHist?.[fIdStr]?.[normLocName] || 0
-      
-      // ABSOLUTE STRICT RULE FOR DICA IA:
-      // ONLY suggest a candidate for a locality card if they have ACTUALLY been allocated to this locality in the past (locDays > 0)
-      if (locDays === 0) return
-
-      let coWorkerDays = 0
-      let topPartnerName: string | null = null
-      let topPartnerDays = 0
-
-      allocatedMembers.forEach(m => {
-        const daysTogether = assistantData.pairHist?.[fIdStr]?.[String(m.id).trim()] || 0
-        if (daysTogether > 0) {
-          coWorkerDays += daysTogether
-          if (daysTogether > topPartnerDays) {
-            topPartnerDays = daysTogether
-            topPartnerName = m.apelido || m.nome
-          }
-        }
-      })
-
-      const empSetor = f.setor && f.setor !== 'Geral' ? f.setor.trim().toLowerCase() : ''
-      const isSameSetor = normLocSetor && empSetor && normLocSetor === empSetor
-      const score = (locDays * 12) + (coWorkerDays * 6) + (isSameSetor ? 15 : 0)
-
-      if (score > maxScore) {
+      const isSameSector = normLocSetor && normLoc(f.setor || '') === normLocSetor
+      let partnerDays = 0
+      allocatedMembers.forEach(m => { partnerDays += assistantData.pairHist?.[fIdStr]?.[String(m.id).trim()] || 0 })
+      const score = (locDays * 20) + (partnerDays * 8) + (isSameSector ? 30 : 0)
+      if (score > maxScore && (locDays > 0 || isSameSector || partnerDays > 0)) {
         maxScore = score
         const funcName = f.apelido || f.nome
         let reason = ''
