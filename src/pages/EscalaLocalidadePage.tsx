@@ -643,32 +643,32 @@ export function EscalaLocalidadePage() {
     
     const activeTeamId = teamInfo?.isRestricted ? (teamInfo.teamIds?.[0] || null) : selectedTeamId
     const borrowedByOthers = borrowedMembers.filter((bm: any) => bm.equipe_id !== activeTeamId)
-    const borrowedByOthersIds = new Set(borrowedByOthers.map((bm: any) => bm.funcionario_id))
+    const borrowedByOthersIds = new Set(borrowedByOthers.map((bm: any) => String(bm.funcionario_id).trim()))
     
-    list = list.filter(f => !borrowedByOthersIds.has(f.id))
+    list = list.filter(f => !borrowedByOthersIds.has(String(f.id).trim()))
 
     if (teamInfo?.isRestricted) {
       // Mostra apenas os funcionários de todas as equipes do encarregado + os emprestados
       const supervisorTeamIds = teamInfo.teamIds || []
       const borrowedForDay = borrowedMembers
         .filter((bm: any) => supervisorTeamIds.includes(bm.equipe_id))
-        .map((bm: any) => bm.funcionario_id)
-      const allowedIds = [...(teamInfo.teamMemberIds || []), ...borrowedForDay]
-      return list.filter(f => allowedIds.includes(f.id))
+        .map((bm: any) => String(bm.funcionario_id).trim())
+      const allowedIds = [...(teamInfo.teamMemberIds || []).map((id: any) => String(id).trim()), ...borrowedForDay]
+      return list.filter(f => allowedIds.includes(String(f.id).trim()))
     }
     if (selectedTeamId) {
       const allowedSectors = dbSetoresEquipes[selectedTeamId] || []
       const borrowedForDay = borrowedMembers
         .filter((bm: any) => bm.equipe_id === selectedTeamId)
-        .map((bm: any) => bm.funcionario_id)
-      const allowedIds = [...(selectedTeamMembers || []), ...borrowedForDay]
+        .map((bm: any) => String(bm.funcionario_id).trim())
+      const allowedIds = [...(selectedTeamMembers || []).map((id: any) => String(id).trim()), ...borrowedForDay]
       return list.filter(f => 
-        allowedIds.includes(f.id) ||
+        allowedIds.includes(String(f.id).trim()) ||
         (f.setor && allowedSectors.includes(f.setor))
       )
     }
     return list
-  }, [allFuncionarios, selectedTeamId, selectedTeamMembers, teamInfo, dbSetoresEquipes, currentDate, borrowedMembers])
+  }, [allFuncionarios, currentDate, selectedTeamId, teamInfo, dbSetoresEquipes, borrowedMembers, selectedTeamMembers])
 
   // Helpers
   const dateKey = `equipes_meta_${dateStr}`
@@ -1443,16 +1443,25 @@ export function EscalaLocalidadePage() {
 
   // Employees who are working today but NOT allocated to any localidade
   const availableFuncs = useMemo(() => {
+    const isSun = isSunday(parseLocalDate(dateStr))
     return filteredFuncionarios.filter(f => {
       if (f.cargo?.toLowerCase() === 'encarregado') return false
       
-      const { isTrabalhando, tipo, isAlocado } = getEmployeeStatus(f.id, dateStr)
+      const { isTrabalhando, tipo, isAlocado, escala } = getEmployeeStatus(f.id, dateStr)
       const normTipo = tipo ? String(tipo).toLowerCase().trim() : ''
       
-      // Only employees with active working scale for today and not off/absent can be allocated
-      if (['falta', 'repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga'].includes(normTipo)) {
-        return false
+      // Exclude explicit absences
+      if (['falta', 'ferias', 'atestado', 'suspensao'].includes(normTipo)) return false
+      
+      if (isSun) {
+        if (isAlocado) return false
+        if ((normTipo === 'repouso' || normTipo === 'compensar') && escala && (!escala.localidade || escala.localidade === 'Sem Local')) {
+          return false
+        }
+        return true
       }
+      
+      if (['repouso', 'compensar'].includes(normTipo)) return false
       
       return isTrabalhando && !isAlocado
     })
@@ -4686,16 +4695,28 @@ export function EscalaLocalidadePage() {
                     // Override to keep employee in the view during checkout animation
                     if (successAllocatedIds[f.id]) return true
                     
-                    const { isTrabalhando, tipo } = getEmployeeStatus(f.id, currentAssign.dateStr)
+                    const { isTrabalhando, tipo, isAlocado, escala } = getEmployeeStatus(f.id, currentAssign.dateStr)
                     const normTipo = tipo ? String(tipo).toLowerCase().trim() : ''
+                    const isSun = isSunday(parseLocalDate(currentAssign.dateStr))
                     
-                    // Exclude explicit absences or off status
-                    if (['falta', 'repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga'].includes(normTipo)) {
+                    // Exclude explicit absences
+                    if (['falta', 'ferias', 'atestado', 'suspensao'].includes(normTipo)) {
                       return false
                     }
 
-                    // Only show employees who are scheduled to work on this date (isTrabalhando = true)
-                    return isTrabalhando
+                    // Exclude if explicitly marked as off/repouso in DB
+                    if ((normTipo === 'repouso' || normTipo === 'compensar') && escala && (!escala.localidade || escala.localidade === 'Sem Local')) {
+                      return false
+                    }
+
+                    if (isSun) {
+                      if (modalSearchTerm.trim()) return true
+                      return !isAlocado
+                    }
+
+                    if (modalSearchTerm.trim()) return isTrabalhando
+                    
+                    return isTrabalhando && !isAlocado
                   }).filter(f => 
                     f.nome.toLowerCase().includes(modalSearchTerm.toLowerCase()) || 
                     (f.apelido && f.apelido.toLowerCase().includes(modalSearchTerm.toLowerCase()))
