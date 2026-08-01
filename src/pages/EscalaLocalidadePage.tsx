@@ -4684,7 +4684,7 @@ export function EscalaLocalidadePage() {
                     // Override to keep employee in the view during checkout animation
                     if (successAllocatedIds[f.id]) return true
                     
-                    const { isTrabalhando, tipo, isAlocado } = getEmployeeStatus(f.id, currentAssign.dateStr)
+                    const { isTrabalhando, tipo } = getEmployeeStatus(f.id, currentAssign.dateStr)
                     const normTipo = tipo ? String(tipo).toLowerCase().trim() : ''
                     
                     // Exclude explicit absences or off status
@@ -4692,10 +4692,8 @@ export function EscalaLocalidadePage() {
                       return false
                     }
 
-                    // If modal search term is typed, allow searching employees working on that day
-                    if (modalSearchTerm.trim()) return isTrabalhando
-                    
-                    return isTrabalhando && !isAlocado
+                    // Only show employees who are scheduled to work on this date (isTrabalhando = true)
+                    return isTrabalhando
                   }).filter(f => 
                     f.nome.toLowerCase().includes(modalSearchTerm.toLowerCase()) || 
                     (f.apelido && f.apelido.toLowerCase().includes(modalSearchTerm.toLowerCase()))
