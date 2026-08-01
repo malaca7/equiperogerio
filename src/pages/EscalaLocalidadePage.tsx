@@ -934,10 +934,12 @@ export function EscalaLocalidadePage() {
   // Single source of truth: determines if a given employee is working on a given date.
   // Returns: { isTrabalhando, tipo, escala, isAlocado }
   const getEmployeeStatus = useCallback((funcId: string, targetDateStr: string) => {
+    const normLoc = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : ""
     const targetDate = parseLocalDate(targetDateStr)
     const isDomingo = isSunday(targetDate)
-    const e = escalaMap[`${funcId}_${targetDateStr}`]
-    const funcObj = allFuncionarios.find(f => f.id === funcId)
+    const fIdStr = String(funcId).trim()
+    const e = escalaMap[`${fIdStr}_${targetDateStr}`] || escalaMap[`${funcId}_${targetDateStr}`]
+    const funcObj = allFuncionarios.find(f => String(f.id).trim() === fIdStr)
     const isDesligado = !!(funcObj?.data_desligamento && targetDateStr >= funcObj.data_desligamento)
 
     let isTrabalhando = false
@@ -947,24 +949,33 @@ export function EscalaLocalidadePage() {
       isTrabalhando = false
       tipo = 'repouso'
     } else if (e) {
-      // Has an explicit escala record — respect it
-      isTrabalhando = e.tipo === 'presente' || e.tipo === 'hora_extra' || e.tipo === 'falta'
-      tipo = e.tipo
+      // Has an explicit escala record — respect it!
+      const normTipo = e.tipo ? String(e.tipo).toLowerCase().trim() : ''
+      const isExplicitOff = normTipo === 'repouso' || normTipo === 'compensar' || normTipo === 'ferias' || normTipo === 'atestado' || normTipo === 'suspensao' || normTipo === 'folga'
+      
+      const hasAssignedLocality = !!(e.localidade && String(e.localidade).trim().length > 0)
+      isTrabalhando = !isExplicitOff || hasAssignedLocality
+      tipo = isExplicitOff && !hasAssignedLocality ? (e.tipo || 'repouso') : (e.tipo || 'presente')
     } else {
       // No record: weekdays default to working, Sundays default to off
       isTrabalhando = !isDomingo
       tipo = isDomingo ? 'repouso' : 'presente'
     }
 
-    // An employee is "allocated" only if they have an escala record with a VALID existing localidade in dbLocalidades
-    const isValidLocality = !!(e && e.localidade && dbLocalidades.some(l => l.nome.trim().toLowerCase() === e.localidade.trim().toLowerCase()))
-    const isAlocado = !isDesligado && isValidLocality
+    // An employee is "allocated" if they have an escala record with a localidade that matches dbLocalidades or localidadesConfig
+    const hasLocalityString = !!(e && e.localidade && String(e.localidade).trim().length > 0)
+    const isValidLocality = hasLocalityString && (
+      dbLocalidades.some(l => normLoc(l.nome) === normLoc(e.localidade)) ||
+      localidadesConfig.some(l => normLoc(l.nome) === normLoc(e.localidade))
+    )
+    const isAlocado = !isDesligado && (isValidLocality || hasLocalityString)
 
-    return { isTrabalhando, tipo, escala: e, isAlocado, hasOrphanedLocality: !!(e && e.localidade && !isValidLocality) }
-  }, [escalaMap, allFuncionarios, dbLocalidades])
+    return { isTrabalhando, tipo, escala: e, isAlocado, hasOrphanedLocality: !!(hasLocalityString && !isValidLocality) }
+  }, [escalaMap, allFuncionarios, dbLocalidades, localidadesConfig])
 
   // Logic for daily view: locality -> employees
   const dailyDistribution = useMemo(() => {
+    const normLoc = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : ""
     const dist: Record<string, { id: string; nome: string; apelido?: string | null; setor: string; escalaId: string; tipo: string }[]> = {}
     localidadesConfig.forEach(l => { dist[l.id] = [] })
     dist['sem_local'] = []
@@ -975,9 +986,10 @@ export function EscalaLocalidadePage() {
       const { isTrabalhando, tipo, escala, isAlocado } = getEmployeeStatus(f.id, dateStr)
 
       if (!isTrabalhando) return
-      if (!isAlocado) return // Not allocated to any location — skip (will appear in avulsos)
+      if (!isAlocado || !escala || !escala.localidade) return // Not allocated to any location — skip (will appear in avulsos)
 
-      const loc = localidadesConfig.find(l => l.nome === escala.localidade)
+      const normEscLoc = normLoc(escala.localidade)
+      const loc = localidadesConfig.find(l => normLoc(l.nome) === normEscLoc)
       const locKey = loc ? loc.id : 'sem_local'
       if (!dist[locKey]) dist[locKey] = []
       dist[locKey].push({ 
