@@ -1651,30 +1651,12 @@ export function EscalaLocalidadePage() {
           const fIdStr = String(f.id).trim()
           const locDays = empLocHist[fIdStr]?.[locKey] || 0
           
-          // Determine employee allowed sectors (registered sector + historical sectors worked in)
-          const histSetores = empSetorHist[fIdStr]
-          const profileSetorKey = f.setor && f.setor !== 'Geral' ? normLoc(f.setor) : ''
-          const userHistSetorKeys = histSetores ? Object.keys(histSetores).map(normLoc) : []
-
-          const allowedSectors = new Set<string>()
-          if (profileSetorKey) allowedSectors.add(profileSetorKey)
-          userHistSetorKeys.forEach(s => allowedSectors.add(s))
-
-          const normLocSetorKey = locSetor ? normLoc(locSetor) : ''
-
-          // ABSOLUTE STRICT SECTOR RULE:
-          // Never suggest or recommend a locality in a sector the employee has NEVER worked in or registered for!
-          if (normLocSetorKey && allowedSectors.size > 0 && !allowedSectors.has(normLocSetorKey)) {
-            return // Strictly filter out any locality outside employee's worked/registered sectors!
-          }
-
           const empLocMap = empLocHist[fIdStr] || {}
-          const hasLocalityHistory = Object.values(empLocMap).some(v => v > 0)
 
-          // STRICT LOCALITY RULE:
-          // If employee has past escalation history, ONLY suggest/recommend localities where they have ACTUALLY been allocated before (locDays > 0)!
-          if (hasLocalityHistory && locDays === 0) {
-            return // Never suggest a locality where this employee has 0 past allocations!
+          // ABSOLUTE STRICT LOCALITY RULE:
+          // ONLY recommend a locality to an employee IF they have ACTUALLY worked in this specific locality before (locDays > 0)!
+          if (locDays <= 0) {
+            return // Unconditionally skip any locality where the employee has 0 past allocations!
           }
 
           let totalCoWorkerDays = 0
@@ -1695,6 +1677,8 @@ export function EscalaLocalidadePage() {
           })
 
           // Sector alignment bonus
+          const normLocSetorKey = locSetor ? normLoc(locSetor) : ''
+          const profileSetorKey = f.setor && f.setor !== 'Geral' ? normLoc(f.setor) : ''
           let setorBonus = 0
           if (normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey) {
             setorBonus = 25
@@ -1733,16 +1717,8 @@ export function EscalaLocalidadePage() {
           let reason = ''
           if (topPartnerName && topPartnerDays > 0 && locDays > 0) {
             reason = `Escalado ${locDays}x aqui e ${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
-          } else if (locDays > 0) {
-            reason = `Escalado ${locDays}x nesta localidade (${totalEsc} dias totais)${behaviorTag}`
-          } else if (topPartnerName && topPartnerDays > 0) {
-            reason = `${topPartnerDays}x em dupla com ${topPartnerName}${behaviorTag}`
-          } else if (normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey) {
-            reason = `Pertence ao setor ${locSetor} (${totalEsc} dias em outras localidades de ${locSetor})${behaviorTag}`
-          } else if (totalEsc > 0) {
-            reason = `Vaga disponível (${totalEsc} dias de histórico em outras localidades)${behaviorTag}`
           } else {
-            reason = `Disponível para alocação${behaviorTag}`
+            reason = `Escalado ${locDays}x nesta localidade (${totalEsc} dias totais)${behaviorTag}`
           }
 
           // If returning from absence, add context
