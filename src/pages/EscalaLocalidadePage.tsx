@@ -2199,14 +2199,15 @@ export function EscalaLocalidadePage() {
     }
   }
 
-  const handleMove = async (funcId: string, targetLocName: string | null, escalaId?: string) => {
+  const handleMove = async (funcId: any, targetLocName: string | null, escalaId?: string) => {
+    const fIdStr = String(funcId).trim()
     const periodKey = ['escalas', 'periodo', fetchStart, fetchEnd]
     const previousEscalas = queryClient.getQueryData<any[]>(periodKey)
 
     // Optimistic Update: move member card instantly
     if (previousEscalas) {
       const updatedEscalas = [...previousEscalas]
-      const existingIdx = updatedEscalas.findIndex(e => e.funcionario_id === funcId && e.data.substring(0, 10) === dateStr)
+      const existingIdx = updatedEscalas.findIndex(e => String(e.funcionario_id).trim() === fIdStr && e.data.substring(0, 10) === dateStr)
       
       if (existingIdx > -1) {
         updatedEscalas[existingIdx] = {
@@ -2214,11 +2215,11 @@ export function EscalaLocalidadePage() {
           localidade: targetLocName
         }
       } else {
-        const funcObj = allFuncionarios.find(f => f.id === funcId)
+        const funcObj = allFuncionarios.find(f => String(f.id).trim() === fIdStr)
         if (funcObj) {
           const tempEscala = {
-            id: `temp-${funcId}-${Date.now()}`,
-            funcionario_id: funcId,
+            id: `temp-${fIdStr}-${Date.now()}`,
+            funcionario_id: funcObj.id,
             data: dateStr,
             tipo: 'presente',
             localidade: targetLocName,
@@ -2241,13 +2242,13 @@ export function EscalaLocalidadePage() {
       if (escalaId) {
         await updateMutation.mutateAsync({ id: escalaId, data: { localidade: targetLocName }, skipFreqSync: true })
       } else {
-        const e = escalaMap[`${funcId}_${dateStr}`]
+        const e = escalaMap[`${fIdStr}_${dateStr}`] || escalaMap[`${funcId}_${dateStr}`]
         if (e) {
           await updateMutation.mutateAsync({ id: e.id, data: { localidade: targetLocName }, skipFreqSync: true })
         } else {
           await batchMutation.mutateAsync({
             items: [{
-              funcionario_id: funcId,
+              funcionario_id: fIdStr,
               data: dateStr,
               tipo: 'presente',
               localidade: targetLocName,
@@ -2258,23 +2259,23 @@ export function EscalaLocalidadePage() {
         }
       }
 
-      // Limpar check de chamada (deletando da tabela frequência)
       await supabase
         .from('frequencia')
         .delete()
-        .eq('funcionario_id', funcId)
+        .eq('funcionario_id', fIdStr)
         .eq('data', dateStr)
 
       await queryClient.invalidateQueries({ queryKey: ['escalas'] })
       await queryClient.invalidateQueries({ queryKey: ['frequencia'] })
       await queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+
       toast(targetLocName ? 'Movimentado com sucesso!' : 'Funcionário agora está disponível', 'success')
       clearSearch()
     } catch (err: any) {
-      // Revert Optimistic Update on error
       if (previousEscalas) {
         queryClient.setQueryData(periodKey, previousEscalas)
       }
+      console.error('Erro ao mover funcionário:', err)
       toast('Falha na movimentação: ' + err.message, 'error')
     }
   }
@@ -4226,7 +4227,8 @@ export function EscalaLocalidadePage() {
                                          <span className="text-[9px] font-semibold text-primary/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">Apelido: {f.nome.split(' ')[0]}</span>
                                        )}
                                        {(() => {
-                                         const rec = assistantData.recommendations[f.id]?.[0];
+                                         const fIdStr = String(f.id).trim();
+                                         const rec = assistantData.recommendations[f.id]?.[0] || assistantData.recommendations[fIdStr]?.[0];
                                          if (!rec) return null;
                                          return (
                                            <button
@@ -4680,20 +4682,24 @@ export function EscalaLocalidadePage() {
                   }
  
                   // AI Sorting: Sort candidates by score for currentAssign.locName
+                  const normTargetLoc = currentAssign.locName ? currentAssign.locName.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : ""
                   const currentLocMembers = dailyDistribution[currentAssign.locId] || []
                   const sortedList = [...list].sort((a, b) => {
-                    const locDaysA = assistantData.empLocHist?.[a.id]?.[currentAssign.locName] || 0
-                    const locDaysB = assistantData.empLocHist?.[b.id]?.[currentAssign.locName] || 0
+                    const aId = String(a.id).trim()
+                    const bId = String(b.id).trim()
+                    const locDaysA = assistantData.empLocHist?.[aId]?.[normTargetLoc] || 0
+                    const locDaysB = assistantData.empLocHist?.[bId]?.[normTargetLoc] || 0
                     
                     let pairDaysA = 0
                     let pairDaysB = 0
                     currentLocMembers.forEach(m => {
-                      pairDaysA += assistantData.pairHist?.[a.id]?.[m.id] || 0
-                      pairDaysB += assistantData.pairHist?.[b.id]?.[m.id] || 0
+                      const mId = String(m.id).trim()
+                      pairDaysA += assistantData.pairHist?.[aId]?.[mId] || 0
+                      pairDaysB += assistantData.pairHist?.[bId]?.[mId] || 0
                     })
 
-                    const scoreA = (locDaysA * 3) + (pairDaysA * 5)
-                    const scoreB = (locDaysB * 3) + (pairDaysB * 5)
+                    const scoreA = (locDaysA * 20) + (pairDaysA * 8)
+                    const scoreB = (locDaysB * 20) + (pairDaysB * 8)
 
                     return scoreB - scoreA
                   })
@@ -4701,20 +4707,22 @@ export function EscalaLocalidadePage() {
                   return (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                       {sortedList.map((f, idx) => {
-                        const isSuccess = successAllocatedIds[f.id]
-                        const locDays = assistantData.empLocHist?.[f.id]?.[currentAssign.locName] || 0
+                        const fIdStr = String(f.id).trim()
+                        const isSuccess = successAllocatedIds[f.id] || successAllocatedIds[fIdStr]
+                        const locDays = assistantData.empLocHist?.[fIdStr]?.[normTargetLoc] || 0
                         
                         let topPartnerName: string | null = null
                         let topPartnerDays = 0
                         currentLocMembers.forEach(m => {
-                          const dTogether = assistantData.pairHist?.[f.id]?.[m.id] || 0
+                          const mId = String(m.id).trim()
+                          const dTogether = assistantData.pairHist?.[fIdStr]?.[mId] || 0
                           if (dTogether > topPartnerDays) {
                             topPartnerDays = dTogether
                             topPartnerName = m.apelido || m.nome
                           }
                         })
 
-                        const score = (locDays * 3) + (topPartnerDays * 5)
+                        const score = (locDays * 20) + (topPartnerDays * 8)
                         const isTopAi = idx === 0 && score > 0
 
                         return (
