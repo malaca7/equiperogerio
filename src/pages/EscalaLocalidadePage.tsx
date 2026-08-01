@@ -1525,8 +1525,14 @@ export function EscalaLocalidadePage() {
           
           if (tipo === 'presente' || tipo === 'escala' || !tipo) empBehavior[fId].presentDays++
           else if (tipo === 'hora_extra') { empBehavior[fId].horaExtraDays++; empBehavior[fId].presentDays++ }
-          else if (['falta', 'atestado', 'suspensao'].includes(tipo)) {
-            empBehavior[fId][`${tipo}Days` as keyof typeof empBehavior[fId]]++
+          if (tipo === 'falta') {
+            empBehavior[fId].faltaDays++
+            if (!empBehavior[fId].lastAbsenceDate || dStrRow > empBehavior[fId].lastAbsenceDate!) empBehavior[fId].lastAbsenceDate = dStrRow
+          } else if (tipo === 'atestado') {
+            empBehavior[fId].atestadoDays++
+            if (!empBehavior[fId].lastAbsenceDate || dStrRow > empBehavior[fId].lastAbsenceDate!) empBehavior[fId].lastAbsenceDate = dStrRow
+          } else if (tipo === 'suspensao') {
+            empBehavior[fId].suspensaoDays++
             if (!empBehavior[fId].lastAbsenceDate || dStrRow > empBehavior[fId].lastAbsenceDate!) empBehavior[fId].lastAbsenceDate = dStrRow
           }
 
@@ -1642,31 +1648,48 @@ export function EscalaLocalidadePage() {
 
   useEffect(() => { calculateAssistantRecommendations() }, [calculateAssistantRecommendations])
 
-  const getBestCandidateForLocality = useCallback((locName: string, allocatedMembers: any[]) => {
+  const getBestCandidateForLocality = useCallback((locName: string, allocatedMembers: any[]): { id: any; name: string; score: number; reason: string } | null => {
     if (!filteredAvailableFuncs || filteredAvailableFuncs.length === 0) return null
     const normLoc = (s: string) => s ? s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : ""
     const normLocName = normLoc(locName)
     const locObj = localidadesConfig.find(l => normLoc(l.nome) === normLocName)
     const normLocSetor = normLoc(locObj?.setor || '')
     const allocatedIds = new Set(allocatedMembers.map(m => String(m.id).trim()))
-    let bestFunc = null; let maxScore = -1
+    let bestFunc: { id: any; name: string; score: number; reason: string } | null = null
+    let maxScore = -1
 
     filteredAvailableFuncs.forEach(f => {
       const fIdStr = String(f.id).trim()
       if (allocatedIds.has(fIdStr)) return
       const locDays = assistantData.empLocHist?.[fIdStr]?.[normLocName] || 0
       const isSameSector = normLocSetor && normLoc(f.setor || '') === normLocSetor
-      let partnerDays = 0
-      allocatedMembers.forEach(m => { partnerDays += assistantData.pairHist?.[fIdStr]?.[String(m.id).trim()] || 0 })
-      const score = (locDays * 20) + (partnerDays * 8) + (isSameSector ? 30 : 0)
-      if (score > maxScore && (locDays > 0 || isSameSector || partnerDays > 0)) {
+      
+      let topPartnerName: string | null = null
+      let topPartnerDays = 0
+
+      allocatedMembers.forEach(m => {
+        const days = assistantData.pairHist?.[fIdStr]?.[String(m.id).trim()] || 0
+        if (days > topPartnerDays) {
+          topPartnerDays = days
+          topPartnerName = m.apelido || m.nome
+        }
+      })
+
+      const score = (locDays * 20) + (topPartnerDays * 8) + (isSameSector ? 30 : 0)
+      if (score > maxScore && (locDays > 0 || isSameSector || topPartnerDays > 0)) {
         maxScore = score
         const funcName = f.apelido || f.nome
         let reason = ''
-        if (topPartnerName && topPartnerDays > 0) {
+        if (locDays > 0 && topPartnerName && topPartnerDays > 0) {
           reason = `Trabalhou ${locDays}x aqui e ${topPartnerDays}x com ${topPartnerName}`
-        } else {
+        } else if (locDays > 0) {
           reason = `Trabalhou ${locDays}x nesta localidade`
+        } else if (topPartnerName && topPartnerDays > 0) {
+          reason = `Trabalhou ${topPartnerDays}x em dupla com ${topPartnerName}`
+        } else if (isSameSector) {
+          reason = `Pertence ao setor ${locObj?.setor || 'do local'}`
+        } else {
+          reason = `Disponível para alocação`
         }
 
         bestFunc = {
@@ -1679,7 +1702,7 @@ export function EscalaLocalidadePage() {
     })
 
     return bestFunc
-  }, [filteredAvailableFuncs, assistantData])
+  }, [filteredAvailableFuncs, assistantData, localidadesConfig])
 
 
   const handleAutoAllocateAllWithAssistant = async () => {
