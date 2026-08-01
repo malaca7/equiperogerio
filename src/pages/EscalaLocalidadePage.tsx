@@ -3359,9 +3359,6 @@ export function EscalaLocalidadePage() {
                   <button onClick={() => setViewMode('weekly')} className={cn("flex-1 md:flex-none px-6 py-3 sm:py-3.5 text-[10px] font-black uppercase tracking-widest rounded-[1.25rem] transition-all flex items-center justify-center gap-2 min-w-[120px]", viewMode === 'weekly' ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground")}>
                     <Layers className="w-4 h-4" /> Semanal
                   </button>
-                  <Link to="/escala/mapeamento" className="flex-1 md:flex-none px-5 py-3 sm:py-3.5 text-[10px] font-black uppercase tracking-widest rounded-[1.25rem] transition-all flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400 hover:bg-card hover:shadow-sm">
-                    <Route className="w-4 h-4" /> Mapeamento
-                  </Link>
                 </div>
               </div>
 
@@ -3479,21 +3476,12 @@ export function EscalaLocalidadePage() {
 
                 <div className="flex items-center gap-2 w-full xl:w-auto overflow-x-auto scrollbar-none pb-2 xl:pb-0 hide-scrollbar">
                   {canEdit && (
-                    <>
-                      <button 
-                        onClick={() => setIsAssistantModalOpen(true)} 
-                        className="flex-1 xl:flex-none min-w-[160px] h-12 sm:h-14 px-4 sm:px-5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0 group cursor-pointer"
-                        title="Assistente Inteligente de Alocação de Membros"
-                      >
-                        <Sparkles className="w-4 h-4 text-amber-200 group-hover:rotate-12 transition-transform" /> Assistente IA
-                      </button>
-                      <button 
-                        onClick={() => { setIsCopyModalOpen(true); setCopyPreview(null); setCopySourceDate('') }} 
-                        className="flex-1 xl:flex-none min-w-[150px] h-12 sm:h-14 px-4 sm:px-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
-                      >
-                        <ClipboardCopy className="w-4 h-4" /> Copiar Modelo
-                      </button>
-                    </>
+                    <button 
+                      onClick={() => { setIsCopyModalOpen(true); setCopyPreview(null); setCopySourceDate('') }} 
+                      className="flex-1 xl:flex-none min-w-[150px] h-12 sm:h-14 px-4 sm:px-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-[1.25rem] font-black text-[10px] uppercase tracking-[0.15em] shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0"
+                    >
+                      <ClipboardCopy className="w-4 h-4" /> Copiar Modelo
+                    </button>
                   )}
                   <button onClick={handlePrint} className="h-12 w-12 sm:h-14 sm:w-14 bg-muted/50 rounded-[1.25rem] flex items-center justify-center hover:bg-card border border-border/30 active:scale-90 transition-all shrink-0" title="Compartilhar Imagem"><Share2 className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" /></button>
                   <button 
