@@ -1672,12 +1672,9 @@ export function EscalaLocalidadePage() {
           const hasLocalityHistory = Object.values(empLocMap).some(v => v > 0)
 
           // STRICT LOCALITY RULE:
-          // If employee has past locality history, ONLY suggest localities they have worked at (locDays > 0) or in their exact same sector
+          // If employee has past escalation history, ONLY suggest/recommend localities where they have ACTUALLY been allocated before (locDays > 0)!
           if (hasLocalityHistory && locDays === 0) {
-            const isSameSector = normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey
-            if (!isSameSector) {
-              return
-            }
+            return // Never suggest a locality where this employee has 0 past allocations!
           }
 
           let totalCoWorkerDays = 0
@@ -1805,25 +1802,10 @@ export function EscalaLocalidadePage() {
       if (allocatedIds.has(fIdStr)) return
 
       const locDays = assistantData.empLocHist?.[fIdStr]?.[normLocName] || 0
-      const empSetor = f.setor && f.setor !== 'Geral' ? f.setor.trim().toLowerCase() : ''
-
-      const histSetores = assistantData.empBehavior?.[fIdStr] ? assistantData.empLocHist?.[fIdStr] : null
       
-      // Build candidate's allowed sectors
-      const candidateSectors = new Set<string>()
-      if (empSetor) candidateSectors.add(empSetor)
-      if (histSetores) {
-        Object.keys(histSetores).forEach(lKey => {
-          const lObj = localidadesConfig.find(l => l.nome.trim().toLowerCase() === lKey)
-          if (lObj?.setor) candidateSectors.add(lObj.setor.trim().toLowerCase())
-        })
-      }
-
-      // ABSOLUTE STRICT SECTOR RULE:
-      // Candidate MUST have worked in or belong to the locality's sector!
-      if (normLocSetor && candidateSectors.size > 0 && !candidateSectors.has(normLocSetor)) {
-        return // Reject candidates who have never worked in this sector!
-      }
+      // ABSOLUTE STRICT RULE FOR DICA IA:
+      // ONLY suggest a candidate for a locality card if they have ACTUALLY been allocated to this locality in the past (locDays > 0)
+      if (locDays === 0) return
 
       let coWorkerDays = 0
       let topPartnerName: string | null = null
@@ -1840,10 +1822,11 @@ export function EscalaLocalidadePage() {
         }
       })
 
+      const empSetor = f.setor && f.setor !== 'Geral' ? f.setor.trim().toLowerCase() : ''
       const isSameSetor = normLocSetor && empSetor && normLocSetor === empSetor
       const score = (locDays * 12) + (coWorkerDays * 6) + (isSameSetor ? 15 : 0)
 
-      if (score > maxScore && (locDays > 0 || isSameSetor)) {
+      if (score > maxScore) {
         maxScore = score
         const funcName = f.apelido || f.nome
         let reason = ''
