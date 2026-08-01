@@ -921,14 +921,21 @@ export function EscalaLocalidadePage() {
   const workingStatus = ['presente', 'hora_extra', 'falta']
 
   const escalaMap = useMemo(() => {
-    return (escalas as any[]).reduce((acc, e) => {
-      const eDate = e.data.substring(0, 10)
-      acc[`${e.funcionario_id}_${eDate}`] = e
-      return acc
-    }, {} as Record<string, any>)
+    const map: Record<string, any> = {}
+    if (Array.isArray(escalas)) {
+      escalas.forEach((e: any) => {
+        if (!e || e.funcionario_id === undefined || e.funcionario_id === null || !e.data) return
+        const fIdRaw = String(e.funcionario_id)
+        const fIdTrim = fIdRaw.trim()
+        const eDate = String(e.data).substring(0, 10)
+        
+        map[`${fIdTrim}_${eDate}`] = e
+        map[`${fIdRaw}_${eDate}`] = e
+        map[`${e.funcionario_id}_${eDate}`] = e
+      })
+    }
+    return map
   }, [escalas])
-
-
 
   // ── CENTRALIZED STATUS HELPER ──
   // Single source of truth: determines if a given employee is working on a given date.
@@ -956,8 +963,9 @@ export function EscalaLocalidadePage() {
       // Has an explicit escala record in DB — respect it!
       const normTipo = e.tipo ? String(e.tipo).toLowerCase().trim() : ''
       const isExplicitOff = normTipo === 'repouso' || normTipo === 'compensar' || normTipo === 'ferias' || normTipo === 'atestado' || normTipo === 'suspensao' || normTipo === 'folga'
+      const isExplicitWork = normTipo === 'escala' || normTipo === 'presente' || normTipo === 'hora_extra' || normTipo === 'trabalho' || normTipo === 'alocado'
       
-      isTrabalhando = !isExplicitOff || hasAssignedLocality
+      isTrabalhando = isExplicitWork || (!isExplicitOff || hasAssignedLocality)
       tipo = isExplicitOff && !hasAssignedLocality ? (e.tipo || 'repouso') : (e.tipo || 'presente')
     } else {
       // No record in DB for this date:
