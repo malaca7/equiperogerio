@@ -945,17 +945,20 @@ export function EscalaLocalidadePage() {
     let isTrabalhando = false
     let tipo = 'presente'
 
+    const normEscLoc = e && e.localidade ? normLoc(e.localidade) : ""
+    const isSemLocalStr = !normEscLoc || normEscLoc === "sem local" || normEscLoc === "sem_local" || normEscLoc === "nenhum" || normEscLoc === "nao definido"
+    const hasAssignedLocality = !isSemLocalStr
+
     if (isDesligado) {
       isTrabalhando = false
       tipo = 'repouso'
     } else if (e) {
       // Has an explicit escala record in DB — respect it!
       const normTipo = e.tipo ? String(e.tipo).toLowerCase().trim() : ''
-      const isWorkingType = normTipo === 'presente' || normTipo === 'escala' || normTipo === 'hora_extra' || normTipo === 'trabalho' || normTipo === 'alocado'
-      const hasAssignedLocality = !!(e.localidade && String(e.localidade).trim().length > 0)
+      const isExplicitOff = normTipo === 'repouso' || normTipo === 'compensar' || normTipo === 'ferias' || normTipo === 'atestado' || normTipo === 'suspensao' || normTipo === 'folga'
       
-      isTrabalhando = isWorkingType || hasAssignedLocality
-      tipo = isTrabalhando ? (e.tipo || 'presente') : (e.tipo || 'repouso')
+      isTrabalhando = !isExplicitOff || hasAssignedLocality
+      tipo = isExplicitOff && !hasAssignedLocality ? (e.tipo || 'repouso') : (e.tipo || 'presente')
     } else {
       // No record in DB for this date:
       // Weekdays default to working ('presente').
@@ -964,15 +967,13 @@ export function EscalaLocalidadePage() {
       tipo = isDomingo ? 'repouso' : 'presente'
     }
 
-    // An employee is "allocated" if they have an escala record with a localidade that matches dbLocalidades or localidadesConfig
-    const hasLocalityString = !!(e && e.localidade && String(e.localidade).trim().length > 0)
-    const isValidLocality = hasLocalityString && (
-      dbLocalidades.some(l => normLoc(l.nome) === normLoc(e.localidade)) ||
-      localidadesConfig.some(l => normLoc(l.nome) === normLoc(e.localidade))
+    const isValidLocality = hasAssignedLocality && (
+      dbLocalidades.some(l => normLoc(l.nome) === normEscLoc) ||
+      localidadesConfig.some(l => normLoc(l.nome) === normEscLoc)
     )
-    const isAlocado = !isDesligado && (isValidLocality || hasLocalityString)
+    const isAlocado = !isDesligado && (isValidLocality || hasAssignedLocality)
 
-    return { isTrabalhando, tipo, escala: e, isAlocado, hasOrphanedLocality: !!(hasLocalityString && !isValidLocality) }
+    return { isTrabalhando, tipo, escala: e, isAlocado, hasOrphanedLocality: !!(hasAssignedLocality && !isValidLocality) }
   }, [escalaMap, allFuncionarios, dbLocalidades, localidadesConfig])
 
   // Logic for daily view: locality -> employees
