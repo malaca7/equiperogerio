@@ -403,6 +403,14 @@ export function EscalaLocalidadePage() {
   useEffect(() => {
     localStorage.setItem('7boss_escala_filter_setor', filterSetor)
   }, [filterSetor])
+
+  const [filterAllocation, setFilterAllocation] = useState(() => {
+    return localStorage.getItem('7boss_escala_filter_allocation') || ''
+  })
+
+  useEffect(() => {
+    localStorage.setItem('7boss_escala_filter_allocation', filterAllocation)
+  }, [filterAllocation])
   const [assignModal, setAssignModal] = useState<{ locId: string; locName: string; dateStr: string; setor: string } | null>(null)
   interface SpecialDayConfirmState {
     title: string
@@ -566,6 +574,24 @@ export function EscalaLocalidadePage() {
     if (!filterSetor) return setores
     return setores.filter(s => s === filterSetor)
   }, [setores, filterSetor])
+
+  const visibleLocalidades = useMemo(() => {
+    let list = localidadesConfig
+    
+    if (filterAllocation) {
+      list = list.filter(loc => {
+        const count = (dailyDistribution[loc.id] || []).length
+        if (filterAllocation === '0') return count === 0
+        if (filterAllocation === '1') return count === 1
+        if (filterAllocation === '2+') return count >= 2
+        if (filterAllocation === '0-1-2') return count <= 2
+        if (filterAllocation === '1+') return count >= 1
+        return true
+      })
+    }
+
+    return list
+  }, [localidadesConfig, dailyDistribution, filterAllocation])
 
   const { data: feriados = [] } = useConfiguracao<any[]>('feriados', [])
 
@@ -3225,7 +3251,7 @@ export function EscalaLocalidadePage() {
                   </thead>
                   <tbody>
                     {visibleSetores.map(setor => {
-                      const locs = localidadesConfig.filter(l => l.setor === setor)
+                      const locs = visibleLocalidades.filter(l => l.setor === setor)
                       if (locs.length === 0) return null
                       return (
                         <React.Fragment key={setor}>
@@ -3392,6 +3418,19 @@ export function EscalaLocalidadePage() {
                   >
                     <option value="">Todos os Setores</option>
                     {setores.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+
+                  <select
+                    value={filterAllocation} 
+                    onChange={e => setFilterAllocation(e.target.value)}
+                    className="w-full xl:w-56 bg-muted/50 border border-border/30 rounded-[1.25rem] px-4 h-12 sm:h-14 text-xs outline-none focus:ring-4 focus:ring-primary/10 transition-all font-bold text-foreground uppercase tracking-wider"
+                  >
+                    <option value="">Todas Alocações</option>
+                    <option value="0">Sem funcionários (0)</option>
+                    <option value="1">1 funcionário</option>
+                    <option value="2+">2 ou mais funcionários</option>
+                    <option value="0-1-2">Até 2 funcionários</option>
+                    <option value="1+">Com alocação (1+)</option>
                   </select>
 
                   {/* Campo de Busca Principal, Sempre Aberto */}
@@ -3571,7 +3610,7 @@ export function EscalaLocalidadePage() {
           {viewMode === 'daily' && (
             <div className="space-y-16">
               {visibleSetores.map(setor => {
-                const locs = localidadesConfig.filter(l => l.setor === setor)
+                const locs = visibleLocalidades.filter(l => l.setor === setor)
                 if (locs.length === 0) return null
                 return (
                   <div key={setor} className="space-y-8">
@@ -4323,7 +4362,7 @@ export function EscalaLocalidadePage() {
               {/* Weekly Mobile Layout (md:hidden) */}
               <div className="md:hidden space-y-8 animate-fade-in">
                 {visibleSetores.map(setor => {
-                  const locs = localidadesConfig.filter(l => l.setor === setor)
+                  const locs = visibleLocalidades.filter(l => l.setor === setor)
                   if (locs.length === 0) return null
                   return (
                     <div key={`${setor}-mobile`} className="space-y-4">
@@ -4442,7 +4481,7 @@ export function EscalaLocalidadePage() {
                     </thead>
                     <tbody className="divide-y divide-border/30">
                       {visibleSetores.map(setor => {
-                        const locs = localidadesConfig.filter(l => l.setor === setor)
+                        const locs = visibleLocalidades.filter(l => l.setor === setor)
                         if (locs.length === 0) return null
                         return (
                           <React.Fragment key={setor}>
