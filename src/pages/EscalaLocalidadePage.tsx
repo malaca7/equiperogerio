@@ -486,7 +486,8 @@ export function EscalaLocalidadePage() {
       lastAbsenceDate: string | null
       daysAwayBeforeReturn: number
     }>
-  }>({ recommendations: {}, empLocHist: {}, pairHist: {}, empBehavior: {} })
+    locTargetCapacity?: Record<string, number>
+  }>({ recommendations: {}, empLocHist: {}, pairHist: {}, empBehavior: {}, locTargetCapacity: {} })
   const [previewMode, setPreviewMode] = useState<'completo' | 'enxuto' | 'apenas_localidades' | 'tipo_equipe' | 'demandas_realizadas'>('completo')
 
   // Google Maps Geocoding Autocomplete State
@@ -1523,9 +1524,9 @@ export function EscalaLocalidadePage() {
     setAssistantLoading(true)
     try {
       const targetDate = parseLocalDate(dateStr)
-      const ninetyDaysAgo = subDays(targetDate, 90)
+      const tenDaysAgo = subDays(targetDate, 10)
 
-      const startStr = format(ninetyDaysAgo, 'yyyy-MM-dd')
+      const startStr = format(tenDaysAgo, 'yyyy-MM-dd')
       const tomorrow = addDays(targetDate, 1)
       const endStr = format(tomorrow, 'yyyy-MM-dd')
 
@@ -1632,6 +1633,37 @@ export function EscalaLocalidadePage() {
         }
       })
 
+      const locTargetCapacity: Record<string, number> = {}
+      const locDailyCounts: Record<string, Record<string, number>> = {}
+      Object.entries(dailyLocMembers).forEach(([key, membersSet]) => {
+        const underscoreIndex = key.indexOf('_')
+        if (underscoreIndex === -1) return
+        const dStrRow = key.substring(0, underscoreIndex)
+        const keyLoc = key.substring(underscoreIndex + 1)
+        if (!locDailyCounts[keyLoc]) locDailyCounts[keyLoc] = {}
+        locDailyCounts[keyLoc][dStrRow] = membersSet.size
+      })
+
+      localidadesConfig.forEach(l => {
+        const locName = normLoc(l.nome.trim())
+        const dailyMap = locDailyCounts[locName]
+        if (dailyMap && Object.keys(dailyMap).length > 0) {
+          const counts = Object.values(dailyMap).sort((a, b) => a - b)
+          const n = counts.length
+          let median = 1
+          if (n % 2 === 1) {
+            median = counts[Math.floor(n / 2)]
+          } else {
+            const mid1 = counts[(n / 2) - 1]
+            const mid2 = counts[n / 2]
+            median = Math.round((mid1 + mid2) / 2)
+          }
+          locTargetCapacity[locName] = Math.max(1, median)
+        } else {
+          locTargetCapacity[locName] = 1
+        }
+      })
+
       const recs: Record<string, any[]> = {}
       const buildBehaviorTag = (fId: string): string => {
         const b = empBehavior[fId]; if (!b) return ''
@@ -1706,8 +1738,15 @@ export function EscalaLocalidadePage() {
           
           const totalEscDays = empBehavior[fIdStr]?.totalEscalatedDays || 0
 
-          // We removed the early return so that ALL localities are scored for ALL employees.
-          // The scoring algorithm will naturally push the best matches to the top.
+          // Regra Restritiva 1: Histórico Individual do Funcionário
+          if (locDays <= 0) return
+
+          // Regra Restritiva 2: Validação Cruzada pelo Colega Mais Frequente
+          if (overallPartner) {
+            const partnerLocDays = empLocHist[overallPartner.id]?.[locKey] || 0
+            const cap = locTargetCapacity[locKey] || 1
+            if (partnerLocDays < cap) return
+          }
 
           let topPartnerName: string | null | undefined = null; let topPartnerDays = 0; let totalCoWorkerDays = 0
           allocatedIdsToday.forEach(cId => {
@@ -1729,7 +1768,8 @@ export function EscalaLocalidadePage() {
           const usage = allocatedIdsToday.length
           const capacityPenalty = usage >= 4 ? 40 : (usage >= 2 ? 15 : 0)
           
-          let score = (locDays * 20) + (totalCoWorkerDays * 4) + setorBonus + reliabilityBonus - capacityPenalty + tieBreaker
+          const partnerLocDays = overallPartner ? (empLocHist[overallPartner.id]?.[locKey] || 0) : 0
+          let score = (locDays * 20) + (partnerLocDays * 15) + (totalCoWorkerDays * 4) + setorBonus + reliabilityBonus - capacityPenalty + tieBreaker
           if (partnerHere) score += 30
 
           if (!recs[f.id]) recs[f.id] = []
@@ -1737,8 +1777,9 @@ export function EscalaLocalidadePage() {
           
           const reasons = []
           if (isTopSector) reasons.push(`Setor que mais trabalha (${locSetor || overallSetor.setor})`)
-          if (partnerHere) reasons.push(`Sua dupla frequente (${overallPartner.name}) está aqui`)
+          if (partnerHere) reasons.push(`Sua dupla frequente (${overallPartner?.name}) está aqui`)
           
+          if (partnerLocDays > 0) reasons.push(`Parceiro principal tem ${partnerLocDays}x aqui`)
           if (!isTopSector && isExactLocality) reasons.push(`Trabalhou ${locDays}x nesta localidade`)
           if (!partnerHere && topPartnerName && topPartnerDays > 0) reasons.push(`Trabalhou ${topPartnerDays}x com ${topPartnerName}`)
           if (!isTopSector && !isExactLocality && isSameSector) reasons.push(`Pertence ao setor ${locSetor}`)
@@ -1751,7 +1792,7 @@ export function EscalaLocalidadePage() {
         })
       })
       Object.values(recs).forEach(list => list.sort((a, b) => b.score - a.score))
-      setAssistantData({ recommendations: recs, empLocHist, pairHist, empBehavior })
+      setAssistantData({ recommendations: recs, empLocHist, pairHist, empBehavior, locTargetCapacity })
     } catch (err) { console.error(err) } finally { setAssistantLoading(false) }
   }, [dateStr, localidadesConfig, dailyDistribution, filteredFuncionarios, allFuncionarios, dbLocalidades])
 
@@ -1774,24 +1815,43 @@ export function EscalaLocalidadePage() {
       // ABSOLUTE STRICT RULE: Dica IA ONLY suggests candidates who have ACTUALLY worked in this locality before (locDays > 0)!
       if (locDays <= 0) return
 
-      let topPartnerName: string | null = null
-      let topPartnerDays = 0
+      // Regra Restritiva 2: Validação Cruzada pelo Colega Mais Frequente
+      let absolutePartnerId: string | null = null
+      let absolutePartnerDays = 0
+      if (assistantData.pairHist && assistantData.pairHist[fIdStr]) {
+        Object.entries(assistantData.pairHist[fIdStr]).forEach(([pId, days]) => {
+          if (days > absolutePartnerDays) {
+            absolutePartnerDays = days
+            absolutePartnerId = pId
+          }
+        })
+      }
 
-      allocatedMembers.forEach(m => {
-        const days = assistantData.pairHist?.[fIdStr]?.[String(m.id).trim()] || 0
-        if (days > topPartnerDays) {
-          topPartnerDays = days
-          topPartnerName = m.apelido || m.nome
+      let partnerLocDays = 0
+      let partnerName: string | null = null
+      if (absolutePartnerId) {
+        partnerLocDays = assistantData.empLocHist?.[absolutePartnerId]?.[normLocName] || 0
+        const cap = assistantData.locTargetCapacity?.[normLocName] || 1
+        
+        // A sugestão só será confirmada se esse parceiro principal também possuir um histórico muito forte (uma alta frequência, equivalente ou superior à mediana habitual) nessa mesma localidade alvo.
+        if (partnerLocDays < cap) {
+          return
         }
-      })
 
-      const score = (locDays * 20) + (topPartnerDays * 8)
+        const partnerObj = allFuncionarios.find(x => String(x.id).trim() === absolutePartnerId)
+        if (partnerObj) {
+          partnerName = partnerObj.apelido || partnerObj.nome
+        }
+      }
+
+      const score = (locDays * 20) + (partnerLocDays * 15)
+      
       if (score > maxScore) {
         maxScore = score
         const funcName = f.apelido || f.nome
         let reason = ''
-        if (topPartnerName && topPartnerDays > 0) {
-          reason = `Trabalhou ${locDays}x aqui e ${topPartnerDays}x com ${topPartnerName}`
+        if (partnerName && absolutePartnerDays > 0) {
+          reason = `${locDays}x aqui. Parceiro principal (${partnerName}) tem ${partnerLocDays}x aqui.`
         } else {
           reason = `Trabalhou ${locDays}x nesta localidade`
         }
@@ -1806,7 +1866,7 @@ export function EscalaLocalidadePage() {
     })
 
     return bestFunc
-  }, [filteredAvailableFuncs, assistantData])
+  }, [filteredAvailableFuncs, assistantData, allFuncionarios])
 
 
   const handleAutoAllocateAllWithAssistant = async () => {
