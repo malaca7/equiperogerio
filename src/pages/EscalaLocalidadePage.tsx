@@ -575,23 +575,6 @@ export function EscalaLocalidadePage() {
     return setores.filter(s => s === filterSetor)
   }, [setores, filterSetor])
 
-  const visibleLocalidades = useMemo(() => {
-    let list = localidadesConfig
-    
-    if (filterAllocation) {
-      list = list.filter(loc => {
-        const count = (dailyDistribution[loc.id] || []).length
-        if (filterAllocation === '0') return count === 0
-        if (filterAllocation === '1') return count === 1
-        if (filterAllocation === '2+') return count >= 2
-        if (filterAllocation === '0-1-2') return count <= 2
-        if (filterAllocation === '1+') return count >= 1
-        return true
-      })
-    }
-
-    return list
-  }, [localidadesConfig, dailyDistribution, filterAllocation])
 
   const { data: feriados = [] } = useConfiguracao<any[]>('feriados', [])
 
@@ -1063,6 +1046,24 @@ export function EscalaLocalidadePage() {
 
     return dist
   }, [escalaMap, dateStr, filteredFuncionarios, localidadesConfig, getEmployeeStatus, equipesMeta, dynamicFuncoes])
+
+  const visibleLocalidades = useMemo(() => {
+    let list = localidadesConfig
+    
+    if (filterAllocation) {
+      list = list.filter(loc => {
+        const count = (dailyDistribution[loc.id] || []).length
+        if (filterAllocation === '0') return count === 0
+        if (filterAllocation === '1') return count === 1
+        if (filterAllocation === '2+') return count >= 2
+        if (filterAllocation === '0-1-2') return count <= 2
+        if (filterAllocation === '1+') return count >= 1
+        return true
+      })
+    }
+
+    return list
+  }, [localidadesConfig, dailyDistribution, filterAllocation])
 
   const getEmployeeDisplayName = useCallback((f: { id: string; nome: string; apelido?: string | null }) => {
     if (f.apelido?.trim()) {
@@ -1678,12 +1679,19 @@ export function EscalaLocalidadePage() {
           // Tie-breaker to prevent everyone getting the exact same recommendation
           let hashF = 0; for (let i=0; i<fIdStr.length; i++) hashF = (hashF * 31 + fIdStr.charCodeAt(i)) >>> 0
           let hashL = 0; for (let i=0; i<locKey.length; i++) hashL = (hashL * 31 + locKey.charCodeAt(i)) >>> 0
-          const tieBreaker = ((hashF + hashL) % 100) * 0.01
+          const tieBreaker = ((hashF * 31 + hashL) % 100) * 0.01
           const score = Math.max(0, (locDays * 20) + (topPartnerDays * 8) + setorBonus + reliabilityBonus + tieBreaker)
 
           if (!recs[f.id]) recs[f.id] = []
           const behaviorTag = buildBehaviorTag(fIdStr)
-          let reason = isExactLocality ? `Escalado ${locDays}x nesta localidade` : (isSameSector ? `Setor ${locSetor}` : 'Disponível')
+          
+          const reasons = []
+          if (isExactLocality) reasons.push(`Trabalhou ${locDays}x nesta localidade`)
+          if (topPartnerName && topPartnerDays > 0) reasons.push(`Trabalhou ${topPartnerDays}x com ${topPartnerName}`)
+          if (!isExactLocality && isSameSector) reasons.push(`Pertence ao setor ${locSetor}`)
+          if (!isExactLocality && !isSameSector && isHistSector) reasons.push(`Tem histórico no setor ${locSetor}`)
+          
+          let reason = reasons.length > 0 ? reasons.join(' • ') : 'Perfil compatível para alocação'
           reason += behaviorTag
 
           recs[f.id].push({ locId: loc.id, topLocalityName: locName, score, matchPercent: Math.min(99, Math.round(50 + (score * 1.2))), reason })
