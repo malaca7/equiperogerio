@@ -29,7 +29,13 @@ export function useFuncionarios(filters?: { setor?: string; status?: string; sea
 
       const { data, error } = await query
       if (error) throw error
-      const list = (data ?? []) as Funcionario[]
+      let list = (data ?? []) as Funcionario[]
+
+      // If we are filtering for active employees, also exclude those who have a data_desligamento in the past
+      if (filters?.status === 'ativo') {
+        const todayStr = new Date().toISOString().substring(0, 10)
+        list = list.filter(f => !f.data_desligamento || f.data_desligamento >= todayStr)
+      }
 
       return list
     },

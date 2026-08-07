@@ -403,6 +403,14 @@ export function EscalaLocalidadePage() {
   useEffect(() => {
     localStorage.setItem('7boss_escala_filter_setor', filterSetor)
   }, [filterSetor])
+
+  const [filterAllocation, setFilterAllocation] = useState(() => {
+    return localStorage.getItem('7boss_escala_filter_allocation') || ''
+  })
+
+  useEffect(() => {
+    localStorage.setItem('7boss_escala_filter_allocation', filterAllocation)
+  }, [filterAllocation])
   const [assignModal, setAssignModal] = useState<{ locId: string; locName: string; dateStr: string; setor: string } | null>(null)
   interface SpecialDayConfirmState {
     title: string
@@ -478,7 +486,8 @@ export function EscalaLocalidadePage() {
       lastAbsenceDate: string | null
       daysAwayBeforeReturn: number
     }>
-  }>({ recommendations: {}, empLocHist: {}, pairHist: {}, empBehavior: {} })
+    locTargetCapacity?: Record<string, number>
+  }>({ recommendations: {}, empLocHist: {}, pairHist: {}, empBehavior: {}, locTargetCapacity: {} })
   const [previewMode, setPreviewMode] = useState<'completo' | 'enxuto' | 'apenas_localidades' | 'tipo_equipe' | 'demandas_realizadas'>('completo')
 
   // Google Maps Geocoding Autocomplete State
@@ -567,6 +576,7 @@ export function EscalaLocalidadePage() {
     return setores.filter(s => s === filterSetor)
   }, [setores, filterSetor])
 
+
   const { data: feriados = [] } = useConfiguracao<any[]>('feriados', [])
 
   const localidadesConfig = useMemo(() => {
@@ -639,7 +649,7 @@ export function EscalaLocalidadePage() {
 
   const filteredFuncionarios = useMemo(() => {
     const targetDStr = format(currentDate, 'yyyy-MM-dd')
-    let list = allFuncionarios.filter(f => !f.data_desligamento || f.data_desligamento > targetDStr)
+    let list = allFuncionarios.filter(f => !f.data_desligamento || f.data_desligamento >= targetDStr)
     
     const activeTeamId = teamInfo?.isRestricted ? (teamInfo.teamIds?.[0] || null) : selectedTeamId
     const borrowedByOthers = borrowedMembers.filter((bm: any) => bm.equipe_id !== activeTeamId)
@@ -954,17 +964,17 @@ export function EscalaLocalidadePage() {
       tipo = 'repouso'
     } else if (e) {
       // Has an explicit escala record in DB — respect it!
-      const normTipo = e.tipo ? String(e.tipo).toLowerCase().trim() : ''
-      const isExplicitOff = normTipo === 'repouso' || normTipo === 'compensar' || normTipo === 'ferias' || normTipo === 'atestado' || normTipo === 'suspensao' || normTipo === 'folga'
+      const normTipo = e.tipo ? String(e.tipo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : ''
+      const isExplicitOff = ['repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga', 'falta'].some(k => normTipo.includes(k))
       
       isTrabalhando = !isExplicitOff || hasAssignedLocality
       tipo = isExplicitOff && !hasAssignedLocality ? (e.tipo || 'repouso') : (e.tipo || 'presente')
     } else {
       // No record in DB for this date:
-      // Weekdays default to working ('presente').
-      // Sundays default to off ('repouso') — ONLY employees with explicit working escala records can work on Sunday!
-      isTrabalhando = !isDomingo
-      tipo = isDomingo ? 'repouso' : 'presente'
+      // If there's no explicit schedule (status de trabalho), don't show as available
+      // Put them in Planejamento e Ausencias (as sem_escala)
+      isTrabalhando = false
+      tipo = 'sem_escala'
     }
 
     const isValidLocality = hasAssignedLocality && (
@@ -1037,6 +1047,24 @@ export function EscalaLocalidadePage() {
 
     return dist
   }, [escalaMap, dateStr, filteredFuncionarios, localidadesConfig, getEmployeeStatus, equipesMeta, dynamicFuncoes])
+
+  const visibleLocalidades = useMemo(() => {
+    let list = localidadesConfig
+    
+    if (filterAllocation) {
+      list = list.filter(loc => {
+        const count = (dailyDistribution[loc.id] || []).length
+        if (filterAllocation === '0') return count === 0
+        if (filterAllocation === '1') return count === 1
+        if (filterAllocation === '2+') return count >= 2
+        if (filterAllocation === '0-1-2') return count <= 2
+        if (filterAllocation === '1+') return count >= 1
+        return true
+      })
+    }
+
+    return list
+  }, [localidadesConfig, dailyDistribution, filterAllocation])
 
   const getEmployeeDisplayName = useCallback((f: { id: string; nome: string; apelido?: string | null }) => {
     if (f.apelido?.trim()) {
@@ -1439,10 +1467,11 @@ export function EscalaLocalidadePage() {
       if (f.cargo?.toLowerCase() === 'encarregado') return false
       
       const { isTrabalhando, tipo, isAlocado } = getEmployeeStatus(f.id, dateStr)
-      const normTipo = tipo ? String(tipo).toLowerCase().trim() : ''
+      const normTipo = tipo ? String(tipo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : ''
       
       // Only employees with active working scale for today and not off/absent can be allocated
-      if (['falta', 'repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga'].includes(normTipo)) {
+      const isOff = ['falta', 'repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga'].some(k => normTipo.includes(k))
+      if (isOff) {
         return false
       }
       
@@ -1495,9 +1524,9 @@ export function EscalaLocalidadePage() {
     setAssistantLoading(true)
     try {
       const targetDate = parseLocalDate(dateStr)
-      const ninetyDaysAgo = subDays(targetDate, 90)
+      const tenDaysAgo = subDays(targetDate, 10)
 
-      const startStr = format(ninetyDaysAgo, 'yyyy-MM-dd')
+      const startStr = format(tenDaysAgo, 'yyyy-MM-dd')
       const tomorrow = addDays(targetDate, 1)
       const endStr = format(tomorrow, 'yyyy-MM-dd')
 
@@ -1604,6 +1633,37 @@ export function EscalaLocalidadePage() {
         }
       })
 
+      const locTargetCapacity: Record<string, number> = {}
+      const locDailyCounts: Record<string, Record<string, number>> = {}
+      Object.entries(dailyLocMembers).forEach(([key, membersSet]) => {
+        const underscoreIndex = key.indexOf('_')
+        if (underscoreIndex === -1) return
+        const dStrRow = key.substring(0, underscoreIndex)
+        const keyLoc = key.substring(underscoreIndex + 1)
+        if (!locDailyCounts[keyLoc]) locDailyCounts[keyLoc] = {}
+        locDailyCounts[keyLoc][dStrRow] = membersSet.size
+      })
+
+      localidadesConfig.forEach(l => {
+        const locName = normLoc(l.nome.trim())
+        const dailyMap = locDailyCounts[locName]
+        if (dailyMap && Object.keys(dailyMap).length > 0) {
+          const counts = Object.values(dailyMap).sort((a, b) => a - b)
+          const n = counts.length
+          let median = 1
+          if (n % 2 === 1) {
+            median = counts[Math.floor(n / 2)]
+          } else {
+            const mid1 = counts[(n / 2) - 1]
+            const mid2 = counts[n / 2]
+            median = Math.round((mid1 + mid2) / 2)
+          }
+          locTargetCapacity[locName] = Math.max(1, median)
+        } else {
+          locTargetCapacity[locName] = 1
+        }
+      })
+
       const recs: Record<string, any[]> = {}
       const buildBehaviorTag = (fId: string): string => {
         const b = empBehavior[fId]; if (!b) return ''
@@ -1614,6 +1674,45 @@ export function EscalaLocalidadePage() {
         return tags.length > 0 ? ` • ⚠️ ${tags.join(', ')}` : ''
       }
 
+      // Pre-calculate best overall partner and best overall sector for each employee
+      const empOverallPartner: Record<string, { id: string, name: string, days: number }> = {}
+      const empOverallSetor: Record<string, { setor: string, days: number }> = {}
+      
+      filteredFuncionarios.forEach(f => {
+        if (f.cargo?.toLowerCase() === 'encarregado') return
+        const fIdStr = String(f.id).trim()
+        
+        let maxDays = 0
+        let bestPartnerId: string | null = null
+        if (pairHist[fIdStr]) {
+          Object.entries(pairHist[fIdStr]).forEach(([pId, days]) => {
+            if (days > maxDays) { maxDays = days; bestPartnerId = pId }
+          })
+        }
+        if (bestPartnerId) {
+          const col = allFuncionarios.find(x => String(x.id).trim() === bestPartnerId)
+          if (col) {
+            empOverallPartner[fIdStr] = { id: bestPartnerId, name: col.apelido || col.nome, days: maxDays }
+          }
+        }
+        
+        const empSetMap = empSetorHist[fIdStr] || {}
+        let maxSetorDays = 0
+        let bestSetor: string | null = null
+        let bestSetorName = null
+        Object.entries(empSetMap).forEach(([setor, days]) => {
+            if (days > maxSetorDays) { maxSetorDays = days; bestSetor = setor }
+        })
+        if (bestSetor) {
+            // Find the original sector name if possible, by checking locToSectorMap reversed or just use capitalized
+            let originalName = (bestSetor as string).charAt(0).toUpperCase() + (bestSetor as string).slice(1);
+            Object.entries(locToSectorMap).forEach(([k, v]) => {
+               if (normLoc(v) === bestSetor) originalName = v;
+            })
+            empOverallSetor[fIdStr] = { setor: bestSetor, days: maxSetorDays }
+        }
+      })
+
       localidadesConfig.forEach(loc => {
         const locName = loc.nome.trim(); const locKey = normLoc(locName)
         const locSetor = loc.setor || locToSectorMap[locKey] || ''
@@ -1623,21 +1722,33 @@ export function EscalaLocalidadePage() {
         filteredFuncionarios.forEach(f => {
           if (f.cargo?.toLowerCase() === 'encarregado') return
           const fIdStr = String(f.id).trim()
-          const empSetMap = empSetorHist[fIdStr] || {}
+          
+          const overallSetor = empOverallSetor[fIdStr]
+          const overallPartner = empOverallPartner[fIdStr]
           const locDays = empLocHist[fIdStr]?.[locKey] || 0
           
-          const topHistSetor = Object.entries(empSetMap).sort((a,b) => b[1] - a[1])[0]?.[0] || null
-          const empPrimarySetor = f.setor && f.setor !== 'Geral' ? f.setor : (topHistSetor || f.setor || '')
-          const profileSetorKey = normLoc(empPrimarySetor)
+          const isTopSector = overallSetor && overallSetor.setor === normLocSetorKey
+          const partnerHere = overallPartner && allocatedIdsToday.includes(overallPartner.id)
+          
+          const empSetMap = empSetorHist[fIdStr] || {}
+          const isExactLocality = locDays > 0
+          const isHistSector = normLocSetorKey && empSetMap[normLocSetorKey] && empSetMap[normLocSetorKey] > 0
+          const profileSetorKey = normLoc(f.setor || '')
+          const isSameSector = normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey
+          
           const totalEscDays = empBehavior[fIdStr]?.totalEscalatedDays || 0
 
-          const isExactLocality = locDays > 0
-          const isSameSector = normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey
-          const isHistSector = normLocSetorKey && empSetMap[normLocSetorKey] && empSetMap[normLocSetorKey] > 0
+          // Regra Restritiva 1: Histórico Individual do Funcionário
+          if (locDays <= 0) return
 
-          if (totalEscDays > 0 && !isExactLocality && !isSameSector && !isHistSector) return
+          // Regra Restritiva 2: Validação Cruzada pelo Colega Mais Frequente
+          if (overallPartner) {
+            const partnerLocDays = empLocHist[overallPartner.id]?.[locKey] || 0
+            const cap = locTargetCapacity[locKey] || 1
+            if (partnerLocDays < cap) return
+          }
 
-          let totalCoWorkerDays = 0; let topPartnerName = null; let topPartnerDays = 0
+          let topPartnerName: string | null | undefined = null; let topPartnerDays = 0; let totalCoWorkerDays = 0
           allocatedIdsToday.forEach(cId => {
             const d = pairHist[fIdStr]?.[cId] || 0
             if (d > 0) {
@@ -1646,20 +1757,42 @@ export function EscalaLocalidadePage() {
             }
           })
 
-          const setorBonus = isSameSector ? 30 : (isHistSector ? 15 : 0)
+          const setorBonus = isTopSector ? 50 : (isSameSector ? 30 : (isHistSector ? 15 : 0))
           const reliabilityBonus = empBehavior[fIdStr]?.daysAwayBeforeReturn <= 3 ? 4 : 0
-          const score = Math.max(0, (locDays * 20) + (topPartnerDays * 8) + setorBonus + reliabilityBonus)
+          
+          let hashF = 0; for (let i=0; i<fIdStr.length; i++) hashF = (hashF * 31 + fIdStr.charCodeAt(i)) >>> 0
+          let hashL = 0; for (let i=0; i<locKey.length; i++) hashL = (hashL * 31 + locKey.charCodeAt(i)) >>> 0
+          const combinedHash = hashF ^ (hashL + 0x9e3779b9 + (hashF << 6) + (hashF >> 2));
+          const tieBreaker = (Math.abs(Math.sin(combinedHash)) * 100) % 1;
+          
+          const usage = allocatedIdsToday.length
+          const capacityPenalty = usage >= 4 ? 40 : (usage >= 2 ? 15 : 0)
+          
+          const partnerLocDays = overallPartner ? (empLocHist[overallPartner.id]?.[locKey] || 0) : 0
+          let score = (locDays * 20) + (partnerLocDays * 15) + (totalCoWorkerDays * 4) + setorBonus + reliabilityBonus - capacityPenalty + tieBreaker
+          if (partnerHere) score += 30
 
           if (!recs[f.id]) recs[f.id] = []
           const behaviorTag = buildBehaviorTag(fIdStr)
-          let reason = isExactLocality ? `Escalado ${locDays}x nesta localidade` : (isSameSector ? `Setor ${locSetor}` : 'Disponível')
+          
+          const reasons = []
+          if (isTopSector) reasons.push(`Setor que mais trabalha (${locSetor || overallSetor.setor})`)
+          if (partnerHere) reasons.push(`Sua dupla frequente (${overallPartner?.name}) está aqui`)
+          
+          if (partnerLocDays > 0) reasons.push(`Parceiro principal tem ${partnerLocDays}x aqui`)
+          if (!isTopSector && isExactLocality) reasons.push(`Trabalhou ${locDays}x nesta localidade`)
+          if (!partnerHere && topPartnerName && topPartnerDays > 0) reasons.push(`Trabalhou ${topPartnerDays}x com ${topPartnerName}`)
+          if (!isTopSector && !isExactLocality && isSameSector) reasons.push(`Pertence ao setor ${locSetor}`)
+          if (!isTopSector && !isExactLocality && !isSameSector && isHistSector) reasons.push(`Tem histórico no setor ${locSetor}`)
+          
+          let reason = reasons.length > 0 ? reasons.join(' • ') : 'Perfil compatível para alocação'
           reason += behaviorTag
 
-          recs[f.id].push({ locId: loc.id, topLocalityName: locName, score, matchPercent: Math.min(99, Math.round(50 + (score * 1.2))), reason })
+          recs[f.id].push({ locId: loc.id, topLocalityName: locName, score, matchPercent: Math.max(10, Math.min(99, Math.round(50 + (score * 1.2)))), reason })
         })
       })
       Object.values(recs).forEach(list => list.sort((a, b) => b.score - a.score))
-      setAssistantData({ recommendations: recs, empLocHist, pairHist, empBehavior })
+      setAssistantData({ recommendations: recs, empLocHist, pairHist, empBehavior, locTargetCapacity })
     } catch (err) { console.error(err) } finally { setAssistantLoading(false) }
   }, [dateStr, localidadesConfig, dailyDistribution, filteredFuncionarios, allFuncionarios, dbLocalidades])
 
@@ -1682,24 +1815,43 @@ export function EscalaLocalidadePage() {
       // ABSOLUTE STRICT RULE: Dica IA ONLY suggests candidates who have ACTUALLY worked in this locality before (locDays > 0)!
       if (locDays <= 0) return
 
-      let topPartnerName: string | null = null
-      let topPartnerDays = 0
+      // Regra Restritiva 2: Validação Cruzada pelo Colega Mais Frequente
+      let absolutePartnerId: string | null = null
+      let absolutePartnerDays = 0
+      if (assistantData.pairHist && assistantData.pairHist[fIdStr]) {
+        Object.entries(assistantData.pairHist[fIdStr]).forEach(([pId, days]) => {
+          if (days > absolutePartnerDays) {
+            absolutePartnerDays = days
+            absolutePartnerId = pId
+          }
+        })
+      }
 
-      allocatedMembers.forEach(m => {
-        const days = assistantData.pairHist?.[fIdStr]?.[String(m.id).trim()] || 0
-        if (days > topPartnerDays) {
-          topPartnerDays = days
-          topPartnerName = m.apelido || m.nome
+      let partnerLocDays = 0
+      let partnerName: string | null = null
+      if (absolutePartnerId) {
+        partnerLocDays = assistantData.empLocHist?.[absolutePartnerId]?.[normLocName] || 0
+        const cap = assistantData.locTargetCapacity?.[normLocName] || 1
+        
+        // A sugestão só será confirmada se esse parceiro principal também possuir um histórico muito forte (uma alta frequência, equivalente ou superior à mediana habitual) nessa mesma localidade alvo.
+        if (partnerLocDays < cap) {
+          return
         }
-      })
 
-      const score = (locDays * 20) + (topPartnerDays * 8)
+        const partnerObj = allFuncionarios.find(x => String(x.id).trim() === absolutePartnerId)
+        if (partnerObj) {
+          partnerName = partnerObj.apelido || partnerObj.nome
+        }
+      }
+
+      const score = (locDays * 20) + (partnerLocDays * 15)
+      
       if (score > maxScore) {
         maxScore = score
         const funcName = f.apelido || f.nome
         let reason = ''
-        if (topPartnerName && topPartnerDays > 0) {
-          reason = `Trabalhou ${locDays}x aqui e ${topPartnerDays}x com ${topPartnerName}`
+        if (partnerName && absolutePartnerDays > 0) {
+          reason = `${locDays}x aqui. Parceiro principal (${partnerName}) tem ${partnerLocDays}x aqui.`
         } else {
           reason = `Trabalhou ${locDays}x nesta localidade`
         }
@@ -1714,7 +1866,7 @@ export function EscalaLocalidadePage() {
     })
 
     return bestFunc
-  }, [filteredAvailableFuncs, assistantData])
+  }, [filteredAvailableFuncs, assistantData, allFuncionarios])
 
 
   const handleAutoAllocateAllWithAssistant = async () => {
@@ -1726,16 +1878,54 @@ export function EscalaLocalidadePage() {
     try {
       const itemsToBatch: { funcionario_id: string; data: string; tipo: string; localidade: string; turno: 'integral' }[] = []
       const locUsageCount: Record<string, number> = {}
+      const currentlyAllocatedInSession: Record<string, string[]> = {}
 
       localidadesConfig.forEach(loc => {
         locUsageCount[loc.nome] = (dailyDistribution[loc.id] || []).length
+        currentlyAllocatedInSession[loc.nome] = (dailyDistribution[loc.id] || []).map(m => String(m.id).trim())
       })
 
       let allocatedCount = 0
 
-      for (const f of filteredAvailableFuncs) {
+      // Prioritize employees with actual history (higher base scores) to ensure they get their optimal localities first
+      const sortedAvailable = [...filteredAvailableFuncs].sort((a, b) => {
+        const scoreA = (assistantData.recommendations[a.id]?.[0]?.score || 0)
+        const scoreB = (assistantData.recommendations[b.id]?.[0]?.score || 0)
+        return scoreB - scoreA
+      })
+
+      for (const f of sortedAvailable) {
         const userRecs = assistantData.recommendations[f.id] || []
-        const bestRec = userRecs.find(r => (locUsageCount[r.topLocalityName] || 0) < 4) || userRecs[0]
+        
+        let bestRec = null
+        let bestDynamicScore = -9999
+
+        for (const rec of userRecs) {
+          const usage = locUsageCount[rec.topLocalityName] || 0
+          
+          // Penalize locations that already have 2+ people to spread them out better
+          const capacityPenalty = usage >= 4 ? -500 : (usage >= 2 ? -20 : 0)
+
+          let dynamicPartnerDays = 0
+          const allocatedHere = currentlyAllocatedInSession[rec.topLocalityName] || []
+          allocatedHere.forEach(cId => {
+            const d = assistantData.pairHist?.[String(f.id).trim()]?.[cId] || 0
+            if (d > dynamicPartnerDays) {
+              dynamicPartnerDays = d
+            }
+          })
+
+          const dynamicScore = rec.score + capacityPenalty + (dynamicPartnerDays * 8)
+          
+          if (dynamicScore > bestDynamicScore) {
+            bestDynamicScore = dynamicScore
+            bestRec = rec
+          }
+        }
+
+        if (!bestRec && userRecs.length > 0) {
+          bestRec = userRecs[0]
+        }
 
         if (bestRec) {
           itemsToBatch.push({
@@ -1746,6 +1936,10 @@ export function EscalaLocalidadePage() {
             turno: 'integral' as const
           })
           locUsageCount[bestRec.topLocalityName] = (locUsageCount[bestRec.topLocalityName] || 0) + 1
+          if (!currentlyAllocatedInSession[bestRec.topLocalityName]) {
+            currentlyAllocatedInSession[bestRec.topLocalityName] = []
+          }
+          currentlyAllocatedInSession[bestRec.topLocalityName].push(String(f.id).trim())
           allocatedCount++
         }
       }
@@ -1804,6 +1998,7 @@ export function EscalaLocalidadePage() {
       'folga': { label: 'Folgas', icon: <Activity className="w-4 h-4" />, members: [], color: 'text-blue-500' },
       'ferias': { label: 'Férias', icon: <CalendarIcon className="w-4 h-4" />, members: [], color: 'text-purple-500' },
       'atestado': { label: 'Afastamentos', icon: <Activity className="w-4 h-4" />, members: [], color: 'text-amber-500' },
+      'sem_escala': { label: 'Sem Escala', icon: <Users className="w-4 h-4" />, members: [], color: 'text-slate-400' },
       'outros': { label: 'Outros', icon: <Clock className="w-4 h-4" />, members: [], color: 'text-slate-500' },
     }
 
@@ -1820,6 +2015,7 @@ export function EscalaLocalidadePage() {
         if (tipo === 'repouso' || tipo === 'compensar') groups['folga'].members.push(member)
         else if (tipo === 'ferias') groups['ferias'].members.push(member)
         else if (tipo === 'atestado') groups['atestado'].members.push(member)
+        else if (tipo === 'sem_escala') groups['sem_escala'].members.push(member)
         else groups['outros'].members.push(member)
       }
     })
@@ -1997,7 +2193,7 @@ export function EscalaLocalidadePage() {
     if (!assignModal) return
     
     const { isTrabalhando, tipo } = getEmployeeStatus(funcId, assignModal.dateStr)
-    if (!isTrabalhando && assignModal.locName !== 'Sem Local') {
+    if (!isTrabalhando && assignModal.locName !== 'Sem Local' && tipo !== 'sem_escala') {
       const statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo.toUpperCase()
       toast(`Não é possível alocar: colaborador em ${statusLabel} no dia.`, 'error')
       return
@@ -2222,7 +2418,7 @@ export function EscalaLocalidadePage() {
     const fIdStr = String(funcId).trim()
     const { isTrabalhando, tipo } = getEmployeeStatus(fIdStr, dateStr)
     
-    if (!isTrabalhando && targetLocName) {
+    if (!isTrabalhando && targetLocName && tipo !== 'sem_escala') {
       const statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo.toUpperCase()
       toast(`Não é possível alocar: colaborador em ${statusLabel} no dia.`, 'error')
       return
@@ -3222,7 +3418,7 @@ export function EscalaLocalidadePage() {
                   </thead>
                   <tbody>
                     {visibleSetores.map(setor => {
-                      const locs = localidadesConfig.filter(l => l.setor === setor)
+                      const locs = visibleLocalidades.filter(l => l.setor === setor)
                       if (locs.length === 0) return null
                       return (
                         <React.Fragment key={setor}>
@@ -3391,6 +3587,19 @@ export function EscalaLocalidadePage() {
                     {setores.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
 
+                  <select
+                    value={filterAllocation} 
+                    onChange={e => setFilterAllocation(e.target.value)}
+                    className="w-full xl:w-56 bg-muted/50 border border-border/30 rounded-[1.25rem] px-4 h-12 sm:h-14 text-xs outline-none focus:ring-4 focus:ring-primary/10 transition-all font-bold text-foreground uppercase tracking-wider"
+                  >
+                    <option value="">Todas Alocações</option>
+                    <option value="0">Sem funcionários (0)</option>
+                    <option value="1">1 funcionário</option>
+                    <option value="2+">2 ou mais funcionários</option>
+                    <option value="0-1-2">Até 2 funcionários</option>
+                    <option value="1+">Com alocação (1+)</option>
+                  </select>
+
                   {/* Campo de Busca Principal, Sempre Aberto */}
                   <div className="relative flex-1 min-w-[240px]">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
@@ -3424,7 +3633,7 @@ export function EscalaLocalidadePage() {
                             let statusColor = 'text-amber-500 bg-amber-500/10 border-amber-500/20'
                             
                             if (!isTrabalhando) {
-                              statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo.toUpperCase()
+                              statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo === 'sem_escala' ? 'Sem Escala' : tipo.toUpperCase()
                               statusColor = 'text-slate-400 bg-muted/50 border-border/40'
                             } else if (isAlocado) {
                               statusLabel = `Alocado: ${escala.localidade}`
@@ -3568,7 +3777,7 @@ export function EscalaLocalidadePage() {
           {viewMode === 'daily' && (
             <div className="space-y-16">
               {visibleSetores.map(setor => {
-                const locs = localidadesConfig.filter(l => l.setor === setor)
+                const locs = visibleLocalidades.filter(l => l.setor === setor)
                 if (locs.length === 0) return null
                 return (
                   <div key={setor} className="space-y-8">
@@ -4320,7 +4529,7 @@ export function EscalaLocalidadePage() {
               {/* Weekly Mobile Layout (md:hidden) */}
               <div className="md:hidden space-y-8 animate-fade-in">
                 {visibleSetores.map(setor => {
-                  const locs = localidadesConfig.filter(l => l.setor === setor)
+                  const locs = visibleLocalidades.filter(l => l.setor === setor)
                   if (locs.length === 0) return null
                   return (
                     <div key={`${setor}-mobile`} className="space-y-4">
@@ -4439,7 +4648,7 @@ export function EscalaLocalidadePage() {
                     </thead>
                     <tbody className="divide-y divide-border/30">
                       {visibleSetores.map(setor => {
-                        const locs = localidadesConfig.filter(l => l.setor === setor)
+                        const locs = visibleLocalidades.filter(l => l.setor === setor)
                         if (locs.length === 0) return null
                         return (
                           <React.Fragment key={setor}>
@@ -4677,10 +4886,10 @@ export function EscalaLocalidadePage() {
                     if (successAllocatedIds[f.id]) return true
                     
                     const { isTrabalhando, tipo, isAlocado } = getEmployeeStatus(f.id, currentAssign.dateStr)
-                    const normTipo = tipo ? String(tipo).toLowerCase().trim() : ''
+                    const normTipo = tipo ? String(tipo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : ''
                     
                     // Exclude explicit absences or off status
-                    if (['falta', 'repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga'].includes(normTipo)) {
+                    if (['falta', 'repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga'].some(k => normTipo.includes(k))) {
                       return false
                     }
 
@@ -5585,7 +5794,7 @@ export function EscalaLocalidadePage() {
                   let statusColor = 'text-amber-500 bg-amber-500/10 border-amber-500/20'
                   
                   if (!isTrabalhando) {
-                    statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo.toUpperCase()
+                    statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo === 'sem_escala' ? 'Sem Escala' : tipo.toUpperCase()
                     statusColor = 'text-slate-400 bg-muted/50 border-border/40'
                   } else if (isAlocado) {
                     statusLabel = `Alocado: ${escala.localidade}`
