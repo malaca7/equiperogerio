@@ -388,7 +388,7 @@ export function FrequenciaPage() {
 
 
   const filteredFuncionarios = useMemo(() => {
-    let list = allFuncionarios.filter(f => !f.data_desligamento || f.data_desligamento > dateStr)
+    let list = allFuncionarios.filter(f => !f.data_desligamento || f.data_desligamento >= dateStr)
     
     // Filter out employees borrowed by OTHER teams today
     const activeTeamId = teamInfo?.isRestricted ? (teamInfo.teamIds?.[0] || null) : selectedTeamId

@@ -639,7 +639,7 @@ export function EscalaLocalidadePage() {
 
   const filteredFuncionarios = useMemo(() => {
     const targetDStr = format(currentDate, 'yyyy-MM-dd')
-    let list = allFuncionarios.filter(f => !f.data_desligamento || f.data_desligamento > targetDStr)
+    let list = allFuncionarios.filter(f => !f.data_desligamento || f.data_desligamento >= targetDStr)
     
     const activeTeamId = teamInfo?.isRestricted ? (teamInfo.teamIds?.[0] || null) : selectedTeamId
     const borrowedByOthers = borrowedMembers.filter((bm: any) => bm.equipe_id !== activeTeamId)
@@ -954,8 +954,8 @@ export function EscalaLocalidadePage() {
       tipo = 'repouso'
     } else if (e) {
       // Has an explicit escala record in DB — respect it!
-      const normTipo = e.tipo ? String(e.tipo).toLowerCase().trim() : ''
-      const isExplicitOff = normTipo === 'repouso' || normTipo === 'compensar' || normTipo === 'ferias' || normTipo === 'atestado' || normTipo === 'suspensao' || normTipo === 'folga'
+      const normTipo = e.tipo ? String(e.tipo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : ''
+      const isExplicitOff = ['repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga', 'falta'].some(k => normTipo.includes(k))
       
       isTrabalhando = !isExplicitOff || hasAssignedLocality
       tipo = isExplicitOff && !hasAssignedLocality ? (e.tipo || 'repouso') : (e.tipo || 'presente')
@@ -1439,10 +1439,11 @@ export function EscalaLocalidadePage() {
       if (f.cargo?.toLowerCase() === 'encarregado') return false
       
       const { isTrabalhando, tipo, isAlocado } = getEmployeeStatus(f.id, dateStr)
-      const normTipo = tipo ? String(tipo).toLowerCase().trim() : ''
+      const normTipo = tipo ? String(tipo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : ''
       
       // Only employees with active working scale for today and not off/absent can be allocated
-      if (['falta', 'repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga'].includes(normTipo)) {
+      const isOff = ['falta', 'repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga'].some(k => normTipo.includes(k))
+      if (isOff) {
         return false
       }
       
@@ -4679,10 +4680,10 @@ export function EscalaLocalidadePage() {
                     if (successAllocatedIds[f.id]) return true
                     
                     const { isTrabalhando, tipo, isAlocado } = getEmployeeStatus(f.id, currentAssign.dateStr)
-                    const normTipo = tipo ? String(tipo).toLowerCase().trim() : ''
+                    const normTipo = tipo ? String(tipo).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim() : ''
                     
                     // Exclude explicit absences or off status
-                    if (['falta', 'repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga'].includes(normTipo)) {
+                    if (['falta', 'repouso', 'compensar', 'ferias', 'atestado', 'suspensao', 'folga'].some(k => normTipo.includes(k))) {
                       return false
                     }
 

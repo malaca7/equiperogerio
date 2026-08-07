@@ -924,13 +924,14 @@ export function ModelosEscalaPage() {
     return set
   }, [editando])
 
-  const funcionariosForaModelo = useMemo(() =>
-    (funcionarios ?? []).filter(f =>
+  const funcionariosForaModelo = useMemo(() => {
+    const todayStr = new Date().toISOString().substring(0, 10)
+    return (funcionarios ?? []).filter(f =>
       f.status === 'ativo' &&
+      (!f.data_desligamento || f.data_desligamento >= todayStr) &&
       !funcionariosNoModeloEditando.has(f.id)
-    ),
-    [funcionarios, funcionariosNoModeloEditando]
-  )
+    )
+  }, [funcionarios, funcionariosNoModeloEditando])
 
   const filteredDisponiveis = useMemo(() => {
     return funcionariosForaModelo.filter(f => {

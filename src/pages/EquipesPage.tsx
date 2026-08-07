@@ -73,7 +73,9 @@ function useFuncionariosAtivos() {
     queryKey: ['func-ativos'],
     queryFn: async () => {
       const { data } = await supabase.from('funcionarios').select('*').is('deleted_at', null).eq('status', 'ativo').order('nome')
-      return data || []
+      if (!data) return []
+      const todayStr = new Date().toISOString().substring(0, 10)
+      return data.filter(f => !f.data_desligamento || f.data_desligamento >= todayStr)
     },
   })
 }
