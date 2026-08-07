@@ -1706,7 +1706,8 @@ export function EscalaLocalidadePage() {
           
           const totalEscDays = empBehavior[fIdStr]?.totalEscalatedDays || 0
 
-          if (totalEscDays > 0 && !isExactLocality && !isSameSector && !isHistSector && !isTopSector && !partnerHere) return
+          // We removed the early return so that ALL localities are scored for ALL employees.
+          // The scoring algorithm will naturally push the best matches to the top.
 
           let topPartnerName: string | null | undefined = null; let topPartnerDays = 0; let totalCoWorkerDays = 0
           allocatedIdsToday.forEach(cId => {
@@ -1728,7 +1729,7 @@ export function EscalaLocalidadePage() {
           const usage = allocatedIdsToday.length
           const capacityPenalty = usage >= 4 ? 40 : (usage >= 2 ? 15 : 0)
           
-          let score = Math.max(0, (locDays * 20) + (totalCoWorkerDays * 4) + setorBonus + reliabilityBonus - capacityPenalty + tieBreaker)
+          let score = (locDays * 20) + (totalCoWorkerDays * 4) + setorBonus + reliabilityBonus - capacityPenalty + tieBreaker
           if (partnerHere) score += 30
 
           if (!recs[f.id]) recs[f.id] = []
@@ -1746,7 +1747,7 @@ export function EscalaLocalidadePage() {
           let reason = reasons.length > 0 ? reasons.join(' • ') : 'Perfil compatível para alocação'
           reason += behaviorTag
 
-          recs[f.id].push({ locId: loc.id, topLocalityName: locName, score, matchPercent: Math.min(99, Math.round(50 + (score * 1.2))), reason })
+          recs[f.id].push({ locId: loc.id, topLocalityName: locName, score, matchPercent: Math.max(10, Math.min(99, Math.round(50 + (score * 1.2)))), reason })
         })
       })
       Object.values(recs).forEach(list => list.sort((a, b) => b.score - a.score))
