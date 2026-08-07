@@ -411,6 +411,10 @@ export function EscalaLocalidadePage() {
   useEffect(() => {
     localStorage.setItem('7boss_escala_filter_allocation', filterAllocation)
   }, [filterAllocation])
+
+  const [filterLocalidade, setFilterLocalidade] = useState('')
+  const [filterCapacity, setFilterCapacity] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
   const [assignModal, setAssignModal] = useState<{ locId: string; locName: string; dateStr: string; setor: string } | null>(null)
   interface SpecialDayConfirmState {
     title: string
@@ -1051,6 +1055,11 @@ export function EscalaLocalidadePage() {
   const visibleLocalidades = useMemo(() => {
     let list = localidadesConfig
     
+    if (filterLocalidade.trim()) {
+      const q = filterLocalidade.toLowerCase().trim()
+      list = list.filter(loc => loc.nome.toLowerCase().includes(q))
+    }
+
     if (filterAllocation) {
       list = list.filter(loc => {
         const count = (dailyDistribution[loc.id] || []).length
@@ -1063,8 +1072,34 @@ export function EscalaLocalidadePage() {
       })
     }
 
+    if (filterCapacity) {
+      list = list.filter(loc => {
+        const sectorName = loc.setor || 'Geral'
+        const limit = sectorLimits[sectorName] !== undefined
+          ? sectorLimits[sectorName]
+          : (sectorName.toLowerCase().includes('varr') ? 2 : 1)
+        
+        if (filterCapacity === '0') return limit === 0
+        if (filterCapacity === '1') return limit === 1
+        if (filterCapacity === '2') return limit === 2
+        if (filterCapacity === '2+') return limit >= 2
+        return true
+      })
+    }
+
+    if (filterStatus) {
+      list = list.filter(loc => {
+        const meta = equipesMeta[loc.id] || {}
+        if (filterStatus === 'com_demandas') return (meta.demandas?.length || 0) > 0 || (meta.locais?.length || 0) > 0
+        if (filterStatus === 'sem_demandas') return (meta.demandas?.length || 0) === 0 && (meta.locais?.length || 0) === 0
+        if (filterStatus === 'sem_lider') return !meta.lider_id
+        if (filterStatus === 'com_lider') return !!meta.lider_id
+        return true
+      })
+    }
+
     return list
-  }, [localidadesConfig, dailyDistribution, filterAllocation])
+  }, [localidadesConfig, dailyDistribution, filterAllocation, filterLocalidade, filterCapacity, filterStatus, sectorLimits, equipesMeta])
 
   const getEmployeeDisplayName = useCallback((f: { id: string; nome: string; apelido?: string | null }) => {
     if (f.apelido?.trim()) {
@@ -3599,6 +3634,41 @@ export function EscalaLocalidadePage() {
                     <option value="0-1-2">Até 2 funcionários</option>
                     <option value="1+">Com alocação (1+)</option>
                   </select>
+
+                  <select
+                    value={filterCapacity}
+                    onChange={e => setFilterCapacity(e.target.value)}
+                    className="w-full xl:w-56 bg-muted/50 border border-border/30 rounded-[1.25rem] px-4 h-12 sm:h-14 text-xs outline-none focus:ring-4 focus:ring-primary/10 transition-all font-bold text-foreground uppercase tracking-wider"
+                  >
+                    <option value="">Todas as Capacidades</option>
+                    <option value="0">Pode Trabalhar com 0</option>
+                    <option value="1">Pode Trabalhar com 1</option>
+                    <option value="2">Pode Trabalhar com 2</option>
+                    <option value="2+">Pode Trabalhar com 2 ou mais</option>
+                  </select>
+
+                  <select
+                    value={filterStatus}
+                    onChange={e => setFilterStatus(e.target.value)}
+                    className="w-full xl:w-56 bg-muted/50 border border-border/30 rounded-[1.25rem] px-4 h-12 sm:h-14 text-xs outline-none focus:ring-4 focus:ring-primary/10 transition-all font-bold text-foreground uppercase tracking-wider"
+                  >
+                    <option value="">Status da Localidade</option>
+                    <option value="com_demandas">Com Demandas / Locais</option>
+                    <option value="sem_demandas">Sem Demandas / Locais</option>
+                    <option value="com_lider">Com Líder Definido</option>
+                    <option value="sem_lider">Sem Líder Definido</option>
+                  </select>
+
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+                    <input
+                      type="text"
+                      placeholder="Pesquisar localidade..."
+                      value={filterLocalidade}
+                      onChange={e => setFilterLocalidade(e.target.value)}
+                      className="w-full pl-11 h-12 sm:h-14 bg-muted/50 border border-border/30 rounded-[1.25rem] text-xs font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary/50 outline-none transition-all text-foreground uppercase tracking-wider placeholder:normal-case placeholder:text-muted-foreground/50"
+                    />
+                  </div>
 
                   {/* Campo de Busca Principal, Sempre Aberto */}
                   <div className="relative flex-1 min-w-[240px]">
