@@ -161,7 +161,7 @@ export default function UsuariosPage() {
     mutationFn: async () => {
       const clean = form.cpf.replace(/\D/g, '')
       const { data, error } = await supabase.from('profiles').insert({
-        cpf: clean, senha: form.senha, nome: form.nome, email: form.email || null,
+        cpf: clean, senha: form.senha.trim(), nome: form.nome.trim(), email: form.email || null,
       }).select().single()
       if (error) throw error
       if (form.roleId) {
@@ -187,7 +187,7 @@ export default function UsuariosPage() {
     mutationFn: async () => {
       const clean = editForm.cpf.replace(/\D/g, '')
       const updates: any = { cpf: clean, nome: editForm.nome, email: editForm.email || null, updated_at: new Date().toISOString() }
-      if (editForm.senha) updates.senha = editForm.senha
+      if (editForm.senha) updates.senha = editForm.senha.trim()
       const { error } = await supabase.from('profiles').update(updates).eq('id', editForm.id)
       if (error) throw error
     },

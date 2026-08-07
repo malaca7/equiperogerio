@@ -40,7 +40,7 @@ export function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const cleanCpf = cpf.replace(/\D/g, '')
-    const cleanSenha = senha.trim()
+    const cleanSenha = senha
     if (!cleanCpf || !cleanSenha) { toast('Preencha CPF e senha', 'warning'); return }
     if (cleanCpf.length < 11) { toast('CPF inválido', 'warning'); return }
     if (lembrarCpf) {

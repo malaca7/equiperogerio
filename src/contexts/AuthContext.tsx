@@ -320,7 +320,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (cpf: string, senha: string): Promise<{ error: string | null }> => {
     const cleanCpf = cpf.replace(/\D/g, '')
-    const cleanSenha = senha.trim()
+    const cleanSenha = senha
     const info = getBrowserInfo()
 
     // Check in DB
