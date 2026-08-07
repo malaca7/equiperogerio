@@ -1708,10 +1708,11 @@ export function EscalaLocalidadePage() {
 
           if (totalEscDays > 0 && !isExactLocality && !isSameSector && !isHistSector && !isTopSector && !partnerHere) return
 
-          let topPartnerName = null; let topPartnerDays = 0
+          let topPartnerName: string | null | undefined = null; let topPartnerDays = 0; let totalCoWorkerDays = 0
           allocatedIdsToday.forEach(cId => {
             const d = pairHist[fIdStr]?.[cId] || 0
             if (d > 0) {
+              totalCoWorkerDays += d
               if (d > topPartnerDays) { topPartnerDays = d; const col = allFuncionarios.find(x => String(x.id).trim() === cId); topPartnerName = col?.apelido || col?.nome }
             }
           })
@@ -1721,10 +1722,14 @@ export function EscalaLocalidadePage() {
           
           let hashF = 0; for (let i=0; i<fIdStr.length; i++) hashF = (hashF * 31 + fIdStr.charCodeAt(i)) >>> 0
           let hashL = 0; for (let i=0; i<locKey.length; i++) hashL = (hashL * 31 + locKey.charCodeAt(i)) >>> 0
-          const tieBreaker = ((hashF * 31 + hashL) % 100) * 0.01
+          const combinedHash = hashF ^ (hashL + 0x9e3779b9 + (hashF << 6) + (hashF >> 2));
+          const tieBreaker = (Math.abs(Math.sin(combinedHash)) * 100) % 1;
           
-          let score = Math.max(0, (locDays * 20) + (topPartnerDays * 8) + setorBonus + reliabilityBonus + tieBreaker)
-          if (partnerHere) score += 40
+          const usage = allocatedIdsToday.length
+          const capacityPenalty = usage >= 4 ? 40 : (usage >= 2 ? 15 : 0)
+          
+          let score = Math.max(0, (locDays * 20) + (totalCoWorkerDays * 4) + setorBonus + reliabilityBonus - capacityPenalty + tieBreaker)
+          if (partnerHere) score += 30
 
           if (!recs[f.id]) recs[f.id] = []
           const behaviorTag = buildBehaviorTag(fIdStr)
