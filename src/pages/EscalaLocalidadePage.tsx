@@ -1676,8 +1676,8 @@ export function EscalaLocalidadePage() {
           const setorBonus = isSameSector ? 30 : (isHistSector ? 15 : 0)
           const reliabilityBonus = empBehavior[fIdStr]?.daysAwayBeforeReturn <= 3 ? 4 : 0
           // Tie-breaker to prevent everyone getting the exact same recommendation
-          let hashF = 0; for (let i=0; i<fIdStr.length; i++) hashF += fIdStr.charCodeAt(i)
-          let hashL = 0; for (let i=0; i<locKey.length; i++) hashL += locKey.charCodeAt(i)
+          let hashF = 0; for (let i=0; i<fIdStr.length; i++) hashF = (hashF * 31 + fIdStr.charCodeAt(i)) >>> 0
+          let hashL = 0; for (let i=0; i<locKey.length; i++) hashL = (hashL * 31 + locKey.charCodeAt(i)) >>> 0
           const tieBreaker = ((hashF + hashL) % 100) * 0.01
           const score = Math.max(0, (locDays * 20) + (topPartnerDays * 8) + setorBonus + reliabilityBonus + tieBreaker)
 
