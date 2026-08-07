@@ -331,16 +331,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('senha', cleanSenha)
       .limit(1)
 
+    if (error) {
+      console.error('Login connection error:', error)
+      return { error: 'Falha de comunicação com o servidor. Verifique a conexão ou as configurações do banco.' }
+    }
+
     const profile = profiles && profiles.length > 0 ? profiles[0] : null
 
-    if (error || !profile) {
-      console.error('Login error:', error, 'Profiles array:', profiles, 'cleanCpf:', cleanCpf)
+    if (!profile) {
+      console.warn('Login failed: Nenhum perfil encontrado para', cleanCpf)
       await supabase.from('login_logs').insert({
         cpf: cleanCpf,
         sucesso: false,
         navegador: info.navegador,
         dispositivo: info.dispositivo,
-        motivo_falha: 'CPF ou senha incorretos - Erro DB: ' + (error?.message || 'Nenhum perfil'),
+        motivo_falha: 'CPF ou senha incorretos',
       })
       return { error: 'CPF ou senha incorretos' }
     }
