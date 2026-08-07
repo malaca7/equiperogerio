@@ -1675,7 +1675,11 @@ export function EscalaLocalidadePage() {
 
           const setorBonus = isSameSector ? 30 : (isHistSector ? 15 : 0)
           const reliabilityBonus = empBehavior[fIdStr]?.daysAwayBeforeReturn <= 3 ? 4 : 0
-          const score = Math.max(0, (locDays * 20) + (topPartnerDays * 8) + setorBonus + reliabilityBonus)
+          // Tie-breaker to prevent everyone getting the exact same recommendation
+          let hashF = 0; for (let i=0; i<fIdStr.length; i++) hashF += fIdStr.charCodeAt(i)
+          let hashL = 0; for (let i=0; i<locKey.length; i++) hashL += locKey.charCodeAt(i)
+          const tieBreaker = ((hashF + hashL) % 100) * 0.01
+          const score = Math.max(0, (locDays * 20) + (topPartnerDays * 8) + setorBonus + reliabilityBonus + tieBreaker)
 
           if (!recs[f.id]) recs[f.id] = []
           const behaviorTag = buildBehaviorTag(fIdStr)
@@ -1753,16 +1757,54 @@ export function EscalaLocalidadePage() {
     try {
       const itemsToBatch: { funcionario_id: string; data: string; tipo: string; localidade: string; turno: 'integral' }[] = []
       const locUsageCount: Record<string, number> = {}
+      const currentlyAllocatedInSession: Record<string, string[]> = {}
 
       localidadesConfig.forEach(loc => {
         locUsageCount[loc.nome] = (dailyDistribution[loc.id] || []).length
+        currentlyAllocatedInSession[loc.nome] = (dailyDistribution[loc.id] || []).map(m => String(m.id).trim())
       })
 
       let allocatedCount = 0
 
-      for (const f of filteredAvailableFuncs) {
+      // Prioritize employees with actual history (higher base scores) to ensure they get their optimal localities first
+      const sortedAvailable = [...filteredAvailableFuncs].sort((a, b) => {
+        const scoreA = (assistantData.recommendations[a.id]?.[0]?.score || 0)
+        const scoreB = (assistantData.recommendations[b.id]?.[0]?.score || 0)
+        return scoreB - scoreA
+      })
+
+      for (const f of sortedAvailable) {
         const userRecs = assistantData.recommendations[f.id] || []
-        const bestRec = userRecs.find(r => (locUsageCount[r.topLocalityName] || 0) < 4) || userRecs[0]
+        
+        let bestRec = null
+        let bestDynamicScore = -9999
+
+        for (const rec of userRecs) {
+          const usage = locUsageCount[rec.topLocalityName] || 0
+          
+          // Penalize locations that already have 2+ people to spread them out better
+          const capacityPenalty = usage >= 4 ? -500 : (usage >= 2 ? -20 : 0)
+
+          let dynamicPartnerDays = 0
+          const allocatedHere = currentlyAllocatedInSession[rec.topLocalityName] || []
+          allocatedHere.forEach(cId => {
+            const d = assistantData.pairHist?.[String(f.id).trim()]?.[cId] || 0
+            if (d > dynamicPartnerDays) {
+              dynamicPartnerDays = d
+            }
+          })
+
+          const dynamicScore = rec.score + capacityPenalty + (dynamicPartnerDays * 8)
+          
+          if (dynamicScore > bestDynamicScore) {
+            bestDynamicScore = dynamicScore
+            bestRec = rec
+          }
+        }
+
+        if (!bestRec && userRecs.length > 0) {
+          bestRec = userRecs[0]
+        }
 
         if (bestRec) {
           itemsToBatch.push({
@@ -1773,6 +1815,10 @@ export function EscalaLocalidadePage() {
             turno: 'integral' as const
           })
           locUsageCount[bestRec.topLocalityName] = (locUsageCount[bestRec.topLocalityName] || 0) + 1
+          if (!currentlyAllocatedInSession[bestRec.topLocalityName]) {
+            currentlyAllocatedInSession[bestRec.topLocalityName] = []
+          }
+          currentlyAllocatedInSession[bestRec.topLocalityName].push(String(f.id).trim())
           allocatedCount++
         }
       }
