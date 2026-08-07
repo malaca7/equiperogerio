@@ -1642,6 +1642,45 @@ export function EscalaLocalidadePage() {
         return tags.length > 0 ? ` • ⚠️ ${tags.join(', ')}` : ''
       }
 
+      // Pre-calculate best overall partner and best overall sector for each employee
+      const empOverallPartner: Record<string, { id: string, name: string, days: number }> = {}
+      const empOverallSetor: Record<string, { setor: string, days: number }> = {}
+      
+      filteredFuncionarios.forEach(f => {
+        if (f.cargo?.toLowerCase() === 'encarregado') return
+        const fIdStr = String(f.id).trim()
+        
+        let maxDays = 0
+        let bestPartnerId: string | null = null
+        if (pairHist[fIdStr]) {
+          Object.entries(pairHist[fIdStr]).forEach(([pId, days]) => {
+            if (days > maxDays) { maxDays = days; bestPartnerId = pId }
+          })
+        }
+        if (bestPartnerId) {
+          const col = allFuncionarios.find(x => String(x.id).trim() === bestPartnerId)
+          if (col) {
+            empOverallPartner[fIdStr] = { id: bestPartnerId, name: col.apelido || col.nome, days: maxDays }
+          }
+        }
+        
+        const empSetMap = empSetorHist[fIdStr] || {}
+        let maxSetorDays = 0
+        let bestSetor: string | null = null
+        let bestSetorName = null
+        Object.entries(empSetMap).forEach(([setor, days]) => {
+            if (days > maxSetorDays) { maxSetorDays = days; bestSetor = setor }
+        })
+        if (bestSetor) {
+            // Find the original sector name if possible, by checking locToSectorMap reversed or just use capitalized
+            let originalName = (bestSetor as string).charAt(0).toUpperCase() + (bestSetor as string).slice(1);
+            Object.entries(locToSectorMap).forEach(([k, v]) => {
+               if (normLoc(v) === bestSetor) originalName = v;
+            })
+            empOverallSetor[fIdStr] = { setor: bestSetor, days: maxSetorDays }
+        }
+      })
+
       localidadesConfig.forEach(loc => {
         const locName = loc.nome.trim(); const locKey = normLoc(locName)
         const locSetor = loc.setor || locToSectorMap[locKey] || ''
@@ -1651,45 +1690,53 @@ export function EscalaLocalidadePage() {
         filteredFuncionarios.forEach(f => {
           if (f.cargo?.toLowerCase() === 'encarregado') return
           const fIdStr = String(f.id).trim()
-          const empSetMap = empSetorHist[fIdStr] || {}
+          
+          const overallSetor = empOverallSetor[fIdStr]
+          const overallPartner = empOverallPartner[fIdStr]
           const locDays = empLocHist[fIdStr]?.[locKey] || 0
           
-          const topHistSetor = Object.entries(empSetMap).sort((a,b) => b[1] - a[1])[0]?.[0] || null
-          const empPrimarySetor = f.setor && f.setor !== 'Geral' ? f.setor : (topHistSetor || f.setor || '')
-          const profileSetorKey = normLoc(empPrimarySetor)
+          const isTopSector = overallSetor && overallSetor.setor === normLocSetorKey
+          const partnerHere = overallPartner && allocatedIdsToday.includes(overallPartner.id)
+          
+          const empSetMap = empSetorHist[fIdStr] || {}
+          const isExactLocality = locDays > 0
+          const isHistSector = normLocSetorKey && empSetMap[normLocSetorKey] && empSetMap[normLocSetorKey] > 0
+          const profileSetorKey = normLoc(f.setor || '')
+          const isSameSector = normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey
+          
           const totalEscDays = empBehavior[fIdStr]?.totalEscalatedDays || 0
 
-          const isExactLocality = locDays > 0
-          const isSameSector = normLocSetorKey && profileSetorKey && normLocSetorKey === profileSetorKey
-          const isHistSector = normLocSetorKey && empSetMap[normLocSetorKey] && empSetMap[normLocSetorKey] > 0
+          if (totalEscDays > 0 && !isExactLocality && !isSameSector && !isHistSector && !isTopSector && !partnerHere) return
 
-          if (totalEscDays > 0 && !isExactLocality && !isSameSector && !isHistSector) return
-
-          let totalCoWorkerDays = 0; let topPartnerName = null; let topPartnerDays = 0
+          let topPartnerName = null; let topPartnerDays = 0
           allocatedIdsToday.forEach(cId => {
             const d = pairHist[fIdStr]?.[cId] || 0
             if (d > 0) {
-              totalCoWorkerDays += d
               if (d > topPartnerDays) { topPartnerDays = d; const col = allFuncionarios.find(x => String(x.id).trim() === cId); topPartnerName = col?.apelido || col?.nome }
             }
           })
 
-          const setorBonus = isSameSector ? 30 : (isHistSector ? 15 : 0)
+          const setorBonus = isTopSector ? 50 : (isSameSector ? 30 : (isHistSector ? 15 : 0))
           const reliabilityBonus = empBehavior[fIdStr]?.daysAwayBeforeReturn <= 3 ? 4 : 0
-          // Tie-breaker to prevent everyone getting the exact same recommendation
+          
           let hashF = 0; for (let i=0; i<fIdStr.length; i++) hashF = (hashF * 31 + fIdStr.charCodeAt(i)) >>> 0
           let hashL = 0; for (let i=0; i<locKey.length; i++) hashL = (hashL * 31 + locKey.charCodeAt(i)) >>> 0
           const tieBreaker = ((hashF * 31 + hashL) % 100) * 0.01
-          const score = Math.max(0, (locDays * 20) + (topPartnerDays * 8) + setorBonus + reliabilityBonus + tieBreaker)
+          
+          let score = Math.max(0, (locDays * 20) + (topPartnerDays * 8) + setorBonus + reliabilityBonus + tieBreaker)
+          if (partnerHere) score += 40
 
           if (!recs[f.id]) recs[f.id] = []
           const behaviorTag = buildBehaviorTag(fIdStr)
           
           const reasons = []
-          if (isExactLocality) reasons.push(`Trabalhou ${locDays}x nesta localidade`)
-          if (topPartnerName && topPartnerDays > 0) reasons.push(`Trabalhou ${topPartnerDays}x com ${topPartnerName}`)
-          if (!isExactLocality && isSameSector) reasons.push(`Pertence ao setor ${locSetor}`)
-          if (!isExactLocality && !isSameSector && isHistSector) reasons.push(`Tem histórico no setor ${locSetor}`)
+          if (isTopSector) reasons.push(`Setor que mais trabalha (${locSetor || overallSetor.setor})`)
+          if (partnerHere) reasons.push(`Sua dupla frequente (${overallPartner.name}) está aqui`)
+          
+          if (!isTopSector && isExactLocality) reasons.push(`Trabalhou ${locDays}x nesta localidade`)
+          if (!partnerHere && topPartnerName && topPartnerDays > 0) reasons.push(`Trabalhou ${topPartnerDays}x com ${topPartnerName}`)
+          if (!isTopSector && !isExactLocality && isSameSector) reasons.push(`Pertence ao setor ${locSetor}`)
+          if (!isTopSector && !isExactLocality && !isSameSector && isHistSector) reasons.push(`Tem histórico no setor ${locSetor}`)
           
           let reason = reasons.length > 0 ? reasons.join(' • ') : 'Perfil compatível para alocação'
           reason += behaviorTag
