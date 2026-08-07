@@ -961,10 +961,10 @@ export function EscalaLocalidadePage() {
       tipo = isExplicitOff && !hasAssignedLocality ? (e.tipo || 'repouso') : (e.tipo || 'presente')
     } else {
       // No record in DB for this date:
-      // Weekdays default to working ('presente').
-      // Sundays default to off ('repouso') — ONLY employees with explicit working escala records can work on Sunday!
-      isTrabalhando = !isDomingo
-      tipo = isDomingo ? 'repouso' : 'presente'
+      // If there's no explicit schedule (status de trabalho), don't show as available
+      // Put them in Planejamento e Ausencias (as sem_escala)
+      isTrabalhando = false
+      tipo = 'sem_escala'
     }
 
     const isValidLocality = hasAssignedLocality && (
@@ -1804,6 +1804,7 @@ export function EscalaLocalidadePage() {
       'folga': { label: 'Folgas', icon: <Activity className="w-4 h-4" />, members: [], color: 'text-blue-500' },
       'ferias': { label: 'Férias', icon: <CalendarIcon className="w-4 h-4" />, members: [], color: 'text-purple-500' },
       'atestado': { label: 'Afastamentos', icon: <Activity className="w-4 h-4" />, members: [], color: 'text-amber-500' },
+      'sem_escala': { label: 'Sem Escala', icon: <Users className="w-4 h-4" />, members: [], color: 'text-slate-400' },
       'outros': { label: 'Outros', icon: <Clock className="w-4 h-4" />, members: [], color: 'text-slate-500' },
     }
 
@@ -1820,6 +1821,7 @@ export function EscalaLocalidadePage() {
         if (tipo === 'repouso' || tipo === 'compensar') groups['folga'].members.push(member)
         else if (tipo === 'ferias') groups['ferias'].members.push(member)
         else if (tipo === 'atestado') groups['atestado'].members.push(member)
+        else if (tipo === 'sem_escala') groups['sem_escala'].members.push(member)
         else groups['outros'].members.push(member)
       }
     })
@@ -1997,7 +1999,7 @@ export function EscalaLocalidadePage() {
     if (!assignModal) return
     
     const { isTrabalhando, tipo } = getEmployeeStatus(funcId, assignModal.dateStr)
-    if (!isTrabalhando && assignModal.locName !== 'Sem Local') {
+    if (!isTrabalhando && assignModal.locName !== 'Sem Local' && tipo !== 'sem_escala') {
       const statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo.toUpperCase()
       toast(`Não é possível alocar: colaborador em ${statusLabel} no dia.`, 'error')
       return
@@ -2222,7 +2224,7 @@ export function EscalaLocalidadePage() {
     const fIdStr = String(funcId).trim()
     const { isTrabalhando, tipo } = getEmployeeStatus(fIdStr, dateStr)
     
-    if (!isTrabalhando && targetLocName) {
+    if (!isTrabalhando && targetLocName && tipo !== 'sem_escala') {
       const statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo.toUpperCase()
       toast(`Não é possível alocar: colaborador em ${statusLabel} no dia.`, 'error')
       return
@@ -3424,7 +3426,7 @@ export function EscalaLocalidadePage() {
                             let statusColor = 'text-amber-500 bg-amber-500/10 border-amber-500/20'
                             
                             if (!isTrabalhando) {
-                              statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo.toUpperCase()
+                              statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo === 'sem_escala' ? 'Sem Escala' : tipo.toUpperCase()
                               statusColor = 'text-slate-400 bg-muted/50 border-border/40'
                             } else if (isAlocado) {
                               statusLabel = `Alocado: ${escala.localidade}`
@@ -5585,7 +5587,7 @@ export function EscalaLocalidadePage() {
                   let statusColor = 'text-amber-500 bg-amber-500/10 border-amber-500/20'
                   
                   if (!isTrabalhando) {
-                    statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo.toUpperCase()
+                    statusLabel = tipo === 'repouso' || tipo === 'compensar' ? 'Folga' : tipo === 'sem_escala' ? 'Sem Escala' : tipo.toUpperCase()
                     statusColor = 'text-slate-400 bg-muted/50 border-border/40'
                   } else if (isAlocado) {
                     statusLabel = `Alocado: ${escala.localidade}`
