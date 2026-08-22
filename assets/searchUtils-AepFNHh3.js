@@ -1,0 +1,1 @@
+function e(e){return e?e.toLowerCase().normalize(`NFD`).replace(/[\u0300-\u036f]/g,``).trim():``}function t(t,n){if(!n||!n.trim())return!0;let r=e(n);if(!r)return!0;let i=e(t.nome),a=e(t.apelido),o=e(t.cargo),s=e(t.setor),c=e(t.matricula);return i.includes(r)||a.includes(r)||o.includes(r)||s.includes(r)||c.includes(r)}export{t};
