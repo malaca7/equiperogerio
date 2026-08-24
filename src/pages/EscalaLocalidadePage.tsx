@@ -4692,9 +4692,7 @@ export function EscalaLocalidadePage() {
             </div>
           )}
 
-
         </div>
-      </div>
 
       {/* Register Demand Type Modal */}
       {registerDemandModal && (
