@@ -90,7 +90,21 @@ export function EscalaMensalPrint() {
     if (!list.some(t => t.id === 'suspensao')) {
       list.push({ id: 'suspensao', letra: 'S', nome: 'Suspensão', bg: 'bg-rose-700', text: 'text-white', ring: 'ring-rose-600' })
     }
-    return list
+    if (!list.some(t => t.id === 'atestado')) {
+      list.push({ id: 'atestado', letra: 'AT', nome: 'Atestado', bg: 'bg-red-500', text: 'text-white', ring: 'ring-red-400' })
+    }
+    if (!list.some(t => t.id === 'afastamento')) {
+      list.push({ id: 'afastamento', letra: 'AF', nome: 'Afastamento', bg: 'bg-orange-950', text: 'text-white', ring: 'ring-orange-800' })
+    }
+    return list.map(t => {
+      if (t.id === 'atestado') {
+        return { ...t, letra: 'AT', nome: 'Atestado', bg: t.bg || 'bg-red-500' }
+      }
+      if (t.id === 'afastamento') {
+        return { ...t, letra: 'AF', nome: 'Afastamento', bg: 'bg-orange-950', ring: 'ring-orange-800' }
+      }
+      return t
+    })
   }
 
   const STATUS_MAP: Record<string, TipoEscala> = getCleanTiposEscala(tiposEscala).reduce((acc: Record<string, TipoEscala>, t: TipoEscala) => {

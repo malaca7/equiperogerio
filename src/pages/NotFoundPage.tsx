@@ -58,7 +58,7 @@ export function NotFoundPage() {
     { path: '/funcionarios', label: 'Funcionários', pageId: 'funcionarios', description: 'Cadastro e gestão de colaboradores', icon: Users },
     { path: '/frequencia', label: 'Frequência Diária', pageId: 'frequencia', description: 'Registro de ponto e presença', icon: Clock },
     { path: '/escala', label: 'Escala de Trabalho', pageId: 'escala', description: 'Planejamento e distribuição de plantão', icon: Calendar },
-    { path: '/escala/localidades', label: 'Meta e Rota', pageId: 'localidades', description: 'Configuração de postos de serviço', icon: MapPin },
+    { path: '/metaerota', label: 'Meta e Rota', pageId: 'localidades', description: 'Configuração de postos de serviço', icon: MapPin },
     { path: '/escala/demandas', label: 'Demandas', pageId: 'demandas', description: 'Painel e histórico de demandas', icon: ClipboardList },
     { path: '/escala/modelos', label: 'Modelos de Escala', pageId: 'modelos_escala', description: 'Gabaritos pré-definidos de plantão', icon: Layers },
     { path: '/rendimento', label: 'Análise de Rendimento', pageId: 'rendimento', description: 'Produtividade individual e coletiva', icon: TrendingUp },

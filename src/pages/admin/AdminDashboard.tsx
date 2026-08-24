@@ -66,7 +66,8 @@ export const DEFAULT_TIPOS_ESCALA: TipoEscala[] = [
   { id: 'repouso', letra: 'R', nome: 'Repouso / Descanso', bg: 'bg-amber-400', text: 'text-amber-900', ring: 'ring-amber-300' },
   { id: 'compensar', letra: 'F', nome: 'Folga', bg: 'bg-emerald-500', text: 'text-white', ring: 'ring-emerald-400' },
   { id: 'ferias', letra: 'FE', nome: 'Férias', bg: 'bg-purple-500', text: 'text-white', ring: 'ring-purple-400' },
-  { id: 'atestado', letra: 'A', nome: 'Afastamento', bg: 'bg-red-500', text: 'text-white', ring: 'ring-red-400' },
+  { id: 'atestado', letra: 'A', nome: 'Atestado', bg: 'bg-red-500', text: 'text-white', ring: 'ring-red-400' },
+  { id: 'afastamento', letra: 'AF', nome: 'Afastamento', bg: 'bg-orange-950', text: 'text-white', ring: 'ring-orange-800' },
   { id: 'falta', letra: 'X', nome: 'Falta', bg: 'bg-rose-600', text: 'text-white', ring: 'ring-rose-500' },
   { id: 'suspensao', letra: 'S', nome: 'Suspensão', bg: 'bg-rose-700', text: 'text-white', ring: 'ring-rose-600' },
 ]

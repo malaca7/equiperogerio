@@ -28,6 +28,21 @@ export class ErrorBoundary extends Component<Props, State> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ errorInfo })
     console.error('Uncaught error inside ErrorBoundary:', error, errorInfo)
+
+    // Check if error is due to a stale dynamic chunk after a new deployment
+    if (
+      error?.name === 'TypeError' &&
+      (error?.message?.includes('Failed to fetch dynamically imported module') ||
+       error?.message?.includes('Importing a module script failed') ||
+       error?.message?.includes('error loading dynamically imported module'))
+    ) {
+      const pageKey = '7boss_chunk_reloaded'
+      const hasReloaded = sessionStorage.getItem(pageKey)
+      if (!hasReloaded) {
+        sessionStorage.setItem(pageKey, 'true')
+        window.location.reload()
+      }
+    }
   }
 
   private handleReset = () => {

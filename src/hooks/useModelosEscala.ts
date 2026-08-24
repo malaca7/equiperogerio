@@ -4,10 +4,11 @@ import { supabase } from '../lib/supabase'
 export interface ModeloEscalaFuncionario {
   funcionario_id: string
   nome: string
-  tipo: 'presente' | 'repouso' | 'compensar'
+  tipo: 'presente' | 'repouso' | 'compensar' | 'extra'
   turno: 'manha' | 'tarde' | 'noite' | 'integral' | null
-  diaCompensado?: 'quinta' | 'sexta' | 'sabado' | null
-  diaRepouso?: 'segunda' | 'terca' | 'quarta' | null
+  diaCompensado?: 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | null
+  diaRepouso?: 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | null
+  grupo?: string | null
 }
 
 export interface ModeloEscala {

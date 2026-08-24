@@ -14,26 +14,31 @@ export default defineConfig({
   base: './',
   build: {
     chunkSizeWarningLimit: 1000,
+    cssCodeSplit: true,
+    target: 'es2020',
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('@fullcalendar')) {
-              return 'vendor-fullcalendar';
+              return 'vendor-fullcalendar'
             }
             if (id.includes('recharts') || id.includes('d3')) {
-              return 'vendor-charts';
+              return 'vendor-charts'
+            }
+            if (id.includes('xlsx') || id.includes('jspdf') || id.includes('html2canvas') || id.includes('html-to-image')) {
+              return 'vendor-export'
             }
             if (id.includes('@supabase')) {
-              return 'vendor-supabase';
+              return 'vendor-supabase'
             }
             if (id.includes('lucide-react')) {
-              return 'vendor-icons';
+              return 'vendor-icons'
             }
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
-              return 'vendor-react-core';
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom') || id.includes('@tanstack')) {
+              return 'vendor-react-core'
             }
-            return 'vendor-libs';
+            return 'vendor-libs'
           }
         }
       }

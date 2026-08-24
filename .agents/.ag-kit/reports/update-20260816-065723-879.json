@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "runId": "20260816-065723-879",
+  "strategy": "merge",
+  "toolkitVersion": "2026.7.27",
+  "createdAt": "2026-08-16T06:57:24.175Z",
+  "backupDir": "D:\\dev\\web\\gestaoequiperogerio\\.ag-kit-backups\\20260816-065723-879",
+  "summary": {
+    "actions": 0,
+    "conflicts": 0,
+    "preserved": 0,
+    "unchanged": 221
+  },
+  "actions": [],
+  "conflicts": [],
+  "preserved": []
+}

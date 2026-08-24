@@ -321,7 +321,10 @@ export function SstAlmoxarifadoEpiPage() {
                         {req.funcionario?.nome?.charAt(0) || '?'}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="text-xs sm:text-sm font-black text-foreground truncate tracking-tight">
+                        <h4 
+                          className="text-xs sm:text-sm font-black text-foreground break-words line-clamp-2 tracking-tight"
+                          title={req.funcionario?.nome}
+                        >
                           {req.funcionario?.nome || 'N/D'}
                         </h4>
                         <span className="text-[9px] text-muted-foreground/60 flex items-center gap-1 mt-0.5 font-bold">

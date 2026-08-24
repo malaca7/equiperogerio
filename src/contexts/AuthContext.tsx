@@ -40,6 +40,22 @@ function getBrowserInfo() {
 }
 
 async function loadUserData(profileId: string): Promise<AuthUser | null> {
+  const CACHE_KEY = `7boss_user_cache_${profileId}`
+  try {
+    const cached = sessionStorage.getItem(CACHE_KEY)
+    if (cached) {
+      const parsed = JSON.parse(cached)
+      if (Date.now() - parsed.timestamp < 300000) { // 5 min TTL
+        return {
+          ...parsed.user,
+          permissions: new Set(parsed.user.permissions)
+        }
+      }
+    }
+  } catch {
+    // Ignore cache parse error
+  }
+
   try {
     const { data: profile, error } = await supabase
       .from('profiles')
@@ -89,13 +105,27 @@ async function loadUserData(profileId: string): Promise<AuthUser | null> {
       }
     }
 
-    return {
+    const userData: AuthUser = {
       profile: profile as Profile,
       roles,
       permissions,
       isAdmin: roles.some((r: any) => r.nivel >= 80 || r.nome.toLowerCase().includes('admin') || r.nome.toLowerCase().includes('desenvolvedor')),
       isDev: roles.some((r: any) => r.nivel >= 100 || r.nome.toLowerCase().includes('desenvolvedor') || r.nome.toLowerCase().includes('dev')),
     }
+
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        user: {
+          ...userData,
+          permissions: Array.from(userData.permissions)
+        }
+      }))
+    } catch {
+      // Ignore quota errors
+    }
+
+    return userData
   } catch {
     return null
   }

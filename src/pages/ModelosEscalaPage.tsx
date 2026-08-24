@@ -9,12 +9,16 @@ import { useBatchUpsertEscalas } from '../hooks/useEscalas'
 import { Loading } from '../components/ui/Loading'
 import { TopHeader } from '../components/layout/TopHeader'
 import { Modal } from '../components/ui/Modal'
+import { FuncionarioName } from '../components/ui/FuncionarioName'
 import { cn } from '../lib/utils'
 import { supabase } from '../lib/supabase'
 import { useUserTeam } from '../hooks/useUserTeam'
 import { useConfiguracao, useUpdateConfiguracao } from '../hooks/useConfiguracoes'
 
 const DIAS_COMPENSADO = [
+  { value: 'segunda', label: 'Segunda-feira', offset: 1 },
+  { value: 'terca', label: 'Terça-feira', offset: 2 },
+  { value: 'quarta', label: 'Quarta-feira', offset: 3 },
   { value: 'quinta', label: 'Quinta-feira', offset: -3 },
   { value: 'sexta', label: 'Sexta-feira', offset: -2 },
   { value: 'sabado', label: 'Sábado', offset: -1 },
@@ -24,18 +28,42 @@ const DIAS_REPOUSO = [
   { value: 'segunda', label: 'Segunda-feira', offset: 1 },
   { value: 'terca', label: 'Terça-feira', offset: 2 },
   { value: 'quarta', label: 'Quarta-feira', offset: 3 },
+  { value: 'quinta', label: 'Quinta-feira', offset: -3 },
+  { value: 'sexta', label: 'Sexta-feira', offset: -2 },
+  { value: 'sabado', label: 'Sábado', offset: -1 },
 ] as const
+
+function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.substring(0, 10).split('-').map(Number)
+  return new Date(year, month - 1, day || 1)
+}
 
 function generateId() {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-function getDayOffset(dia: string): number {
-  const comp = DIAS_COMPENSADO.find(d => d.value === dia)
-  if (comp) return comp.offset
-  const rep = DIAS_REPOUSO.find(d => d.value === dia)
-  if (rep) return rep.offset
-  return 0
+function getCompensadoOffset(dia: string): number {
+  const map: Record<string, number> = {
+    segunda: -6,
+    terca: -5,
+    quarta: -4,
+    quinta: -3,
+    sexta: -2,
+    sabado: -1,
+  }
+  return map[dia] ?? 0
+}
+
+function getRepousoOffset(dia: string): number {
+  const map: Record<string, number> = {
+    segunda: 1,
+    terca: 2,
+    quarta: 3,
+    quinta: 4,
+    sexta: 5,
+    sabado: 6,
+  }
+  return map[dia] ?? 0
 }
 
 function labelDia(dia: string): string {
@@ -121,7 +149,32 @@ export function ModelosEscalaPage() {
 
   const modelos = filteredModelos
 
+  const funcionarioModelosMap = useMemo(() => {
+    const map = new Map<string, ModeloEscala[]>()
+    const list = modelosData ?? []
+    for (const modelo of list) {
+      for (const func of modelo.funcionarios || []) {
+        const existing = map.get(func.funcionario_id) || []
+        existing.push(modelo)
+        map.set(func.funcionario_id, existing)
+      }
+    }
+    return map
+  }, [modelosData])
+
   const [editando, setEditando] = useState<ModeloEscala | null>(null)
+  const [originalEditando, setOriginalEditando] = useState<ModeloEscala | null>(null)
+
+  const openModelEditor = useCallback((model: ModeloEscala | null) => {
+    setEditando(model)
+    setOriginalEditando(model ? JSON.parse(JSON.stringify(model)) : null)
+  }, [])
+
+  const hasChanges = useMemo(() => {
+    if (!editando || !originalEditando) return false
+    return JSON.stringify(editando) !== JSON.stringify(originalEditando)
+  }, [editando, originalEditando])
+
   const [modeloParaAplicar, setModeloParaAplicar] = useState<ModeloEscala | null>(null)
   const [showAddFunc, setShowAddFunc] = useState(false)
   const [showAplicar, setShowAplicar] = useState(false)
@@ -131,6 +184,8 @@ export function ModelosEscalaPage() {
   const [desaplicando, setDesaplicando] = useState(false)
   const [msg, setMsg] = useState('')
   const [msgType, setMsgType] = useState<'success' | 'error'>('success')
+
+  const [confirmRemover, setConfirmRemover] = useState<{ date: string; modeloId: string; nome: string; formattedDateStr: string } | null>(null)
 
   const [modelosAplicados, setModelosAplicados] = useState<Record<string, { modeloId: string; nome: string }>>({})
   const [historicoMonth, setHistoricoMonth] = useState<Date>(new Date())
@@ -196,6 +251,25 @@ export function ModelosEscalaPage() {
     }
   }
 
+  const [clearingFolgas, setClearingFolgas] = useState(false)
+
+  const removerTodasFolgasFixas = async () => {
+    if (!window.confirm('Tem certeza que deseja remover as folgas fixas de TODOS os funcionários?')) return
+    setClearingFolgas(true)
+    try {
+      const updated: Record<string, { diaCompensado: string | null; diaRepouso: string | null; turno: string | null }> = {}
+      funcionarios.forEach(f => {
+        updated[f.id] = { diaCompensado: null, diaRepouso: null, turno: 'integral' }
+      })
+      await updateConfig({ chave: 'folgas_funcionarios', valor: updated })
+      showMsg('Todas as folgas fixas foram removidas com sucesso!')
+    } catch (err) {
+      showMsg('Erro ao remover folgas fixas', 'error')
+    } finally {
+      setClearingFolgas(false)
+    }
+  }
+
   useEffect(() => {
     async function loadModelosAplicados() {
       try {
@@ -215,9 +289,34 @@ export function ModelosEscalaPage() {
   }, [])
 
   async function removerModeloAplicado(dataDomingo: string, modeloId: string) {
-    const modelo = modelos.find(m => m.id === modeloId)
+    const appliedRecord = modelosAplicados[dataDomingo]
+    let modelo = modelos.find(m => m.id === modeloId)
+
     if (!modelo) {
-      showMsg('Modelo não encontrado para remoção', 'error')
+      // If model definition was deleted, construct fallback or clear history record
+      if (appliedRecord) {
+        modelo = {
+          id: modeloId,
+          nome: appliedRecord.nome || 'Modelo',
+          descricao: '',
+          funcionarios: [],
+          created_at: '',
+        }
+      }
+    }
+
+    if (!modelo) {
+      const updated = { ...modelosAplicados }
+      delete updated[dataDomingo]
+      try {
+        await supabase
+          .from('configuracoes')
+          .upsert({ chave: 'modelos_aplicados', valor: updated, updated_at: new Date().toISOString() }, { onConflict: 'chave' })
+        setModelosAplicados(updated)
+        showMsg('Registro de aplicação removido do histórico')
+      } catch (e: any) {
+        showMsg('Erro ao atualizar histórico: ' + (e?.message || ''), 'error')
+      }
       return
     }
 
@@ -259,32 +358,37 @@ export function ModelosEscalaPage() {
 
       if (!isFeriado) {
         for (const f of modelo.funcionarios) {
-          const folga = folgasFuncionarios[f.funcionario_id] || {}
-          const diaCompensado = modelo.personalizarFolgas ? (f.diaCompensado !== undefined ? f.diaCompensado : folga.diaCompensado) : folga.diaCompensado
-          const diaRepouso = modelo.personalizarFolgas ? (f.diaRepouso !== undefined ? f.diaRepouso : folga.diaRepouso) : folga.diaRepouso
+          const folga = folgasFuncionarios[f.funcionario_id] || { diaCompensado: 'quinta', diaRepouso: 'segunda' }
+          const diaCompensado = modelo.personalizarFolgas ? (f.diaCompensado || null) : (folga.diaCompensado || 'quinta')
+          const diaRepouso = modelo.personalizarFolgas ? (f.diaRepouso || null) : (folga.diaRepouso || 'segunda')
 
           if (diaCompensado) {
-            const offset = getDayOffset(diaCompensado)
+            const offset = getCompensadoOffset(diaCompensado)
             datesToQuerySet.add(format(addDays(domingoDate, offset), 'yyyy-MM-dd'))
           }
           if (diaRepouso) {
-            const offset = getDayOffset(diaRepouso)
+            const offset = getRepousoOffset(diaRepouso)
             datesToQuerySet.add(format(addDays(domingoDate, offset), 'yyyy-MM-dd'))
           }
         }
       }
 
       // 2. Fetch existing scales for protected items check
-      const { data: existingEscalas } = await supabase
-        .from('escalas')
-        .select('*')
-        .in('funcionario_id', allTargetFuncIds)
-        .in('data', Array.from(datesToQuerySet))
+      const queryDates = Array.from(datesToQuerySet)
+      let existingEscalas: any[] = []
+      if (allTargetFuncIds.length > 0 && queryDates.length > 0) {
+        const { data: fetchEsc } = await supabase
+          .from('escalas')
+          .select('*')
+          .in('funcionario_id', allTargetFuncIds)
+          .in('data', queryDates)
+        existingEscalas = fetchEsc || []
+      }
 
       const hasProtectedEntry = (funcId: string, dateStr: string): boolean => {
         const existing = (existingEscalas || []).find(e =>
           e.funcionario_id === funcId &&
-          e.data.substring(0, 10) === dateStr
+          (typeof e.data === 'string' ? e.data.substring(0, 10) : String(e.data || '').substring(0, 10)) === dateStr
         )
         return existing ? isProtectedScaleType(existing.tipo) : false
       }
@@ -302,9 +406,9 @@ export function ModelosEscalaPage() {
         }
       } else {
         for (const f of modelo.funcionarios) {
-          const folga = folgasFuncionarios[f.funcionario_id] || {}
-          const diaCompensado = modelo.personalizarFolgas ? (f.diaCompensado !== undefined ? f.diaCompensado : folga.diaCompensado) : folga.diaCompensado
-          const diaRepouso = modelo.personalizarFolgas ? (f.diaRepouso !== undefined ? f.diaRepouso : folga.diaRepouso) : folga.diaRepouso
+          const folga = folgasFuncionarios[f.funcionario_id] || { diaCompensado: 'quinta', diaRepouso: 'segunda' }
+          const diaCompensado = modelo.personalizarFolgas ? (f.diaCompensado || null) : (folga.diaCompensado || 'quinta')
+          const diaRepouso = modelo.personalizarFolgas ? (f.diaRepouso || null) : (folga.diaRepouso || 'segunda')
           const turno = folga.turno !== undefined ? folga.turno : f.turno
 
           // 1. Sunday/Holiday becomes 'repouso'
@@ -313,13 +417,13 @@ export function ModelosEscalaPage() {
               funcionario_id: f.funcionario_id,
               data: dataDomingo,
               tipo: 'repouso',
-              turno: undefined,
+              turno: null,
             })
           }
 
-          // 2. Compensado becomes 'presente' (Trabalho)
+          // 2. Compensado becomes 'presente' (Trabalho) - week BEFORE Sunday
           if (diaCompensado) {
-            const offset = getDayOffset(diaCompensado)
+            const offset = getCompensadoOffset(diaCompensado)
             const compDate = addDays(domingoDate, offset)
             const dStr = format(compDate, 'yyyy-MM-dd')
             if (!hasProtectedEntry(f.funcionario_id, dStr)) {
@@ -327,14 +431,14 @@ export function ModelosEscalaPage() {
                 funcionario_id: f.funcionario_id,
                 data: dStr,
                 tipo: 'presente',
-                turno: turno || undefined,
+                turno: turno || null,
               })
             }
           }
 
-          // 3. Repouso becomes 'presente' (Trabalho)
+          // 3. Repouso becomes 'presente' (Trabalho) - week AFTER Sunday
           if (diaRepouso) {
-            const offset = getDayOffset(diaRepouso)
+            const offset = getRepousoOffset(diaRepouso)
             const repDate = addDays(domingoDate, offset)
             const dStr = format(repDate, 'yyyy-MM-dd')
             if (!hasProtectedEntry(f.funcionario_id, dStr)) {
@@ -342,14 +446,16 @@ export function ModelosEscalaPage() {
                 funcionario_id: f.funcionario_id,
                 data: dStr,
                 tipo: 'presente',
-                turno: turno || undefined,
+                turno: turno || null,
               })
             }
           }
         }
 
         // Upsert the inverted scales!
-        await batchUpsert(entries)
+        if (entries.length > 0) {
+          await batchUpsert(entries)
+        }
       }
 
       // Remove from modelos_aplicados in configuracoes
@@ -365,8 +471,9 @@ export function ModelosEscalaPage() {
 
       setModelosAplicados(updated)
       showMsg(`Modelo "${modelo.nome}" removido com sucesso!`)
-    } catch (err) {
-      showMsg('Erro ao remover aplicação do modelo', 'error')
+    } catch (err: any) {
+      console.error('Erro ao remover aplicação do modelo:', err)
+      showMsg(`Erro ao remover aplicação do modelo: ${err?.message || ''}`, 'error')
     } finally {
       setDesaplicando(false)
     }
@@ -438,7 +545,7 @@ export function ModelosEscalaPage() {
   }
 
   function criarNovo() {
-    setEditando({
+    const newModel: ModeloEscala = {
       id: generateId(),
       nome: '',
       descricao: '',
@@ -446,7 +553,8 @@ export function ModelosEscalaPage() {
       created_at: new Date().toISOString(),
       equipe_id: teamInfo?.isRestricted ? teamInfo.teamIds?.[0] : undefined,
       tipo: 'dominical'
-    })
+    }
+    openModelEditor(newModel)
   }
 
   async function salvar() {
@@ -485,7 +593,8 @@ export function ModelosEscalaPage() {
     try {
       await salvarModelos(novaLista)
       showMsg('Modelo salvo com sucesso!')
-      setEditando(null)
+      setOriginalEditando(JSON.parse(JSON.stringify(modelToSave)))
+      setEditando(modelToSave)
     } catch {
       showMsg('Erro ao salvar', 'error')
     }
@@ -545,62 +654,61 @@ export function ModelosEscalaPage() {
     }
 
     if (mode === 'enxuto') {
-      let text = `🚀 *ROTEIRO OPERACIONAL (RESUMIDO)* 🚀\n\n`
-      text += `📅 *Data:* ${dateText}\n`
-      text += `👥 *Equipe:* ${teamName}\n`
-      text += `👑 *Líder/Encarregado:* ${leaders}\n`
-      text += `👥 *Qtd. Funcionários:* ${modelo.funcionarios.length} colaboradores\n`
+      let text = `📋 *ESCALA DE TRABALHO* 📋\n`
+      if (dateStr) text += `📆 *Data:* ${dateText}\n`
+      if (locations.length > 0) text += `📍 *Locais:* ${locations.join(', ')}\n`
       
-      if (locations.length > 0) {
-        text += `📍 *Locais de Atuação:* \n`
-        locations.forEach((loc, idx) => {
-          text += `  ${idx + 1}. ${loc}\n`
-        })
-      } else {
-        text += `📍 *Locais:* Conforme escala diária\n`
-      }
+      text += `\n*COLABORADORES QUE IRÃO TRABALHAR:*\n`
       
-      text += `\n----------------------------------\n`
-      text += `✨ *Gestão de Equipes - Rogério* ✨`
+      modelo.funcionarios.forEach((f: any, idx: number) => {
+        const funcData = funcionarioMap.get(f.funcionario_id)
+        const name = funcData?.nome || f.nome
+        const apelido = funcData?.apelido?.trim()
+        const hasApelido = !!(apelido && apelido.toLowerCase() !== name.trim().toLowerCase())
+        const mainName = hasApelido ? apelido : name
+        const subName = hasApelido ? ` (${name})` : ''
+        const grupoStr = f.grupo ? ` [${f.grupo}]` : ''
+        const extraBadge = f.tipo === 'extra' ? ' ⚡ (100% Extra)' : ''
+        
+        text += `${idx + 1}. *${mainName}*${subName}${grupoStr}${extraBadge}\n`
+      })
+      
       return text
     }
 
-    // Modo Completo:
-    let text = `🚀 *ROTEIRO OPERACIONAL DE TRABALHO* 🚀\n\n`
-    text += `📅 *Data:* ${dateText}\n`
-    text += `👥 *Equipe:* ${teamName}\n`
-    text += `👑 *Líder/Encarregado:* ${leaders}\n`
-    text += `📋 *Tipo de Escala:* ${isFeriado ? '🚨 FERIADO (100%)' : '☀️ DOMINICAL (COM FOLGAS)'}\n`
-    if (locations.length > 0) {
-      text += `📍 *Locais de Atuação:* ${locations.join(', ')}\n`
-    }
-    if (modelo.descricao) {
-      text += `📝 *Descrição:* ${modelo.descricao}\n`
-    }
-    text += `\n👤 *Integrantes da Equipe:* \n`
+    // Modo Completo: Trabalhadores + Dias de Folga
+    let text = `📋 *ESCALA E FOLGAS DA EQUIPE* 📋\n`
+    if (dateStr) text += `📆 *Data:* ${dateText}\n`
+    if (locations.length > 0) text += `📍 *Locais:* ${locations.join(', ')}\n`
+    if (modelo.descricao) text += `📝 *Obs:* ${modelo.descricao}\n`
+
+    text += `\n*COLABORADORES E SEUS DIAS DE FOLGA:*\n`
 
     modelo.funcionarios.forEach((f: any, idx: number) => {
       const funcData = funcionarioMap.get(f.funcionario_id)
       const name = funcData?.nome || f.nome
-      const apelido = funcData?.apelido ? ` (${funcData.apelido})` : ''
-      const cargo = funcData?.cargo || 'Colaborador'
-      
-      text += `\n${idx + 1}. *${name}*${apelido}\n`
-      text += `   💼 *Função:* ${cargo}\n`
-      
-      if (!isFeriado) {
+      const apelido = funcData?.apelido?.trim()
+      const hasApelido = !!(apelido && apelido.toLowerCase() !== name.trim().toLowerCase())
+      const mainName = hasApelido ? apelido : name
+      const subName = hasApelido ? ` (${name})` : ''
+      const grupoStr = f.grupo ? ` [${f.grupo}]` : ''
+
+      text += `\n${idx + 1}. *${mainName}*${subName}${grupoStr}\n`
+
+      if (f.tipo === 'extra') {
+        text += `   ⚡ *Status:* 100% Hora Extra (Sem folgas)\n`
+      } else if (!isFeriado) {
         const folga = folgasFuncionarios[f.funcionario_id] || {}
         const diaCompensado = modelo.personalizarFolgas ? (f.diaCompensado !== undefined ? f.diaCompensado : folga.diaCompensado) : folga.diaCompensado
         const diaRepouso = modelo.personalizarFolgas ? (f.diaRepouso !== undefined ? f.diaRepouso : folga.diaRepouso) : folga.diaRepouso
-        
+
         const compLabel = diaCompensado ? labelDia(diaCompensado) : 'Nenhum'
         const repLabel = diaRepouso ? labelDia(diaRepouso) : 'Nenhum'
-        text += `   🔄 *Folga Compensada:* ${compLabel} | 💤 *Repouso:* ${repLabel}\n`
+        text += `   🔄 *Folga Compensada:* ${compLabel}\n`
+        text += `   💤 *Repouso Semanal:* ${repLabel}\n`
       }
-    });
+    })
 
-    text += `\n----------------------------------\n`
-    text += `✨ *Gestão de Equipes - Rogério* ✨`
     return text
   }, [equipesList, getModelTeam, folgasFuncionarios, funcionarioMap])
 
@@ -741,12 +849,12 @@ export function ModelosEscalaPage() {
         const dates: string[] = [aplicarData]
 
         if (!isFeriado) {
-          const folga = folgasFuncionarios[f.funcionario_id] || {}
-          const diaCompensado = targetModelo.personalizarFolgas ? (f.diaCompensado !== undefined ? f.diaCompensado : folga.diaCompensado) : folga.diaCompensado
-          const diaRepouso = targetModelo.personalizarFolgas ? (f.diaRepouso !== undefined ? f.diaRepouso : folga.diaRepouso) : folga.diaRepouso
+          const folga = folgasFuncionarios[f.funcionario_id] || { diaCompensado: 'quinta', diaRepouso: 'segunda' }
+          const diaCompensado = targetModelo.personalizarFolgas ? (f.diaCompensado || null) : (folga.diaCompensado || 'quinta')
+          const diaRepouso = targetModelo.personalizarFolgas ? (f.diaRepouso || null) : (folga.diaRepouso || 'segunda')
 
           if (diaCompensado) {
-            const offset = getDayOffset(diaCompensado)
+            const offset = getCompensadoOffset(diaCompensado)
             const compDate = addDays(targetDate, offset)
             const dStr = format(compDate, 'yyyy-MM-dd')
             dates.push(dStr)
@@ -754,7 +862,7 @@ export function ModelosEscalaPage() {
           }
 
           if (diaRepouso) {
-            const offset = getDayOffset(diaRepouso)
+            const offset = getRepousoOffset(diaRepouso)
             const repDate = addDays(targetDate, offset)
             const dStr = format(repDate, 'yyyy-MM-dd')
             dates.push(dStr)
@@ -809,22 +917,28 @@ export function ModelosEscalaPage() {
         if (isEmployeeInactive(f.funcionario_id, aplicarData)) continue
 
         if (!hasProtectedEntry(f.funcionario_id, aplicarData)) {
+          let tipoEscala = 'presente'
+          if (f.tipo === 'extra') {
+            tipoEscala = 'hora_extra'
+          } else {
+            tipoEscala = 'presente'
+          }
           entries.push({
             funcionario_id: f.funcionario_id,
             data: aplicarData,
-            tipo: isFeriado ? 'hora_extra' : 'presente',
+            tipo: tipoEscala,
             turno: null,
           })
         }
 
-        if (!isFeriado) {
-          const folga = folgasFuncionarios[f.funcionario_id] || {}
-          const diaCompensado = targetModelo.personalizarFolgas ? (f.diaCompensado !== undefined ? f.diaCompensado : folga.diaCompensado) : folga.diaCompensado
-          const diaRepouso = targetModelo.personalizarFolgas ? (f.diaRepouso !== undefined ? f.diaRepouso : folga.diaRepouso) : folga.diaRepouso
+        if (!isFeriado && f.tipo !== 'extra') {
+          const folga = folgasFuncionarios[f.funcionario_id] || { diaCompensado: 'quinta', diaRepouso: 'segunda' }
+          const diaCompensado = targetModelo.personalizarFolgas ? (f.diaCompensado || null) : (folga.diaCompensado || 'quinta')
+          const diaRepouso = targetModelo.personalizarFolgas ? (f.diaRepouso || null) : (folga.diaRepouso || 'segunda')
 
-          // Compensado - week before Sunday (Thu/Fri/Sat)
+          // Compensado - week BEFORE Sunday (Mon -6, Tue -5, Wed -4, Thu -3, Fri -2, Sat -1)
           if (diaCompensado) {
-            const offset = getDayOffset(diaCompensado)
+            const offset = getCompensadoOffset(diaCompensado)
             const compDate = addDays(targetDate, offset)
             const dStr = format(compDate, 'yyyy-MM-dd')
             if (!hasProtectedEntry(f.funcionario_id, dStr) && !isEmployeeInactive(f.funcionario_id, dStr)) {
@@ -837,9 +951,9 @@ export function ModelosEscalaPage() {
             }
           }
 
-          // Repouso - week after Sunday (Mon/Tue/Wed)
+          // Repouso - week AFTER Sunday (Mon +1, Tue +2, Wed +3, Thu +4, Fri +5, Sat +6)
           if (diaRepouso) {
-            const offset = getDayOffset(diaRepouso)
+            const offset = getRepousoOffset(diaRepouso)
             const repDate = addDays(targetDate, offset)
             const dStr = format(repDate, 'yyyy-MM-dd')
             if (!hasProtectedEntry(f.funcionario_id, dStr) && !isEmployeeInactive(f.funcionario_id, dStr)) {
@@ -936,8 +1050,36 @@ export function ModelosEscalaPage() {
     return funcionariosForaModelo.filter(f => {
       const term = searchDisponivel.toLowerCase()
       return f.nome.toLowerCase().includes(term) || (f.apelido && f.apelido.toLowerCase().includes(term))
+    }).sort((a, b) => {
+      const nameA = a.apelido || a.nome
+      const nameB = b.apelido || b.nome
+      return nameA.localeCompare(nameB)
     })
   }, [funcionariosForaModelo, searchDisponivel])
+
+  const groupedEditandoFuncionarios = useMemo(() => {
+    if (!editando) return []
+    const map = new Map<string, typeof editando.funcionarios>()
+    const sorted = [...editando.funcionarios].sort((a, b) => {
+      const fA = funcionarioMap.get(a.funcionario_id)
+      const fB = funcionarioMap.get(b.funcionario_id)
+      const nameA = fA?.apelido || fA?.nome || a.nome
+      const nameB = fB?.apelido || fB?.nome || b.nome
+      return nameA.localeCompare(nameB)
+    })
+
+    sorted.forEach(f => {
+      const gKey = f.grupo?.trim() || ''
+      if (!map.has(gKey)) map.set(gKey, [])
+      map.get(gKey)!.push(f)
+    })
+
+    return Array.from(map.entries()).sort(([gA], [gB]) => {
+      if (!gA) return 1
+      if (!gB) return -1
+      return gA.localeCompare(gB)
+    })
+  }, [editando, funcionarioMap])
 
   const folgaDistribution = useMemo(() => {
     const distribution = {
@@ -1018,16 +1160,78 @@ export function ModelosEscalaPage() {
       <TopHeader title="Modelos de Escala" subtitle="Gerencie os modelos de escala dominical" />
 
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-24 sm:pt-28">
-        {/* Toast */}
+        {/* Floating Popup Toast - Centered Top */}
         {msg && (
-          <div className={cn(
-            "flex items-center gap-3 px-5 py-4 rounded-2xl text-xs font-black uppercase tracking-wider border mb-6 animate-fade-in shadow-lg backdrop-blur-md",
-            msgType === 'success'
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 shadow-emerald-500/5"
-              : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 shadow-rose-500/5"
-          )}>
-            <Check className="w-4 h-4 shrink-0" />
-            {msg}
+          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[99999] max-w-md w-[92vw] sm:w-auto min-w-[320px] animate-in fade-in slide-in-from-top-6 duration-300 pointer-events-auto">
+            <div className={cn(
+              "flex items-center justify-between gap-4 px-5 py-4 rounded-2xl text-xs font-black uppercase tracking-wider border shadow-2xl backdrop-blur-2xl transition-all bg-card/95 text-foreground border-border/80 shadow-black/40 ring-1 ring-white/10",
+              msgType === 'success' ? "border-emerald-500/40" : "border-rose-500/40"
+            )}>
+              <div className="flex items-center gap-3 min-w-0">
+                {msgType === 'success' ? (
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0 border border-emerald-500/30 shadow-inner">
+                    <Check className="w-4.5 h-4.5" />
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-500 flex items-center justify-center shrink-0 border border-rose-500/30 shadow-inner">
+                    <X className="w-4.5 h-4.5" />
+                  </div>
+                )}
+                <span className="truncate leading-normal font-bold text-[11px] text-foreground">{msg}</span>
+              </div>
+              <button 
+                onClick={() => setMsg('')}
+                className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all shrink-0 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Confirmation Modal for Removing Applied Model */}
+        {confirmRemover && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="bg-card/95 border border-border/80 rounded-[2rem] p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-6 relative overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center border border-rose-500/30 shadow-inner">
+                <Trash2 className="w-6 h-6" />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-base font-black uppercase tracking-wider text-foreground">
+                  Remover Aplicação de Modelo
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Deseja remover o modelo <strong className="text-foreground font-black">"{confirmRemover.nome}"</strong> aplicado no domingo <strong className="text-primary font-black">{confirmRemover.formattedDateStr}</strong>?
+                </p>
+                <p className="text-[11px] text-muted-foreground/70 leading-relaxed pt-1">
+                  Esta ação reverterá as folgas e o domingo de trabalho dos funcionários deste modelo.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border/20">
+                <button
+                  type="button"
+                  onClick={() => setConfirmRemover(null)}
+                  disabled={desaplicando}
+                  className="px-5 py-2.5 rounded-xl border border-border/40 hover:bg-muted/50 text-muted-foreground hover:text-foreground text-xs font-black uppercase tracking-wider transition-all cursor-pointer active:scale-95"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const { date, modeloId } = confirmRemover
+                    setConfirmRemover(null)
+                    await removerModeloAplicado(date, modeloId)
+                  }}
+                  disabled={desaplicando}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-700 hover:to-rose-600 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-rose-500/25 transition-all cursor-pointer active:scale-95 border border-rose-500/20 flex items-center gap-2"
+                >
+                  {desaplicando ? 'Removendo...' : 'Confirmar Remoção'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1201,17 +1405,44 @@ export function ModelosEscalaPage() {
                                     const funcData = funcionarioMap.get(f.funcionario_id)
                                     const apelido = funcData?.apelido || funcData?.nome?.split(' ')[0] || f.nome?.split(' ')[0] || '—'
 
+                                    const isExtra100 = f.tipo === 'extra'
                                     const folga = folgasFuncionarios[f.funcionario_id] || {}
                                     const diaCompensado = m.personalizarFolgas ? (f.diaCompensado !== undefined ? f.diaCompensado : folga.diaCompensado) : folga.diaCompensado
                                     const diaRepouso = m.personalizarFolgas ? (f.diaRepouso !== undefined ? f.diaRepouso : folga.diaRepouso) : folga.diaRepouso
 
+                                    const todosModelos = funcionarioModelosMap.get(f.funcionario_id) || []
+                                    const emOutrosModelos = todosModelos.length > 1
+
                                     return (
-                                      <div key={f.funcionario_id} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-muted/40 dark:bg-muted/10 border border-border/20 text-[9px] font-black uppercase text-foreground/90">
-                                        <span>{apelido}</span>
-                                        <div className="flex gap-0.5">
-                                          {diaCompensado && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.6)]" title={`Compensado: ${diaCompensado}`} />}
-                                          {diaRepouso && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.6)]" title={`Repouso: ${diaRepouso}`} />}
-                                        </div>
+                                      <div
+                                        key={f.funcionario_id}
+                                        className={cn(
+                                          "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[9px] font-black uppercase border transition-all",
+                                          isExtra100
+                                            ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                                            : emOutrosModelos
+                                            ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-300"
+                                            : "bg-muted/40 dark:bg-muted/10 border-border/20 text-foreground/90"
+                                        )}
+                                        title={isExtra100 ? "100% Hora Extra (Sem Folgas)" : emOutrosModelos ? `Em ${todosModelos.length} modelos: ${todosModelos.map(tm => tm.nome).join(', ')}` : undefined}
+                                      >
+                                        <FuncionarioName nome={funcData?.nome || f.nome} apelido={funcData?.apelido} uppercase size="xs" />
+                                        {isExtra100 && (
+                                          <span className="px-1 py-0.2 rounded bg-emerald-500 text-white text-[7.5px] font-black leading-none" title="100% Hora Extra">
+                                            100%
+                                          </span>
+                                        )}
+                                        {emOutrosModelos && !isExtra100 && (
+                                          <span className="px-1 py-0.2 rounded bg-indigo-500 text-white text-[7.5px] font-black leading-none" title={`Presente em ${todosModelos.length} modelos`}>
+                                            {todosModelos.length}M
+                                          </span>
+                                        )}
+                                        {!isExtra100 && (
+                                          <div className="flex gap-0.5">
+                                            {diaCompensado && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.6)]" title={`Compensado: ${diaCompensado}`} />}
+                                            {diaRepouso && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.6)]" title={`Repouso: ${diaRepouso}`} />}
+                                          </div>
+                                        )}
                                       </div>
                                     )
                                   })}
@@ -1233,10 +1464,17 @@ export function ModelosEscalaPage() {
                                 <Play className="w-3.5 h-3.5 shrink-0" /> Aplicar
                               </button>
                               <button
-                                onClick={() => setEditando(m)}
+                                onClick={() => openModelEditor(m)}
                                 className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-muted/50 hover:bg-muted text-foreground border border-border/40 hover:border-primary/30 text-[9.5px] font-black uppercase tracking-wider transition-all duration-300 cursor-pointer active:scale-95"
                               >
                                 <Layers className="w-3.5 h-3.5 shrink-0 text-primary" /> Editar
+                              </button>
+                              <button
+                                onClick={() => deletar(m.id)}
+                                className="p-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 transition-all duration-300 cursor-pointer active:scale-95 shrink-0"
+                                title="Excluir este Modelo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                             <div className="pt-2 border-t border-border/10">
@@ -1380,7 +1618,16 @@ export function ModelosEscalaPage() {
                                       {isExpanded ? "Recolher" : `Ver (${item.funcionarios.length})`}
                                     </button>
                                     <button
-                                      onClick={() => removerModeloAplicado(item.date, item.modeloId)}
+                                      onClick={() => {
+                                        const d = parseLocalDate(item.date)
+                                        const formattedDateStr = format(d, 'dd/MM/yyyy')
+                                        setConfirmRemover({
+                                          date: item.date,
+                                          modeloId: item.modeloId,
+                                          nome: item.nome,
+                                          formattedDateStr
+                                        })
+                                      }}
                                       className="p-1.5 rounded-lg text-rose-500/50 hover:text-white bg-rose-500/5 hover:bg-rose-500 border border-rose-500/10 hover:border-rose-500 transition-all duration-300 shrink-0 active:scale-95 cursor-pointer shadow-sm"
                                       title="Remover aplicação e reverter escala"
                                     >
@@ -1396,10 +1643,9 @@ export function ModelosEscalaPage() {
                                       <div className="flex flex-wrap gap-1">
                                         {item.funcionarios.map((f: any) => {
                                           const funcData = funcionarioMap.get(f.funcionario_id)
-                                          const nameToShow = funcData?.apelido || funcData?.nome || f.nome
                                           return (
                                             <span key={f.funcionario_id} className="text-[8px] font-black uppercase px-2 py-1 rounded bg-card border border-border/30 text-foreground/80">
-                                              {nameToShow}
+                                              <FuncionarioName nome={funcData?.nome || f.nome} apelido={funcData?.apelido} uppercase size="xs" />
                                             </span>
                                           )
                                         })}
@@ -1453,16 +1699,30 @@ export function ModelosEscalaPage() {
                     </p>
                   </div>
 
-                  {/* Search Input inside the box */}
-                  <div className="relative w-full md:w-80">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/45" />
-                    <input
-                      type="text"
-                      value={folgasSearchTerm}
-                      onChange={e => setFolgasSearchTerm(e.target.value)}
-                      placeholder="Pesquisar funcionário..."
-                      className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-border/30 bg-muted/20 text-xs font-bold focus:outline-none focus:border-primary/50 text-foreground transition-all duration-300 focus:bg-background"
-                    />
+                  {/* Search & Actions */}
+                  <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                    {/* Search Input inside the box */}
+                    <div className="relative w-full sm:w-72">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary animate-pulse" />
+                      <input
+                        type="text"
+                        value={folgasSearchTerm}
+                        onChange={e => setFolgasSearchTerm(e.target.value)}
+                        placeholder="BUSCAR COLABORADOR..."
+                        className="w-full pl-11 pr-4 py-3.5 rounded-2xl border-2 border-border/30 bg-muted/10 text-xs font-black uppercase tracking-widest focus:outline-none focus:border-primary/60 text-foreground transition-all duration-300 focus:bg-background shadow-inner placeholder:text-muted-foreground/40"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={removerTodasFolgasFixas}
+                      disabled={clearingFolgas}
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/30 text-[10px] font-black uppercase tracking-wider transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50 shadow-sm shrink-0"
+                      title="Remover a folga fixa de todos os funcionários de uma vez"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      {clearingFolgas ? 'Removendo...' : 'Remover Folgas de Todos'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1515,6 +1775,10 @@ export function ModelosEscalaPage() {
                     if (f.status !== 'ativo') return false
                     const term = folgasSearchTerm.toLowerCase()
                     return f.nome.toLowerCase().includes(term) || (f.apelido && f.apelido.toLowerCase().includes(term))
+                  }).sort((a, b) => {
+                    const nameA = a.apelido || a.nome
+                    const nameB = b.apelido || b.nome
+                    return nameA.localeCompare(nameB)
                   })
 
                   if (filteredFuncs.length === 0) {
@@ -1528,24 +1792,28 @@ export function ModelosEscalaPage() {
                   return (
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                       {filteredFuncs.map(f => {
-                        const initials = f.nome.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
                         const folga = folgasFuncionarios[f.id] || { diaCompensado: 'quinta', diaRepouso: 'segunda', turno: 'integral' }
+                        const pertencentes = funcionarioModelosMap.get(f.id) || []
 
                         return (
                           <div key={f.id} className="p-5 rounded-[1.75rem] bg-muted/20 border border-border/30 hover:border-primary/20 transition-all duration-300 flex flex-col md:flex-row md:items-center justify-between gap-6 group">
                             {/* Info */}
-                            <div className="flex items-center gap-3.5 min-w-0 md:max-w-[40%]">
-                              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-primary/20 to-primary/5 flex items-center justify-center shrink-0 border border-primary/20 group-hover:scale-105 transition-all">
-                                <span className="text-[11px] font-black text-primary">{initials}</span>
-                              </div>
+                            <div className="flex items-center gap-3.5 min-w-0 md:max-w-[45%]">
                               <div className="min-w-0">
-                                <span className="text-sm font-black text-foreground block truncate uppercase leading-none mb-1 group-hover:text-primary transition-colors">
-                                  {f.apelido || f.nome}
-                                </span>
-                                {f.cargo && (
-                                  <span className="text-[9px] text-muted-foreground/60 uppercase tracking-widest font-black">
-                                    {f.cargo}
-                                  </span>
+                                <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
+                                {pertencentes.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1.5">
+                                    {pertencentes.map(m => (
+                                      <span
+                                        key={m.id}
+                                        className="inline-flex items-center gap-1 text-[8px] font-black uppercase px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 tracking-wider shadow-sm"
+                                        title={`Vinculado ao modelo: ${m.nome}`}
+                                      >
+                                        <Layers className="w-2.5 h-2.5 shrink-0 text-indigo-500" />
+                                        {m.nome}
+                                      </span>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1557,7 +1825,7 @@ export function ModelosEscalaPage() {
                                 <span className="text-[8px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest flex items-center gap-1">
                                   <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse" /> Compensado
                                 </span>
-                                <div className="flex gap-1.5">
+                                <div className="flex flex-wrap gap-1.5">
                                   {DIAS_COMPENSADO.map(d => {
                                     const active = folga.diaCompensado === d.value
                                     return (
@@ -1583,7 +1851,7 @@ export function ModelosEscalaPage() {
                                 <span className="text-[8px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-1">
                                   <span className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" /> Repouso
                                 </span>
-                                <div className="flex gap-1.5">
+                                <div className="flex flex-wrap gap-1.5">
                                   {DIAS_REPOUSO.map(d => {
                                     const active = folga.diaRepouso === d.value
                                     return (
@@ -1618,7 +1886,7 @@ export function ModelosEscalaPage() {
           <div className="space-y-8 animate-fade-in">
             {/* Header with back */}
             <div className="flex items-center justify-between flex-wrap gap-4 bg-gradient-to-r from-card/80 to-card/50 backdrop-blur-xl border border-border/40 rounded-3xl p-5 shadow-lg">
-              <button onClick={() => setEditando(null)} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer">
+              <button onClick={() => openModelEditor(null)} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer">
                 <ChevronLeft className="w-5 h-5 text-primary" /> Voltar ao Painel
               </button>
               <div className="flex items-center gap-3 flex-wrap">
@@ -1631,8 +1899,14 @@ export function ModelosEscalaPage() {
                 </button>
                 <button
                   onClick={salvar}
-                  disabled={saving || !editando.nome.trim()}
-                  className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-primary to-primary/90 text-white text-[10px] font-black uppercase tracking-widest hover:scale-[1.02] hover:shadow-primary/30 transition-all duration-300 disabled:opacity-40 disabled:hover:scale-100 active:scale-95 shadow-lg border border-primary/20 cursor-pointer"
+                  disabled={saving || !editando.nome.trim() || !hasChanges}
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 shadow-lg border",
+                    hasChanges && editando.nome.trim()
+                      ? "bg-gradient-to-r from-primary to-primary/90 text-white hover:scale-[1.02] hover:shadow-primary/30 active:scale-95 border-primary/20 cursor-pointer"
+                      : "bg-muted/40 text-muted-foreground/40 border-border/20 cursor-not-allowed opacity-40 select-none shadow-none pointer-events-none"
+                  )}
+                  title={!hasChanges ? "Nenhuma alteração efetuada para salvar" : "Salvar alterações do modelo"}
                 >
                   {saving ? 'Salvando...' : <><Save className="w-4 h-4" /> Salvar Modelo</>}
                 </button>
@@ -1759,7 +2033,7 @@ export function ModelosEscalaPage() {
                   </div>
 
                   {/* Colaboradores Disponíveis */}
-                  <div className="bg-gradient-to-br from-card/85 to-card/50 backdrop-blur-xl border border-border/40 rounded-[2rem] p-6 shadow-md flex flex-col h-[480px] relative overflow-hidden">
+                  <div className="bg-gradient-to-br from-card/85 to-card/50 backdrop-blur-xl border border-border/40 rounded-[2rem] p-6 shadow-md flex flex-col relative overflow-hidden">
                     <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-500/50 via-emerald-500/5 to-transparent" />
                     <div className="flex items-center justify-between pb-3 border-b border-border/30">
                       <h3 className="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-2">
@@ -1770,39 +2044,46 @@ export function ModelosEscalaPage() {
 
                     {/* Campo de pesquisa lateral */}
                     <div className="my-4 relative">
-                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary animate-pulse" />
                       <input
                         type="text"
                         value={searchDisponivel}
                         onChange={e => setSearchDisponivel(e.target.value)}
-                        placeholder="Pesquisar disponível..."
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border/30 bg-muted/20 text-[10px] font-black uppercase tracking-widest focus:outline-none focus:border-primary/50 text-foreground transition-all duration-300 focus:bg-background"
+                        placeholder="BUSCAR DISPONÍVEL..."
+                        className="w-full pl-11 pr-4 py-3.5 rounded-2xl border-2 border-border/30 bg-muted/10 text-xs font-black uppercase tracking-widest focus:outline-none focus:border-primary/60 text-foreground transition-all duration-300 focus:bg-background shadow-inner placeholder:text-muted-foreground/40"
                       />
                     </div>
 
-                    {/* Lista com scroll */}
-                    <div className="flex-1 overflow-y-auto pr-1 space-y-2.5 custom-scrollbar">
+                    {/* Lista sem scroll interno */}
+                    <div className="flex-1 space-y-2.5">
                       {filteredDisponiveis.length === 0 ? (
                         <div className="py-20 text-center text-muted-foreground/35 uppercase text-[9px] font-black italic">
                           Nenhum colaborador disponível
                         </div>
                       ) : (
                         filteredDisponiveis.map(f => {
-                          const initials = f.nome.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                          const pertencentes = funcionarioModelosMap.get(f.id) || []
                           return (
                             <div key={f.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-muted/10 border border-border/10 hover:border-emerald-500/20 hover:bg-emerald-500/[0.01] transition-all duration-300 group">
                               <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20 text-[10px] font-black shrink-0 shadow-sm">
-                                  {initials}
-                                </div>
                                 <div className="min-w-0">
-                                  <span className="text-[10.5px] font-black text-foreground block truncate uppercase leading-tight group-hover:text-emerald-500 transition-colors">
-                                    {f.apelido || f.nome}
+                                  <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
+                                  <span className="text-[8px] text-muted-foreground/60 uppercase tracking-widest font-black block mt-0.5 truncate mb-1">
+                                    {f.nome}
                                   </span>
-                                  {f.cargo && (
-                                    <span className="text-[8px] text-muted-foreground/60 uppercase tracking-widest font-black block mt-0.5">
-                                      {f.cargo}
-                                    </span>
+                                  {pertencentes.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {pertencentes.map(m => (
+                                        <span
+                                          key={m.id}
+                                          className="inline-flex items-center gap-1 text-[7.5px] font-black uppercase px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20"
+                                          title={`Faz parte do modelo: ${m.nome}`}
+                                        >
+                                          <Layers className="w-2 h-2 text-indigo-500 shrink-0" />
+                                          {m.nome}
+                                        </span>
+                                      ))}
+                                    </div>
                                   )}
                                 </div>
                               </div>
@@ -1846,119 +2127,195 @@ export function ModelosEscalaPage() {
                         <p className="text-[10px] mt-1.5 text-center font-medium leading-relaxed px-6">Adicione colaboradores da lista de disponíveis na lateral esquerda para configurar suas folgas.</p>
                       </div>
                     ) : (
-                      <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
-                        {editando.funcionarios.map(f => {
-                          const funcData = funcionarioMap.get(f.funcionario_id)
-                          const nome = funcData?.nome || f.nome
-                          const initials = nome.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
-
-                          const diaCompensado = f.diaCompensado
-                          const diaRepouso = f.diaRepouso
-
-                          return (
-                            <div key={f.funcionario_id} className="p-2 px-3 rounded-xl bg-muted/15 border border-border/20 hover:border-border/40 transition-all duration-300 flex flex-col lg:flex-row lg:items-center justify-between gap-3 relative group animate-fade-in">
-                              {/* Info */}
-                              <div className="flex items-center gap-2 min-w-0 lg:w-52 shrink-0">
-                                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
-                                  <span className="text-[9px] font-black text-primary">{initials}</span>
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-black text-foreground uppercase truncate leading-none">{nome}</p>
-                                  {funcData?.cargo && (
-                                    <p className="text-[7.5px] font-bold text-muted-foreground/45 uppercase tracking-wider mt-1 leading-none">{funcData.cargo}</p>
-                                  )}
-                                </div>
+                      <div className="space-y-6">
+                        {groupedEditandoFuncionarios.map(([groupName, groupItems]) => (
+                          <div key={groupName || 'sem-grupo'} className="space-y-3">
+                            {groupName ? (
+                              <div className="flex items-center gap-2 pb-2 border-b border-purple-500/20">
+                                <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 flex items-center gap-1.5">
+                                  <Users className="w-3 h-3 text-purple-500" />
+                                  {groupName} ({groupItems.length})
+                                </span>
                               </div>
+                            ) : groupedEditandoFuncionarios.length > 1 ? (
+                              <div className="flex items-center gap-2 pb-2 border-b border-border/20">
+                                <span className="text-[8.5px] font-black uppercase tracking-widest text-muted-foreground/60">
+                                  Sem Dupla / Grupo ({groupItems.length})
+                                </span>
+                              </div>
+                            ) : null}
 
-                              {/* Selectors / Indicators */}
-                              <div className="flex-1 flex flex-wrap gap-3 items-center lg:justify-end">
-                                {editando.personalizarFolgas ? (
-                                  <>
-                                    {/* Compensado */}
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-[7px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Comp:</span>
-                                      <div className="flex gap-0.5">
-                                        {DIAS_COMPENSADO.map(d => (
-                                          <button
-                                            key={d.value}
-                                            type="button"
-                                            onClick={() => updateFunc(f.funcionario_id, { diaCompensado: diaCompensado === d.value ? null : d.value })}
-                                            className={cn(
-                                              "py-0.5 px-2 rounded text-[7.5px] font-black uppercase border transition-all duration-200 cursor-pointer active:scale-95",
-                                              diaCompensado === d.value
-                                                ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white border-transparent"
-                                                : "bg-muted/40 text-muted-foreground/80 border-border/30 hover:bg-muted"
-                                            )}
-                                          >
-                                            {d.label.slice(0, 3)}
-                                          </button>
-                                        ))}
+                            <div className="space-y-3">
+                              {groupItems.map(f => {
+                                const funcData = funcionarioMap.get(f.funcionario_id)
+                                const nome = funcData?.nome || f.nome
+                                const apelido = funcData?.apelido?.trim()
+                                const diaCompensado = f.diaCompensado
+                                const diaRepouso = f.diaRepouso
+
+                                const outrosModelos = (funcionarioModelosMap.get(f.funcionario_id) || []).filter(m => m.id !== editando.id)
+
+                                return (
+                                  <div key={f.funcionario_id} className="p-2 px-3 rounded-xl bg-muted/15 border border-border/20 hover:border-border/40 transition-all duration-300 flex flex-col lg:flex-row lg:items-center justify-between gap-3 relative group animate-fade-in">
+                                    {/* Info */}
+                                    <div className="flex items-center gap-2 min-w-0 lg:w-52 shrink-0">
+                                      <div className="min-w-0">
+                                        <FuncionarioName nome={nome} apelido={apelido} uppercase size="xs" />
+                                        {outrosModelos.length > 0 && (
+                                          <div className="flex flex-wrap gap-1 mt-1">
+                                            {outrosModelos.map(m => (
+                                              <span
+                                                key={m.id}
+                                                className="inline-flex items-center gap-1 text-[7.5px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                                                title={`Também faz parte do modelo: ${m.nome}`}
+                                              >
+                                                <Layers className="w-2 h-2 text-amber-500 shrink-0" />
+                                                {m.nome}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
 
-                                    {/* Repouso */}
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-[7px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">Rep:</span>
-                                      <div className="flex gap-0.5">
-                                        {DIAS_REPOUSO.map(d => (
+                                    {/* Selectors / Indicators */}
+                                    <div className="flex-1 flex flex-wrap gap-3 items-center lg:justify-end">
+                                      {/* Dupla / Grupo Selector */}
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-[7px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">Dupla/Grupo:</span>
+                                        <input
+                                          type="text"
+                                          value={f.grupo || ''}
+                                          onChange={e => updateFunc(f.funcionario_id, { grupo: e.target.value || null })}
+                                          placeholder="Ex: Dupla 1"
+                                          className="w-24 px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-muted/40 border border-border/30 focus:outline-none focus:border-purple-500/50 text-foreground transition-all duration-200"
+                                        />
+                                      </div>
+
+                                      {/* Dia Selector */}
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-[7px] font-black uppercase tracking-wider text-muted-foreground">Dia:</span>
+                                        <div className="flex bg-muted/30 p-0.5 rounded-lg border border-border/20">
                                           <button
-                                            key={d.value}
                                             type="button"
-                                            onClick={() => updateFunc(f.funcionario_id, { diaRepouso: diaRepouso === d.value ? null : d.value })}
+                                            onClick={() => updateFunc(f.funcionario_id, { tipo: 'extra' })}
                                             className={cn(
-                                              "py-0.5 px-2 rounded text-[7.5px] font-black uppercase border transition-all duration-200 cursor-pointer active:scale-95",
-                                              diaRepouso === d.value
-                                                ? "bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-transparent"
-                                                : "bg-muted/40 text-muted-foreground/80 border-border/30 hover:bg-muted"
+                                              "py-1 px-2 rounded-md text-[8px] font-black uppercase transition-all duration-200 cursor-pointer",
+                                              f.tipo === 'extra' ? "bg-emerald-500 text-white border-transparent shadow-sm" : "text-muted-foreground hover:bg-muted"
                                             )}
                                           >
-                                            {d.label.slice(0, 3)}
+                                            Extra 100%
                                           </button>
-                                        ))}
+                                          <button
+                                            type="button"
+                                            onClick={() => updateFunc(f.funcionario_id, { tipo: 'presente' })}
+                                            className={cn(
+                                              "py-1 px-2 rounded-md text-[8px] font-black uppercase transition-all duration-200 cursor-pointer",
+                                              (!f.tipo || f.tipo === 'presente' || f.tipo === 'repouso') ? "bg-blue-500 text-white border-transparent shadow-sm" : "text-muted-foreground hover:bg-muted"
+                                            )}
+                                          >
+                                            Folga
+                                          </button>
+                                        </div>
                                       </div>
-                                    </div>
-                                  </>
-                                ) : (
-                                  <>
-                                    {/* Compensado Fixo */}
-                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-muted/40 border border-border/10 text-[8.5px] font-bold text-foreground">
-                                      <span className="text-[7px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Comp:</span>
-                                      <span className="font-black uppercase">
-                                        {(() => {
-                                          const folga = folgasFuncionarios[f.funcionario_id] || {}
-                                          const dia = DIAS_COMPENSADO.find(d => d.value === folga.diaCompensado)
-                                          return dia ? dia.label.slice(0, 3) : 'Sem'
-                                        })()}
-                                      </span>
+
+                                      {/* Folgas Config (Hidden if Extra 100%) */}
+                                      {f.tipo !== 'extra' ? (
+                                        editando.personalizarFolgas ? (
+                                          <>
+                                            {/* Compensado */}
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-[7px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">Comp:</span>
+                                              <div className="flex gap-0.5">
+                                                {DIAS_COMPENSADO.map(d => (
+                                                  <button
+                                                    key={d.value}
+                                                    type="button"
+                                                    onClick={() => updateFunc(f.funcionario_id, { diaCompensado: diaCompensado === d.value ? null : d.value })}
+                                                    className={cn(
+                                                      "py-0.5 px-2 rounded text-[7.5px] font-black uppercase border transition-all duration-200 cursor-pointer active:scale-95",
+                                                      diaCompensado === d.value
+                                                        ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white border-transparent"
+                                                        : "bg-muted/40 text-muted-foreground/80 border-border/30 hover:bg-muted"
+                                                    )}
+                                                  >
+                                                    {d.label.slice(0, 3)}
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            </div>
+
+                                            {/* Repouso */}
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-[7px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">Rep:</span>
+                                              <div className="flex gap-0.5">
+                                                {DIAS_REPOUSO.map(d => (
+                                                  <button
+                                                    key={d.value}
+                                                    type="button"
+                                                    onClick={() => updateFunc(f.funcionario_id, { diaRepouso: diaRepouso === d.value ? null : d.value })}
+                                                    className={cn(
+                                                      "py-0.5 px-2 rounded text-[7.5px] font-black uppercase border transition-all duration-200 cursor-pointer active:scale-95",
+                                                      diaRepouso === d.value
+                                                        ? "bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-transparent"
+                                                        : "bg-muted/40 text-muted-foreground/80 border-border/30 hover:bg-muted"
+                                                    )}
+                                                  >
+                                                    {d.label.slice(0, 3)}
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <>
+                                            {/* Compensado Fixo */}
+                                            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-muted/40 border border-border/10 text-[8.5px] font-bold text-foreground">
+                                              <span className="text-[7px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Comp:</span>
+                                              <span className="font-black uppercase">
+                                                {(() => {
+                                                  const folga = folgasFuncionarios[f.funcionario_id] || {}
+                                                  const dia = DIAS_COMPENSADO.find(d => d.value === folga.diaCompensado)
+                                                  return dia ? dia.label.slice(0, 3) : 'Sem'
+                                                })()}
+                                              </span>
+                                            </div>
+
+                                            {/* Repouso Fixo */}
+                                            <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-muted/40 border border-border/10 text-[8.5px] font-bold text-foreground">
+                                              <span className="text-[7px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Rep:</span>
+                                              <span className="font-black uppercase">
+                                                {(() => {
+                                                  const folga = folgasFuncionarios[f.funcionario_id] || {}
+                                                  const dia = DIAS_REPOUSO.find(d => d.value === folga.diaRepouso)
+                                                  return dia ? dia.label.slice(0, 3) : 'Sem'
+                                                })()}
+                                              </span>
+                                            </div>
+                                          </>
+                                        )
+                                      ) : (
+                                        <span className="text-[7.5px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+                                          Sem Folgas (100% Extra)
+                                        </span>
+                                      )}
                                     </div>
 
-                                    {/* Repouso Fixo */}
-                                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-muted/40 border border-border/10 text-[8.5px] font-bold text-foreground">
-                                      <span className="text-[7px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Rep:</span>
-                                      <span className="font-black uppercase">
-                                        {(() => {
-                                          const folga = folgasFuncionarios[f.funcionario_id] || {}
-                                          const dia = DIAS_REPOUSO.find(d => d.value === folga.diaRepouso)
-                                          return dia ? dia.label.slice(0, 3) : 'Sem'
-                                        })()}
-                                      </span>
+                                    {/* Actions */}
+                                    <div className="shrink-0 flex justify-end">
+                                      <button
+                                        onClick={() => removeFuncionario(f.funcionario_id)}
+                                        className="p-1 rounded bg-rose-500/5 hover:bg-rose-500 text-rose-500/40 hover:text-white border border-rose-500/10 hover:border-rose-500 transition-all duration-300 active:scale-95 cursor-pointer"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
                                     </div>
-                                  </>
-                                )}
-                              </div>
-
-                              {/* Actions */}
-                              <div className="shrink-0 flex justify-end">
-                                <button
-                                  onClick={() => removeFuncionario(f.funcionario_id)}
-                                  className="p-1 rounded bg-rose-500/5 hover:bg-rose-500 text-rose-500/40 hover:text-white border border-rose-500/10 hover:border-rose-500 transition-all duration-300 active:scale-95 cursor-pointer"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </div>
+                                  </div>
+                                )
+                              })}
                             </div>
-                          )
-                        })}
+                          </div>
+                        ))}
                       </div>
                     )}
 
@@ -1982,7 +2339,7 @@ export function ModelosEscalaPage() {
       {/* Modal Adicionar Funcionário */}
       {showAddFunc && (
         <Modal open onClose={() => setShowAddFunc(false)} title="Adicionar Funcionário" subtitle="Selecione funcionários para o modelo" size="lg" className="h-[90vh] sm:h-[90vh]">
-          <FuncionarioSearchList funcionarios={funcionariosForaModelo} onSelect={addFuncionario} />
+          <FuncionarioSearchList funcionarios={funcionariosForaModelo} onSelect={addFuncionario} funcionarioModelosMap={funcionarioModelosMap} />
         </Modal>
       )}
 
@@ -2054,17 +2411,6 @@ export function ModelosEscalaPage() {
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Estilo da Mensagem</p>
               <div className="flex bg-muted/30 p-1.5 rounded-2xl border border-border/20 gap-2">
                 <button
-                  onClick={() => setPreviewMode('completo')}
-                  className={cn(
-                    "flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer border-none",
-                    previewMode === 'completo' 
-                      ? "bg-card text-primary shadow-sm" 
-                      : "text-muted-foreground hover:text-foreground bg-transparent"
-                  )}
-                >
-                  Texto Completo
-                </button>
-                <button
                   onClick={() => setPreviewMode('enxuto')}
                   className={cn(
                     "flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer border-none",
@@ -2073,7 +2419,18 @@ export function ModelosEscalaPage() {
                       : "text-muted-foreground hover:text-foreground bg-transparent"
                   )}
                 >
-                  Texto Enxuto
+                  Apenas Trabalhadores
+                </button>
+                <button
+                  onClick={() => setPreviewMode('completo')}
+                  className={cn(
+                    "flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer border-none",
+                    previewMode === 'completo' 
+                      ? "bg-card text-primary shadow-sm" 
+                      : "text-muted-foreground hover:text-foreground bg-transparent"
+                  )}
+                >
+                  Trabalho + Folgas
                 </button>
               </div>
             </div>
@@ -2095,7 +2452,7 @@ export function ModelosEscalaPage() {
                     />
                     <div className="absolute top-3 right-3 flex items-center gap-2">
                       <span className="text-[8px] font-bold uppercase tracking-wider bg-primary/10 border border-primary/20 text-primary px-2 py-0.5 rounded">
-                        {previewMode === 'completo' ? 'Completo' : 'Enxuto'}
+                        {previewMode === 'enxuto' ? 'Apenas Trabalhadores' : 'Trabalho + Folgas'}
                       </span>
                     </div>
                   </>
@@ -2149,11 +2506,23 @@ export function ModelosEscalaPage() {
   )
 }
 
-function FuncionarioSearchList({ funcionarios, onSelect }: { funcionarios: { id: string; nome: string; apelido?: string | null; cargo?: string }[]; onSelect: (id: string) => void }) {
+function FuncionarioSearchList({
+  funcionarios,
+  onSelect,
+  funcionarioModelosMap,
+}: {
+  funcionarios: { id: string; nome: string; apelido?: string | null; cargo?: string }[]
+  onSelect: (id: string) => void
+  funcionarioModelosMap?: Map<string, ModeloEscala[]>
+}) {
   const [search, setSearch] = useState('')
   const filtrados = funcionarios.filter(f =>
     !search || f.nome.toLowerCase().includes(search.toLowerCase()) || f.apelido?.toLowerCase().includes(search.toLowerCase())
-  )
+  ).sort((a, b) => {
+    const nameA = a.apelido || a.nome
+    const nameB = b.apelido || b.nome
+    return nameA.localeCompare(nameB)
+  })
 
   const handleSelect = (id: string) => {
     // Blurs the clicked element to prevent DOM unmounting focus-reset glitches in the browser
@@ -2166,12 +2535,12 @@ function FuncionarioSearchList({ funcionarios, onSelect }: { funcionarios: { id:
   return (
     <div className="flex flex-col h-full space-y-3">
       <div className="relative flex-shrink-0">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary animate-pulse" />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar funcionário..."
-          className="w-full pl-10 pr-4 py-3.5 rounded-2xl border border-border/40 bg-muted/20 text-sm font-bold focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10 transition-all"
+          placeholder="BUSCAR COLABORADOR..."
+          className="w-full pl-11 pr-4 py-3.5 rounded-2xl border-2 border-border/30 bg-muted/10 text-sm font-black uppercase tracking-widest focus:outline-none focus:border-primary/60 text-foreground transition-all duration-300 focus:bg-background shadow-inner placeholder:text-muted-foreground/40"
         />
       </div>
       <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
@@ -2179,20 +2548,38 @@ function FuncionarioSearchList({ funcionarios, onSelect }: { funcionarios: { id:
           <p className="text-xs text-muted-foreground/60 italic text-center py-6">Nenhum funcionário disponível</p>
         )}
         {filtrados.map(f => {
-          const initials = f.nome.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
+          const apelido = f.apelido?.trim()
+          const hasApelido = !!(apelido && apelido.toLowerCase() !== f.nome.trim().toLowerCase())
+          const initials = (hasApelido ? apelido : f.nome).split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
+          const pertencentes = funcionarioModelosMap?.get(f.id) || []
           return (
             <button
               key={f.id}
               type="button"
               onClick={() => handleSelect(f.id)}
-              className="w-full flex items-center gap-3.5 p-3 rounded-2xl hover:bg-muted/50 border border-transparent hover:border-border transition-all active:scale-[0.98] cursor-pointer"
+              className="w-full flex items-center justify-between gap-3.5 p-3 rounded-2xl hover:bg-muted/50 border border-transparent hover:border-border transition-all active:scale-[0.98] cursor-pointer"
             >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/15 to-primary/5 flex items-center justify-center shrink-0 border border-primary/20 shadow-inner">
-                <span className="text-[10px] font-black text-primary">{initials}</span>
-              </div>
-              <div className="text-left min-w-0">
-                <span className="text-sm font-black text-foreground block truncate uppercase leading-none mb-1">{f.nome}</span>
-                {f.cargo && <span className="text-[9px] text-muted-foreground/60 uppercase tracking-widest font-bold">{f.cargo}</span>}
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/15 to-primary/5 flex items-center justify-center shrink-0 border border-primary/20 shadow-inner">
+                  <span className="text-[10px] font-black text-primary">{initials}</span>
+                </div>
+                <div className="text-left min-w-0">
+                  <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
+                  {pertencentes.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {pertencentes.map(m => (
+                        <span
+                          key={m.id}
+                          className="inline-flex items-center gap-1 text-[7.5px] font-black uppercase px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20"
+                          title={`Faz parte do modelo: ${m.nome}`}
+                        >
+                          <Layers className="w-2 h-2 text-indigo-500 shrink-0" />
+                          {m.nome}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </button>
           )

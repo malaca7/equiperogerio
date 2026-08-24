@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Search, Phone, Briefcase, Filter, Edit2, Trash2, ChevronRight, Calendar, Stethoscope, Plane, Users, X, Info, PhoneCall, ShieldCheck, Camera, Upload } from 'lucide-react'
+import { matchEmployeeSearch } from '../lib/searchUtils'
+import { Plus, Search, Phone, Briefcase, Filter, Edit2, Trash2, ChevronRight, Calendar, Stethoscope, Plane, Users, X, Info, PhoneCall, ShieldCheck, Camera, Upload, RotateCw } from 'lucide-react'
 import { format, eachDayOfInterval, parseISO, addDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useForm, useWatch } from 'react-hook-form'
@@ -129,7 +130,9 @@ export function FuncionariosPage() {
   const [absenceModal, setAbsenceModal] = useState<Funcionario | null>(null)
   const [desligamentoModal, setDesligamentoModal] = useState<Funcionario | null>(null)
   const [nicknameModal, setNicknameModal] = useState<{ id: string; nome: string; apelido: string } | null>(null)
+  const [retornoModal, setRetornoModal] = useState<{ funcionario: Funcionario; record: any } | null>(null)
 
+  const { data: afastamentosIndeterminados = [] } = useConfiguracao<any[]>('afastamentos_indeterminados', [])
   const { data: tiposEscalaData } = useConfiguracao<TipoEscala[]>('tipos_escala', DEFAULT_TIPOS_ESCALA)
   const tiposEscala = React.useMemo(() => {
     const list = [...(tiposEscalaData || DEFAULT_TIPOS_ESCALA)]
@@ -178,17 +181,7 @@ export function FuncionariosPage() {
 
   const filteredFuncionarios = React.useMemo(() => {
     if (!search || !search.trim()) return funcionarios
-    const q = search.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-
-    return funcionarios.filter(f => {
-      const matchNome = (f.nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
-      const matchApelido = (f.apelido || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
-      const matchMatricula = (f.matricula || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
-      const matchCpf = (f.cpf || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
-      const matchCargo = (f.cargo || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
-      const matchSetor = (f.setor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q)
-      return matchNome || matchApelido || matchMatricula || matchCpf || matchCargo || matchSetor
-    })
+    return funcionarios.filter(f => matchEmployeeSearch(f, search))
   }, [funcionarios, search])
 
   const stats = React.useMemo(() => {
@@ -357,57 +350,152 @@ export function FuncionariosPage() {
     }
   }
 
-  const handleLancarAusencia = async (data: { tipo: string; inicio: string; dias: number }) => {
+  const handleLancarAusencia = async (data: { tipo: string; inicio: string; dias: number; indeterminado?: boolean }) => {
     if (!absenceModal) return
     if (!isMemberOfMyTeam(absenceModal.id)) {
       toast('Você não tem permissão para lançar ausência para colaboradores fora de sua equipe.', 'error')
       return
     }
     try {
-      const start = parseISO(data.inicio)
-      const end = addDays(start, data.dias - 1)
-      const days = eachDayOfInterval({
-        start,
-        end
-      })
+      if (data.indeterminado) {
+        // Afastamento por tempo indeterminado: gerar escalas por 90 dias a partir do início
+        const start = parseISO(data.inicio)
+        const end = addDays(start, 89)
+        const days = eachDayOfInterval({ start, end })
 
-      const inserts = days.map(day => ({
-        funcionario_id: absenceModal.id,
-        data: format(day, 'yyyy-MM-dd'),
-        tipo: data.tipo,
-        turno: 'integral' as const
-      }))
+        const inserts = days.map(day => ({
+          funcionario_id: absenceModal.id,
+          data: format(day, 'yyyy-MM-dd'),
+          tipo: data.tipo,
+          turno: 'integral' as const,
+          observacoes: 'Afastamento por tempo indeterminado'
+        }))
 
-      await batchEscalaMutation.mutateAsync(inserts)
+        await batchEscalaMutation.mutateAsync(inserts)
 
-      // Sincronizar com a frequência
-      const freqMap: Record<string, string> = {
-        'presente': 'presente',
-        'hora_extra': 'hora_extra',
-        'falta': 'falta',
-        'repouso': 'folga',
-        'compensar': 'folga',
-        'ferias': 'ferias',
-        'atestado': 'atestado'
+        // Registrar registro em afastamentos_indeterminados
+        const newRecord = {
+          id: `af_${Date.now()}`,
+          funcionario_id: absenceModal.id,
+          data_inicio: data.inicio,
+          tipo: data.tipo,
+          indeterminado: true,
+          status: 'ativo',
+          created_at: new Date().toISOString()
+        }
+        const currentRecords = Array.isArray(afastamentosIndeterminados) ? afastamentosIndeterminados : []
+        await updateConfig.mutateAsync({
+          chave: 'afastamentos_indeterminados',
+          valor: [newRecord, ...currentRecords]
+        })
+
+        const freqStatus = data.tipo === 'ferias' ? 'ferias' : 'atestado'
+        const freqUpserts = days.map(day => ({
+          funcionario_id: absenceModal.id,
+          data: format(day, 'yyyy-MM-dd'),
+          status: freqStatus,
+          updated_at: new Date().toISOString()
+        }))
+        await supabase.from('frequencia').upsert(freqUpserts, { onConflict: 'funcionario_id,data' })
+
+        qc.invalidateQueries({ queryKey: ['escalas'] })
+        qc.invalidateQueries({ queryKey: ['frequencia'] })
+        qc.invalidateQueries({ queryKey: ['dashboard'] })
+        qc.invalidateQueries({ queryKey: ['configuracoes', 'afastamentos_indeterminados'] })
+
+        toast(`Afastamento por tempo indeterminado registrado com sucesso!`, 'success')
+        setAbsenceModal(null)
+      } else {
+        const start = parseISO(data.inicio)
+        const end = addDays(start, data.dias - 1)
+        const days = eachDayOfInterval({ start, end })
+
+        const inserts = days.map(day => ({
+          funcionario_id: absenceModal.id,
+          data: format(day, 'yyyy-MM-dd'),
+          tipo: data.tipo,
+          turno: 'integral' as const
+        }))
+
+        await batchEscalaMutation.mutateAsync(inserts)
+
+        // Sincronizar com a frequência
+        const freqMap: Record<string, string> = {
+          'presente': 'presente',
+          'hora_extra': 'hora_extra',
+          'falta': 'falta',
+          'repouso': 'folga',
+          'compensar': 'folga',
+          'ferias': 'ferias',
+          'atestado': 'atestado'
+        }
+        const freqStatus = freqMap[data.tipo] || 'atestado'
+        const freqUpserts = days.map(day => ({
+          funcionario_id: absenceModal.id,
+          data: format(day, 'yyyy-MM-dd'),
+          status: freqStatus,
+          updated_at: new Date().toISOString()
+        }))
+        await supabase.from('frequencia').upsert(freqUpserts, { onConflict: 'funcionario_id,data' })
+
+        qc.invalidateQueries({ queryKey: ['escalas'] })
+        qc.invalidateQueries({ queryKey: ['frequencia'] })
+        qc.invalidateQueries({ queryKey: ['dashboard'] })
+
+        toast(`${inserts.length} dias de ${data.tipo} lançados com sucesso!`, 'success')
+        setAbsenceModal(null)
       }
-      const freqStatus = freqMap[data.tipo] || 'presente'
-      const freqUpserts = days.map(day => ({
-        funcionario_id: absenceModal.id,
-        data: format(day, 'yyyy-MM-dd'),
-        status: freqStatus,
-        updated_at: new Date().toISOString()
-      }))
-      await supabase.from('frequencia').upsert(freqUpserts, { onConflict: 'funcionario_id,data' })
+    } catch (err: any) {
+      toast('Erro ao lançar ausência: ' + err.message, 'error')
+    }
+  }
 
-      // Invalidar caches para sincronização imediata
+  const handleEncerrarAfastamento = async (dataRetornoStr: string) => {
+    if (!retornoModal) return
+    const { funcionario, record } = retornoModal
+    try {
+      const retornoDate = parseISO(dataRetornoStr)
+      const dataRetornoFormatted = format(retornoDate, 'yyyy-MM-dd')
+
+      const currentRecords = Array.isArray(afastamentosIndeterminados) ? afastamentosIndeterminados : []
+      const updatedList = currentRecords.map(a => {
+        if (a.id === record.id) {
+          return { ...a, status: 'encerrado', data_retorno: dataRetornoFormatted }
+        }
+        return a
+      })
+      await updateConfig.mutateAsync({ chave: 'afastamentos_indeterminados', valor: updatedList })
+
+      // Excluir registros de escalas de afastamento criados a partir da data de retorno
+      const { data: escalasAfastado } = await supabase
+        .from('escalas')
+        .select('id, data')
+        .eq('funcionario_id', funcionario.id)
+        .gte('data', dataRetornoFormatted)
+        .eq('tipo', record.tipo || 'atestado')
+
+      if (escalasAfastado && escalasAfastado.length > 0) {
+        const idsToDelete = escalasAfastado.map(e => e.id)
+        await supabase.from('escalas').delete().in('id', idsToDelete)
+      }
+
+      // Remover registros da tabela de frequência a partir da data de retorno
+      await supabase
+        .from('frequencia')
+        .delete()
+        .eq('funcionario_id', funcionario.id)
+        .gte('data', dataRetornoFormatted)
+        .eq('status', record.tipo === 'ferias' ? 'ferias' : 'atestado')
+
       qc.invalidateQueries({ queryKey: ['escalas'] })
       qc.invalidateQueries({ queryKey: ['frequencia'] })
       qc.invalidateQueries({ queryKey: ['dashboard'] })
+      qc.invalidateQueries({ queryKey: ['configuracoes', 'afastamentos_indeterminados'] })
 
-      toast(`${inserts.length} dias de ${data.tipo} lançados com sucesso!`, 'success')
-      setAbsenceModal(null)
+      toast(`Afastamento encerrado com sucesso! Retorno registrado em ${format(retornoDate, 'dd/MM/yyyy')}.`, 'success')
+      setRetornoModal(null)
     } catch (err: any) {
-      toast('Erro ao lançar ausência: ' + err.message, 'error')
+      toast('Erro ao encerrar afastamento: ' + err.message, 'error')
     }
   }
 
@@ -598,9 +686,17 @@ export function FuncionariosPage() {
                   </div>
                   
                   <div className="flex-1 min-w-0 pr-6">
-                    <h3 className="text-sm sm:text-base font-black text-foreground truncate tracking-tight group-hover:text-primary transition-colors uppercase leading-tight mb-1">{func.nome}</h3>
-                    <p className="text-[8.5px] font-black text-muted-foreground/60 truncate uppercase tracking-widest leading-none mb-3">
-                      {func.apelido ? `Conhecido como: ${func.apelido}` : "Sem Apelido Registrado"}
+                    <h3 
+                      className="text-sm sm:text-base font-black text-foreground break-words line-clamp-2 tracking-tight group-hover:text-primary transition-colors uppercase leading-tight mb-1"
+                      title={func.nome}
+                    >
+                      {func.nome}
+                    </h3>
+                    <p 
+                      className="text-[8.5px] font-black text-muted-foreground/60 truncate uppercase tracking-widest leading-none mb-3"
+                      title={func.apelido || ''}
+                    >
+                      {func.apelido ? `Apelido: ${func.apelido}` : "Sem Apelido Registrado"}
                     </p>
                     
                     <div className="flex flex-wrap gap-2">
@@ -722,6 +818,11 @@ export function FuncionariosPage() {
                         Desligamento: {format(parseISO(detailModal.data_desligamento), 'dd/MM/yyyy')}
                       </span>
                     )}
+                    {Array.isArray(afastamentosIndeterminados) && afastamentosIndeterminados.some((a: any) => a.funcionario_id === detailModal.id && a.status === 'ativo') && (
+                      <span className="text-[9px] font-black uppercase tracking-wider block px-3 py-2 rounded-xl border w-fit leading-none bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-400">
+                        ⚠️ Em Afastamento Indeterminado
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -752,12 +853,25 @@ export function FuncionariosPage() {
               )}
               {canEdit && isMemberOfMyTeam(detailModal.id) && (
                 <div className="flex flex-col gap-2 w-full">
+                  {Array.isArray(afastamentosIndeterminados) && afastamentosIndeterminados.some((a: any) => a.funcionario_id === detailModal.id && a.status === 'ativo') && (
+                    <Button
+                      variant="secondary"
+                      className="w-full h-13 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-400 border border-amber-500/30 font-black text-[10px] uppercase tracking-widest transition-all cursor-pointer shadow-sm"
+                      onClick={() => {
+                        const activeRec = afastamentosIndeterminados.find((a: any) => a.funcionario_id === detailModal.id && a.status === 'ativo')
+                        setRetornoModal({ funcionario: detailModal, record: activeRec })
+                        setDetailModal(null)
+                      }}
+                    >
+                      <RotateCw className="w-4.5 h-4.5 mr-2 text-amber-600" /> Retirar Afastamento (Informar Data de Retorno)
+                    </Button>
+                  )}
                   <Button
                     variant="primary"
                     className="w-full h-13 rounded-2xl bg-blue-600 border border-blue-500/10 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all cursor-pointer"
                     onClick={() => { setAbsenceModal(detailModal); setDetailModal(null) }}
                   >
-                    <Calendar className="w-4.5 h-4.5 mr-2" /> Lançar Período de Ausência
+                    <Calendar className="w-4.5 h-4.5 mr-2" /> Lançar Período de Ausência / Afastamento
                   </Button>
                   {detailModal.data_desligamento ? (
                     <Button
@@ -1039,6 +1153,15 @@ export function FuncionariosPage() {
         loading={batchEscalaMutation.isPending}
       />
 
+      {/* Retorno Afastamento Modal */}
+      <RetornoAfastamentoModal
+        open={!!retornoModal}
+        onClose={() => setRetornoModal(null)}
+        funcionarioNome={retornoModal?.funcionario?.nome || ''}
+        onSave={handleEncerrarAfastamento}
+        loading={updateConfig.isPending}
+      />
+
       {/* Desligamento Modal */}
       <DesligamentoModal
         open={!!desligamentoModal}
@@ -1090,19 +1213,54 @@ export function FuncionariosPage() {
 }
 
 function AbsenceModal({ open, onClose, funcionarioNome, tiposEscala, onSave, loading }: any) {
-  const [tipo, setTipo] = useState('ferias')
+  const [tipo, setTipo] = useState('atestado')
   const [inicio, setInicio] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [dias, setDias] = useState(30)
+  const [indeterminado, setIndeterminado] = useState(false)
 
-  const options = tiposEscala
-    .filter((t: TipoEscala) => ['ferias', 'atestado', 'compensar', 'repouso', 'falta'].includes(t.id))
-    .map((t: TipoEscala) => ({ value: t.id, label: t.nome }))
+  useEffect(() => {
+    if (open) {
+      setTipo('atestado')
+      setInicio(format(new Date(), 'yyyy-MM-dd'))
+      setDias(30)
+      setIndeterminado(false)
+    }
+  }, [open])
+
+  const options = React.useMemo(() => {
+    const customList = (tiposEscala || []).filter((t: TipoEscala) => ['atestado', 'afastamento', 'ferias', 'compensar', 'repouso', 'falta'].includes(t.id))
+    
+    // Garantir rótulos limpos e explícitos
+    const mapped = customList.map((t: TipoEscala) => {
+      if (t.id === 'atestado') return { value: 'atestado', label: 'Atestado Médico (AT)' }
+      if (t.id === 'afastamento') return { value: 'afastamento', label: 'Afastamento / Licença (AF)' }
+      if (t.id === 'ferias') return { value: 'ferias', label: 'Férias' }
+      if (t.id === 'compensar') return { value: 'compensar', label: 'Folga / Compensação' }
+      if (t.id === 'repouso') return { value: 'repouso', label: 'Repouso / Descanso' }
+      if (t.id === 'falta') return { value: 'falta', label: 'Falta' }
+      return { value: t.id, label: t.nome }
+    })
+
+    if (!mapped.some((o: any) => o.value === 'atestado')) {
+      mapped.unshift({ value: 'atestado', label: 'Atestado Médico (AT)' })
+    }
+    if (!mapped.some((o: any) => o.value === 'afastamento')) {
+      mapped.unshift({ value: 'afastamento', label: 'Afastamento / Licença (AF)' })
+    }
+    if (!mapped.some((o: any) => o.value === 'ferias')) {
+      mapped.push({ value: 'ferias', label: 'Férias' })
+    }
+
+    return mapped
+  }, [tiposEscala])
+
+  const isAfastamento = tipo === 'atestado' || tipo === 'afastamento' || tipo === 'ferias'
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Lançar Período de Ausência"
+      title="Lançar Período de Ausência / Afastamento"
     >
       <div className="space-y-6 animate-fade-in">
         <div className="p-5 bg-muted/40 rounded-[1.5rem] border border-border/50">
@@ -1111,16 +1269,27 @@ function AbsenceModal({ open, onClose, funcionarioNome, tiposEscala, onSave, loa
         </div>
 
         <Select
-          label="Categoria de Ausência"
-          className="h-14 rounded-2xl"
+          label="Categoria de Ausência / Afastamento"
+          className="h-14 rounded-2xl font-bold uppercase text-xs"
           value={tipo}
           onChange={e => setTipo(e.target.value)}
-          options={options.length > 0 ? options : [
-            { value: 'ferias', label: 'Férias' },
-            { value: 'atestado', label: 'Atestado' },
-            { value: 'compensar', label: 'Folga/Compensação' }
-          ]}
+          options={options}
         />
+
+        {isAfastamento && (
+          <div className="flex items-center gap-3 p-4 bg-muted/20 border border-border/30 rounded-2xl cursor-pointer" onClick={() => setIndeterminado(!indeterminado)}>
+            <input
+              type="checkbox"
+              id="indeterminado-check"
+              checked={indeterminado}
+              onChange={e => setIndeterminado(e.target.checked)}
+              className="w-5 h-5 accent-primary rounded-lg cursor-pointer"
+            />
+            <label htmlFor="indeterminado-check" className="text-xs font-black uppercase tracking-wider text-foreground cursor-pointer select-none">
+              Afastamento por Tempo Indeterminado
+            </label>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
@@ -1130,26 +1299,84 @@ function AbsenceModal({ open, onClose, funcionarioNome, tiposEscala, onSave, loa
             value={inicio}
             onChange={e => setInicio(e.target.value)}
           />
-          <Input
-            type="number"
-            min="1"
-            label="Quantidade de Dias"
-            className="h-14 rounded-2xl"
-            value={dias}
-            onChange={e => setDias(Math.max(1, parseInt(e.target.value) || 1))}
-          />
+          {!indeterminado && (
+            <Input
+              type="number"
+              min="1"
+              label="Quantidade de Dias"
+              className="h-14 rounded-2xl"
+              value={dias}
+              onChange={e => setDias(Math.max(1, parseInt(e.target.value) || 1))}
+            />
+          )}
         </div>
 
-        <div className="p-4 bg-primary/5 rounded-2xl flex items-start gap-3">
+        <div className="p-4 bg-primary/5 rounded-2xl flex items-start gap-3 border border-primary/10">
           <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <p className="text-[11px] font-bold text-primary/80 leading-relaxed italic">
-            O sistema preencherá automaticamente a escala do colaborador para todos os dias do intervalo selecionado.
+            {indeterminado
+              ? "O colaborador ficará em afastamento por tempo indeterminado. Para finalizá-lo futuramente, basta acessar a ficha do funcionário e informar a Data de Retorno."
+              : "O sistema preencherá automaticamente a escala do colaborador para todos os dias do intervalo selecionado."}
           </p>
         </div>
 
         <div className="flex gap-4 pt-4">
           <Button variant="secondary" className="flex-1 h-14 rounded-[1.25rem] font-black uppercase" onClick={onClose}>Cancelar</Button>
-          <Button className="flex-1 h-14 rounded-[1.25rem] bg-primary font-black uppercase shadow-lg shadow-primary/20" onClick={() => onSave({ tipo, inicio, dias })} loading={loading}>Confirmar Lançamento</Button>
+          <Button
+            className="flex-1 h-14 rounded-[1.25rem] bg-primary font-black uppercase shadow-lg shadow-primary/20 text-xs"
+            onClick={() => onSave({ tipo, inicio, dias, indeterminado })}
+            loading={loading}
+          >
+            Confirmar Lançamento
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function RetornoAfastamentoModal({ open, onClose, funcionarioNome, onSave, loading }: any) {
+  const [dataRetorno, setDataRetorno] = useState(format(new Date(), 'yyyy-MM-dd'))
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Informar Retorno do Afastamento"
+    >
+      <div className="space-y-6 animate-fade-in">
+        <div className="p-5 bg-muted/40 rounded-[1.5rem] border border-border/50">
+          <p className="text-[10px] font-black uppercase text-primary tracking-widest mb-1.5 leading-none">Colaborador em Afastamento</p>
+          <p className="text-base font-black text-foreground uppercase leading-none">{funcionarioNome}</p>
+        </div>
+
+        <Input
+          id="retorno-date"
+          label="Data de Retorno às Atividades (Dia de Retorno) *"
+          type="date"
+          className="h-14 rounded-2xl font-bold"
+          value={dataRetorno}
+          onChange={e => setDataRetorno(e.target.value)}
+        />
+
+        <div className="p-4 bg-emerald-500/10 rounded-2xl flex items-start gap-3 border border-emerald-500/20">
+          <Info className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 leading-relaxed italic">
+            O afastamento será finalizado no dia anterior à data de retorno. A partir de {dataRetorno ? format(parseISO(dataRetorno), 'dd/MM/yyyy') : 'data de retorno'}, a escala do colaborador retornará ao padrão normal de trabalho.
+          </p>
+        </div>
+
+        <div className="flex gap-4 pt-4">
+          <Button variant="secondary" className="flex-1 h-14 rounded-[1.25rem] font-black uppercase text-xs" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            className="flex-1 h-14 rounded-[1.25rem] bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-xs shadow-lg shadow-emerald-500/20"
+            onClick={() => onSave(dataRetorno)}
+            loading={loading}
+          >
+            Confirmar Data de Retorno
+          </Button>
         </div>
       </div>
     </Modal>

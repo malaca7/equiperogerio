@@ -166,24 +166,27 @@ export function useUpsertEscala() {
       if (error) throw error
       const result = data as Escala
 
-      // Sincronizar com tabela de frequência
+      // Sincronizar com tabela de frequência (apenas ausências/folgas/férias/atestados, NÃO marca presença trabalho automaticamente)
       if (result && !skipFreqSync) {
-        const freqStatusMap: Record<string, string> = {
-          'presente': 'presente',
-          'hora_extra': 'hora_extra',
-          'falta': 'falta',
-          'compensar': 'folga',
-          'repouso': 'folga',
-          'ferias': 'ferias',
-          'atestado': 'atestado'
+        if (result.tipo !== 'presente') {
+          const freqStatusMap: Record<string, string> = {
+            'hora_extra': 'hora_extra',
+            'falta': 'falta',
+            'compensar': 'folga',
+            'repouso': 'folga',
+            'ferias': 'ferias',
+            'atestado': 'atestado'
+          }
+          const mappedStatus = freqStatusMap[result.tipo]
+          if (mappedStatus) {
+            await supabase.from('frequencia').upsert({
+              funcionario_id: result.funcionario_id,
+              data: result.data,
+              status: mappedStatus as any,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'funcionario_id,data' })
+          }
         }
-        const mappedStatus = freqStatusMap[result.tipo] || 'presente'
-        await supabase.from('frequencia').upsert({
-          funcionario_id: result.funcionario_id,
-          data: result.data,
-          status: mappedStatus as any,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'funcionario_id,data' })
       }
 
       return result
@@ -206,7 +209,10 @@ export function useBatchUpsertEscalas() {
 
       if (items.length === 0) return []
 
-      const upsertPayloads = items.map(item => {
+      // Deduplicate items by composite key (funcionario_id + data) to prevent Postgres ON CONFLICT error
+      const itemMap = new Map<string, any>()
+      items.forEach(item => {
+        const key = `${item.funcionario_id}_${item.data}`
         const p: any = {
           funcionario_id: item.funcionario_id,
           data: item.data,
@@ -220,8 +226,10 @@ export function useBatchUpsertEscalas() {
         if (item.observacoes !== undefined) {
           p.observacoes = item.observacoes
         }
-        return p
+        itemMap.set(key, p)
       })
+
+      const upsertPayloads = Array.from(itemMap.values())
 
       const { data: results, error: upsertError } = await supabase
         .from('escalas')
@@ -230,10 +238,9 @@ export function useBatchUpsertEscalas() {
 
       if (upsertError) throw upsertError
 
-      // Sincronizar com tabela de frequência se não skipFreqSync
+      // Sincronizar com tabela de frequência se não skipFreqSync (apenas para não-trabalho)
       if (results && results.length > 0 && !skipFreqSync) {
         const freqStatusMap: Record<string, string> = {
-          'presente': 'presente',
           'hora_extra': 'hora_extra',
           'falta': 'falta',
           'compensar': 'folga',
@@ -242,21 +249,30 @@ export function useBatchUpsertEscalas() {
           'atestado': 'atestado'
         }
 
-        const freqUpserts = results.map(result => {
-          const mappedStatus = freqStatusMap[result.tipo] || 'presente'
-          return {
-            funcionario_id: result.funcionario_id,
-            data: result.data,
-            status: mappedStatus as any,
-            updated_at: new Date().toISOString()
+        const freqMap = new Map<string, any>()
+        results.forEach(result => {
+          if (result.tipo !== 'presente') {
+            const key = `${result.funcionario_id}_${result.data}`
+            const mappedStatus = freqStatusMap[result.tipo]
+            if (mappedStatus) {
+              freqMap.set(key, {
+                funcionario_id: result.funcionario_id,
+                data: result.data,
+                status: mappedStatus as any,
+                updated_at: new Date().toISOString()
+              })
+            }
           }
         })
+        const freqUpserts = Array.from(freqMap.values())
 
-        const { error: freqError } = await supabase
-          .from('frequencia')
-          .upsert(freqUpserts, { onConflict: 'funcionario_id,data' })
+        if (freqUpserts.length > 0) {
+          const { error: freqError } = await supabase
+            .from('frequencia')
+            .upsert(freqUpserts, { onConflict: 'funcionario_id,data' })
 
-        if (freqError) throw freqError
+          if (freqError) throw freqError
+        }
       }
 
       return results as Escala[]
@@ -286,22 +302,25 @@ export function useUpdateEscala() {
 
       // Sincronizar com tabela de frequência APENAS se o tipo foi alterado na mutation e skipFreqSync for falso
       if (!skipFreqSync && data.tipo !== undefined && result.tipo) {
-        const freqStatusMap: Record<string, string> = {
-          'presente': 'presente',
-          'hora_extra': 'hora_extra',
-          'falta': 'falta',
-          'compensar': 'folga',
-          'repouso': 'folga',
-          'ferias': 'ferias',
-          'atestado': 'atestado'
+        if (result.tipo !== 'presente') {
+          const freqStatusMap: Record<string, string> = {
+            'hora_extra': 'hora_extra',
+            'falta': 'falta',
+            'compensar': 'folga',
+            'repouso': 'folga',
+            'ferias': 'ferias',
+            'atestado': 'atestado'
+          }
+          const mappedStatus = freqStatusMap[result.tipo]
+          if (mappedStatus) {
+            await supabase.from('frequencia').upsert({
+              funcionario_id: result.funcionario_id,
+              data: result.data,
+              status: mappedStatus as any,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'funcionario_id,data' })
+          }
         }
-        const mappedStatus = freqStatusMap[result.tipo] || 'presente'
-        await supabase.from('frequencia').upsert({
-          funcionario_id: result.funcionario_id,
-          data: result.data,
-          status: mappedStatus as any,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'funcionario_id,data' })
       }
 
       return result as Escala

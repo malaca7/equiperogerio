@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { matchEmployeeSearch, normalizeSearchText } from '../lib/searchUtils'
 import { 
   format, 
   startOfWeek, 
@@ -56,7 +57,8 @@ import {
   AlertCircle,
   Route,
   Sparkles,
-  RotateCcw
+  RotateCcw,
+  Bot
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { TopHeader } from '../components/layout/TopHeader'
@@ -64,6 +66,7 @@ import { Loading } from '../components/ui/Loading'
 import { Modal } from '../components/ui/Modal'
 import { Button } from '../components/ui/Button'
 import { useToast } from '../components/ui/Toast'
+import { FuncionarioName } from '../components/ui/FuncionarioName'
 import { useFuncionarios } from '../hooks/useFuncionarios'
 import { useEscalasPeriodo, useBatchUpsertEscalas, useUpdateEscala } from '../hooks/useEscalas'
 import { useConfiguracao, useUpdateConfiguracao } from '../hooks/useConfiguracoes'
@@ -73,6 +76,16 @@ import { cn } from '../lib/utils'
 import { useAuth } from '../contexts/AuthContext'
 import { useUserTeam } from '../hooks/useUserTeam'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { AiAllocationModal } from '../components/AiAllocationModal'
+import { CopilotoIaDrawer } from '../components/CopilotoIaDrawer'
+import { 
+  fetchHistoricalAIContext, 
+  buildAIEngine, 
+  generateSmartAutoAllocations, 
+  normStr,
+  type AIProcessedEngine, 
+  type SuggestedAllocation 
+} from '../services/aiAllocationService'
 
 
 interface Localidade {
@@ -466,8 +479,10 @@ export function EscalaLocalidadePage() {
       coWorkerDays: number
       reason: string
     }[]>
-  empLocHist?: Record<string, Record<string, number>>
+    empLocHist?: Record<string, Record<string, number>>
     pairHist?: Record<string, Record<string, number>>
+    latestAllocationMap?: Record<string, { localityName: string; date: string }>
+    localityPatternMap?: Record<string, Record<string, number>>
     empBehavior?: Record<string, {
       totalDays: number
       presentDays: number
@@ -478,8 +493,24 @@ export function EscalaLocalidadePage() {
       lastAbsenceDate: string | null
       daysAwayBeforeReturn: number
     }>
-  }>({ recommendations: {}, empLocHist: {}, pairHist: {}, empBehavior: {} })
+  }>({ recommendations: {}, empLocHist: {}, pairHist: {}, latestAllocationMap: {}, localityPatternMap: {}, empBehavior: {} })
   const [previewMode, setPreviewMode] = useState<'completo' | 'enxuto' | 'apenas_localidades' | 'tipo_equipe' | 'demandas_realizadas'>('completo')
+
+  // Copiloto IA State
+  const [aiEngine, setAiEngine] = useState<AIProcessedEngine>({
+    empLocHist: {},
+    empSectorHist: {},
+    pairHist: {},
+    attendanceHist: {},
+    recentLocality: {},
+    recentSector: {},
+    latestAllocation: {},
+    localityLastDateMap: {},
+    localityPatternMap: {}
+  })
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false)
+  const [isCopilotDrawerOpen, setIsCopilotDrawerOpen] = useState(false)
+  const [aiSuggestions, setAiSuggestions] = useState<SuggestedAllocation[]>([])
 
   // Google Maps Geocoding Autocomplete State
   const [googleAddressSuggestions, setGoogleAddressSuggestions] = useState<Record<string, any[]>>({})
@@ -511,27 +542,44 @@ export function EscalaLocalidadePage() {
     }
   }, [])
 
-
-  useEffect(() => {
-    if (isPrinting) {
-      document.documentElement.classList.add('printing-active')
-    } else {
-      document.documentElement.classList.remove('printing-active')
-    }
-    return () => {
-      document.documentElement.classList.remove('printing-active')
-    }
-  }, [isPrinting])
-
   // Data fetching
   const { data: allFuncionarios = [], isLoading: loadF } = useFuncionarios({ status: 'ativo' })
   const fetchStart = format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const fetchEnd = format(endOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const { data: escalas = [], isLoading: loadE } = useEscalasPeriodo(fetchStart, fetchEnd)
+  const { data: frequenciasData = [] } = useQuery<any[]>({
+    queryKey: ['frequencia-periodo', fetchStart, fetchEnd],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('frequencia')
+        .select('funcionario_id, data, status')
+        .gte('data', fetchStart)
+        .lte('data', fetchEnd)
+      return data || []
+    }
+  })
   const { data: dbSetores = [] } = useConfiguracao<string[]>('setores', [])
   const { data: dbLocalidades = [] } = useConfiguracao<Localidade[]>('localidades', [])
   const { data: dbSetoresEquipes = {} } = useConfiguracao<Record<string, string[]>>('setores_equipes', {})
   const { data: plataformaNome = '7Locar' } = useConfiguracao('plataforma_nome', '7Locar')
+
+  useEffect(() => {
+    let isMounted = true
+    const dStr = format(currentDate, 'yyyy-MM-dd')
+    const timer = setTimeout(() => {
+      fetchHistoricalAIContext(dStr).then(({ escalas, frequencias }) => {
+        if (!isMounted) return
+        const locMap: Record<string, string> = {}
+        dbLocalidades.forEach((l: any) => { if (l.nome && l.setor) locMap[normStr(l.nome)] = l.setor })
+        const engine = buildAIEngine(escalas, frequencias, allFuncionarios, locMap)
+        setAiEngine(engine)
+      })
+    }, 250)
+    return () => { 
+      isMounted = false
+      clearTimeout(timer)
+    }
+  }, [currentDate, allFuncionarios.length, dbLocalidades.length])
   const setores = useMemo(() => {
     let list: string[] = []
     if (teamInfo?.isRestricted) {
@@ -937,6 +985,23 @@ export function EscalaLocalidadePage() {
     return map
   }, [escalas])
 
+  const freqMap = useMemo(() => {
+    const map: Record<string, any> = {}
+    if (Array.isArray(frequenciasData)) {
+      frequenciasData.forEach((f: any) => {
+        if (!f || f.funcionario_id === undefined || f.funcionario_id === null || !f.data) return
+        const fIdRaw = String(f.funcionario_id)
+        const fIdTrim = fIdRaw.trim()
+        const fDate = String(f.data).substring(0, 10)
+        
+        map[`${fIdTrim}_${fDate}`] = f
+        map[`${fIdRaw}_${fDate}`] = f
+        map[`${f.funcionario_id}_${fDate}`] = f
+      })
+    }
+    return map
+  }, [frequenciasData])
+
   // ── CENTRALIZED STATUS HELPER ──
   // Single source of truth: determines if a given employee is working on a given date.
   // Returns: { isTrabalhando, tipo, escala, isAlocado }
@@ -946,6 +1011,7 @@ export function EscalaLocalidadePage() {
     const isDomingo = isSunday(targetDate)
     const fIdStr = String(funcId).trim()
     const e = escalaMap[`${fIdStr}_${targetDateStr}`] || escalaMap[`${funcId}_${targetDateStr}`]
+    const freq = freqMap[`${fIdStr}_${targetDateStr}`] || freqMap[`${funcId}_${targetDateStr}`]
     const funcObj = allFuncionarios.find(f => String(f.id).trim() === fIdStr)
     const isDesligado = !!(funcObj?.data_desligamento && targetDateStr >= funcObj.data_desligamento)
 
@@ -956,20 +1022,57 @@ export function EscalaLocalidadePage() {
     const isSemLocalStr = !normEscLoc || normEscLoc === "sem local" || normEscLoc === "sem_local" || normEscLoc === "nenhum" || normEscLoc === "nao definido"
     const hasAssignedLocality = !isSemLocalStr
 
+    const isAbsence = (s?: string) => {
+      if (!s) return false
+      const norm = s.toLowerCase().trim()
+      return ['falta', 'atestado', 'ferias', 'feria', 'suspensao', 'suspenso', 'licenca', 'afastamento', 'afastado'].includes(norm)
+    }
+
+    const isFolga = (s?: string) => {
+      if (!s) return false
+      const norm = s.toLowerCase().trim()
+      return ['repouso', 'compensar', 'folga', 'folga_domingo', 'folga_feriado', 'descanso'].includes(norm)
+    }
+
+    const isWork = (s?: string) => {
+      if (!s) return false
+      const norm = s.toLowerCase().trim()
+      return ['escala', 'presente', 'hora_extra', 'trabalho', 'alocado', 'he', 'trabalhando'].includes(norm)
+    }
+
     if (isDesligado) {
       isTrabalhando = false
       tipo = 'repouso'
+    } else if (freq && freq.status) {
+      // Frequency record (actual presence/absence) takes highest precedence
+      const freqStatus = String(freq.status).toLowerCase().trim()
+      if (isAbsence(freqStatus) || isFolga(freqStatus)) {
+        isTrabalhando = false
+        tipo = freq.status
+      } else if (isWork(freqStatus)) {
+        isTrabalhando = true
+        tipo = freq.status
+      } else {
+        isTrabalhando = !isDomingo
+        tipo = freq.status || (isDomingo ? 'repouso' : 'presente')
+      }
     } else if (e) {
-      // Has an explicit escala record in DB — respect it!
+      // Scale record (planned work/absence/folga)
       const normTipo = e.tipo ? String(e.tipo).toLowerCase().trim() : ''
-      const isExplicitWork = normTipo === 'escala' || normTipo === 'presente' || normTipo === 'hora_extra' || normTipo === 'trabalho' || normTipo === 'alocado'
-      
-      isTrabalhando = isExplicitWork
-      tipo = e.tipo || (isExplicitWork ? 'presente' : 'repouso')
+      if (isAbsence(normTipo) || isFolga(normTipo)) {
+        isTrabalhando = false
+        tipo = e.tipo
+      } else if (isWork(normTipo)) {
+        isTrabalhando = true
+        tipo = e.tipo || 'presente'
+      } else {
+        isTrabalhando = !isDomingo
+        tipo = e.tipo || (isDomingo ? 'repouso' : 'presente')
+      }
     } else {
       // No record in DB for this date:
       // Weekdays default to working ('presente').
-      // Sundays default to off ('repouso') — ONLY employees with explicit working escala records can work on Sunday!
+      // Sundays default to off ('repouso').
       isTrabalhando = !isDomingo
       tipo = isDomingo ? 'repouso' : 'presente'
     }
@@ -981,7 +1084,7 @@ export function EscalaLocalidadePage() {
     const isAlocado = !isDesligado && isTrabalhando && (isValidLocality || hasAssignedLocality)
 
     return { isTrabalhando, tipo, escala: e, isAlocado, hasOrphanedLocality: !!(hasAssignedLocality && !isValidLocality) }
-  }, [escalaMap, allFuncionarios, dbLocalidades, localidadesConfig])
+  }, [escalaMap, freqMap, allFuncionarios, dbLocalidades, localidadesConfig])
 
   // Logic for daily view: locality -> employees
   const dailyDistribution = useMemo(() => {
@@ -1519,6 +1622,7 @@ export function EscalaLocalidadePage() {
         .select('funcionario_id, localidade, data, tipo')
         .gte('data', startStr)
         .lte('data', endStr)
+        .order('data', { ascending: false })
         .limit(5000)
 
       if (error) throw error
@@ -1527,6 +1631,9 @@ export function EscalaLocalidadePage() {
       const empSetorHist: Record<string, Record<string, number>> = {}
       const dailyLocMembers: Record<string, Set<string>> = {}
       const empBehavior: Record<string, { totalDays: number; presentDays: number; faltaDays: number; atestadoDays: number; suspensaoDays: number; horaExtraDays: number; lastAbsenceDate: string | null; daysAwayBeforeReturn: number; totalEscalatedDays: number }> = {}
+      const latestAllocationMap: Record<string, { localityName: string; date: string }> = {}
+      const localityPatternMap: Record<string, Record<string, number>> = {}
+      const recentActiveShifts: Record<string, string[]> = {}
 
       if (allHistoryData) {
         allHistoryData.forEach((row: any) => {
@@ -1558,6 +1665,17 @@ export function EscalaLocalidadePage() {
             const rawLoc = String(row.localidade).trim()
             const keyLoc = normLoc(rawLoc)
             
+            if (!latestAllocationMap[fId]) {
+              latestAllocationMap[fId] = { localityName: rawLoc, date: dStrRow }
+            }
+
+            if (!recentActiveShifts[fId]) recentActiveShifts[fId] = []
+            if (recentActiveShifts[fId].length < 5) {
+              recentActiveShifts[fId].push(dStrRow)
+              if (!localityPatternMap[fId]) localityPatternMap[fId] = {}
+              localityPatternMap[fId][keyLoc] = (localityPatternMap[fId][keyLoc] || 0) + 1
+            }
+
             if (!empLocHist[fId]) empLocHist[fId] = {}
             empLocHist[fId][keyLoc] = (empLocHist[fId][keyLoc] || 0) + 1
             empBehavior[fId].totalEscalatedDays++
@@ -1626,6 +1744,10 @@ export function EscalaLocalidadePage() {
           const empSetMap = empSetorHist[fIdStr] || {}
           const locDays = empLocHist[fIdStr]?.[locKey] || 0
           
+          const latestAlloc = latestAllocationMap[fIdStr]
+          const isLatestLoc = latestAlloc && normLoc(latestAlloc.localityName) === locKey
+          const patternCount = localityPatternMap[fIdStr]?.[locKey] || 0
+
           const topHistSetor = Object.entries(empSetMap).sort((a,b) => b[1] - a[1])[0]?.[0] || null
           const empPrimarySetor = f.setor && f.setor !== 'Geral' ? f.setor : (topHistSetor || f.setor || '')
           const profileSetorKey = normLoc(empPrimarySetor)
@@ -1646,20 +1768,32 @@ export function EscalaLocalidadePage() {
             }
           })
 
+          const recencyBonus = isLatestLoc ? 80 : (patternCount >= 2 ? 50 : (patternCount === 1 ? 25 : 0))
           const setorBonus = isSameSector ? 30 : (isHistSector ? 15 : 0)
           const reliabilityBonus = empBehavior[fIdStr]?.daysAwayBeforeReturn <= 3 ? 4 : 0
-          const score = Math.max(0, (locDays * 20) + (topPartnerDays * 8) + setorBonus + reliabilityBonus)
+          const score = Math.max(0, recencyBonus + (locDays * 15) + (topPartnerDays * 8) + setorBonus + reliabilityBonus)
 
           if (!recs[f.id]) recs[f.id] = []
           const behaviorTag = buildBehaviorTag(fIdStr)
-          let reason = isExactLocality ? `Escalado ${locDays}x nesta localidade` : (isSameSector ? `Setor ${locSetor}` : 'Disponível')
+          let reason = ''
+          if (isLatestLoc) {
+            reason = `📍 Última alocação neste posto`
+          } else if (patternCount >= 2) {
+            reason = `🔁 Padrão mantido (${patternCount}/5 recentes)`
+          } else if (isExactLocality) {
+            reason = `Escalado ${locDays}x nesta localidade`
+          } else if (isSameSector) {
+            reason = `Setor ${locSetor}`
+          } else {
+            reason = 'Disponível'
+          }
           reason += behaviorTag
 
-          recs[f.id].push({ locId: loc.id, topLocalityName: locName, score, matchPercent: Math.min(99, Math.round(50 + (score * 1.2))), reason })
+          recs[f.id].push({ locId: loc.id, topLocalityName: locName, score, matchPercent: Math.min(99, Math.round(50 + (score * 0.8))), reason })
         })
       })
       Object.values(recs).forEach(list => list.sort((a, b) => b.score - a.score))
-      setAssistantData({ recommendations: recs, empLocHist, pairHist, empBehavior })
+      setAssistantData({ recommendations: recs, empLocHist, pairHist, latestAllocationMap, localityPatternMap, empBehavior })
     } catch (err) { console.error(err) } finally { setAssistantLoading(false) }
   }, [dateStr, localidadesConfig, dailyDistribution, filteredFuncionarios, allFuncionarios, dbLocalidades])
 
@@ -1682,6 +1816,10 @@ export function EscalaLocalidadePage() {
       // ABSOLUTE STRICT RULE: Dica IA ONLY suggests candidates who have ACTUALLY worked in this locality before (locDays > 0)!
       if (locDays <= 0) return
 
+      const latestAlloc = assistantData.latestAllocationMap?.[fIdStr]
+      const isLatestLoc = latestAlloc && normLoc(latestAlloc.localityName) === normLocName
+      const patternCount = assistantData.localityPatternMap?.[fIdStr]?.[normLocName] || 0
+
       let topPartnerName: string | null = null
       let topPartnerDays = 0
 
@@ -1693,13 +1831,19 @@ export function EscalaLocalidadePage() {
         }
       })
 
-      const score = (locDays * 20) + (topPartnerDays * 8)
+      const recencyBonus = isLatestLoc ? 80 : (patternCount >= 2 ? 40 : 0)
+      const score = recencyBonus + (locDays * 15) + (topPartnerDays * 8)
+
       if (score > maxScore) {
         maxScore = score
         const funcName = f.apelido || f.nome
         let reason = ''
-        if (topPartnerName && topPartnerDays > 0) {
-          reason = `Trabalhou ${locDays}x aqui e ${topPartnerDays}x com ${topPartnerName}`
+        if (isLatestLoc) {
+          reason = `📍 Última alocação neste posto`
+        } else if (patternCount >= 2) {
+          reason = `🔁 Padrão mantido (${patternCount}/5 recentes)`
+        } else if (topPartnerName && topPartnerDays > 0) {
+          reason = `Trabalhou ${locDays}x aqui e ${topPartnerDays}x c/ ${topPartnerName}`
         } else {
           reason = `Trabalhou ${locDays}x nesta localidade`
         }
@@ -1717,6 +1861,7 @@ export function EscalaLocalidadePage() {
   }, [filteredAvailableFuncs, assistantData])
 
 
+
   const handleAutoAllocateAllWithAssistant = async () => {
     if (!filteredAvailableFuncs || filteredAvailableFuncs.length === 0) {
       return toast('Nenhum colaborador avulso para alocar.', 'info')
@@ -1724,45 +1869,55 @@ export function EscalaLocalidadePage() {
 
     setAssistantLoading(true)
     try {
-      const itemsToBatch: { funcionario_id: string; data: string; tipo: string; localidade: string; turno: 'integral' }[] = []
-      const locUsageCount: Record<string, number> = {}
+      const funcMap: Record<string, Funcionario> = {}
+      allFuncionarios.forEach(f => { funcMap[f.id] = f })
 
-      localidadesConfig.forEach(loc => {
-        locUsageCount[loc.nome] = (dailyDistribution[loc.id] || []).length
+      const locs = localidadesConfig.map(l => ({ id: l.id, nome: l.nome, setor: l.setor }))
+
+      const allocatedMap: Record<string, string[]> = {}
+      localidadesConfig.forEach(l => {
+        allocatedMap[l.id] = (dailyDistribution[l.id] || []).map(m => String(m.id))
       })
 
-      let allocatedCount = 0
+      const suggestions = generateSmartAutoAllocations(
+        filteredAvailableFuncs,
+        locs,
+        allocatedMap,
+        aiEngine,
+        funcMap
+      )
 
-      for (const f of filteredAvailableFuncs) {
-        const userRecs = assistantData.recommendations[f.id] || []
-        const bestRec = userRecs.find(r => (locUsageCount[r.topLocalityName] || 0) < 4) || userRecs[0]
-
-        if (bestRec) {
-          itemsToBatch.push({
-            funcionario_id: f.id,
-            data: dateStr,
-            tipo: 'presente',
-            localidade: bestRec.topLocalityName,
-            turno: 'integral' as const
-          })
-          locUsageCount[bestRec.topLocalityName] = (locUsageCount[bestRec.topLocalityName] || 0) + 1
-          allocatedCount++
-        }
-      }
-
-      if (itemsToBatch.length > 0) {
-        await batchMutation.mutateAsync({ items: itemsToBatch, skipFreqSync: true })
-        await queryClient.invalidateQueries({ queryKey: ['escalas'] })
-        toast(`${allocatedCount} colaboradores alocados automaticamente pelo assistente!`, 'success')
-        setIsAssistantModalOpen(false)
+      if (suggestions.length > 0) {
+        setAiSuggestions(suggestions)
+        setIsAiModalOpen(true)
       } else {
-        toast('Não foi possível sugerir vagas para os colaboradores disponíveis.', 'info')
+        toast('Não foi possível gerar sugestões para os colaboradores avulsos.', 'info')
       }
     } catch (err: any) {
-      console.error('Erro na alocação automática:', err)
-      toast('Erro na alocação automática: ' + (err?.message || 'Falha'), 'error')
+      console.error('Erro ao gerar alocações IA:', err)
+      toast('Erro ao gerar alocações da IA: ' + (err?.message || 'Falha'), 'error')
     } finally {
       setAssistantLoading(false)
+    }
+  }
+
+  const handleApproveAiAllocations = async (approved: SuggestedAllocation[]) => {
+    try {
+      const itemsToBatch = approved.map(item => ({
+        funcionario_id: item.funcionarioId,
+        data: dateStr,
+        tipo: 'presente' as const,
+        localidade: item.localidadeNome,
+        turno: 'integral' as const
+      }))
+
+      await batchMutation.mutateAsync({ items: itemsToBatch, skipFreqSync: true })
+      await queryClient.invalidateQueries({ queryKey: ['escalas'] })
+      toast(`${approved.length} alocações confirmadas com sucesso pelo gestor!`, 'success')
+      setIsAiModalOpen(false)
+    } catch (err: any) {
+      console.error('Erro ao confirmar alocações:', err)
+      toast('Erro ao salvar alocações: ' + (err?.message || 'Falha'), 'error')
     }
   }
 
@@ -2098,26 +2253,8 @@ export function EscalaLocalidadePage() {
         }
       }
 
-      if (feriado || isSun) {
-        const text = feriado ? `feriado (${feriado.nome})` : 'domingo'
-        const dateLabel = format(targetDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
-        setSpecialDayConfirm({
-          title: "Tipo de Dia Trabalhado",
-          description: `Você está alocando uma escala de trabalho em um ${text}. Como gostaria de registrar esta jornada?`,
-          dateLabel,
-          onConfirmHE: () => saveAssignment('hora_extra'),
-          onConfirmTrabalho: () => saveAssignment('presente'),
-          onCancel: () => {
-            setSuccessAllocatedIds(prev => {
-              const next = { ...prev }
-              delete next[funcId]
-              return next
-            })
-          }
-        })
-      } else {
-        await saveAssignment('presente')
-      }
+      // Always save directly as 'presente' without prompting for special day/type
+      await saveAssignment('presente')
     } catch (err: any) {
       // Revert optimistic success state on error
       setSuccessAllocatedIds(prev => {
@@ -3132,9 +3269,7 @@ export function EscalaLocalidadePage() {
                             <div className="w-4.5 h-4.5 rounded bg-primary text-white flex items-center justify-center text-[9px] font-black shrink-0">
                               {(m.apelido || m.nome).charAt(0).toUpperCase()}
                             </div>
-                            <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight whitespace-nowrap leading-none">
-                              {m.apelido || m.nome}
-                            </span>
+                            <FuncionarioName nome={m.nome} apelido={m.apelido} uppercase size="xs" />
                           </div>
                         ))
                       )}
@@ -3304,22 +3439,24 @@ export function EscalaLocalidadePage() {
               </div>
             </div>
 
-            {canEdit && filteredAvailableFuncs.length > 0 && (
+            {canEdit && (
               <div className="flex items-center gap-2.5 w-full lg:w-auto shrink-0">
+                {filteredAvailableFuncs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleAutoAllocateAllWithAssistant}
+                    disabled={assistantLoading}
+                    className="flex-1 lg:flex-none px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4 animate-spin" /> Alocar todos os avulsos com IA
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleAutoAllocateAllWithAssistant}
-                  disabled={assistantLoading}
-                  className="flex-1 lg:flex-none px-6 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-700 text-white text-[10px] font-black uppercase tracking-widest transition-all shadow-md shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                  onClick={() => setIsCopilotDrawerOpen(true)}
+                  className="px-5 py-3.5 rounded-2xl bg-card border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shrink-0 cursor-pointer flex items-center gap-2 shadow-sm"
                 >
-                  <Sparkles className="w-4 h-4" /> Escalar Tudo com IA (1-Clique)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAssistantModalOpen(true)}
-                  className="px-5 py-3.5 rounded-2xl bg-card border border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shrink-0 cursor-pointer"
-                >
-                  Ver Recomendações
+                  <Bot className="w-4 h-4 text-amber-500" /> Copiloto IA (Perguntar)
                 </button>
               </div>
             )}
@@ -3425,42 +3562,41 @@ export function EscalaLocalidadePage() {
                             const originalTeams = employeeTeamMap[f.id] || []
                             const originalTeamText = originalTeams.length > 0 ? originalTeams.map(t => t.nome).join(', ') : 'Sem Equipe'
 
-                            return (
-                              <button
-                                key={f.id}
-                                type="button"
-                                onClick={async () => {
-                                  if (isAlreadyInTeam) {
-                                    scrollToEmployee(f.id)
-                                  } else {
-                                    await handleBorrowEmployee(f.id)
-                                  }
-                                }}
-                                className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/50 active:bg-muted/80 transition-all text-left border-none bg-transparent cursor-pointer"
-                              >
-                                <div className="min-w-0 flex-1 pr-2">
-                                  <span className="text-xs font-black text-foreground uppercase truncate block">
-                                    {f.apelido || f.nome}
-                                  </span>
-                                  <span className="text-[9px] text-muted-foreground uppercase tracking-wider block mt-0.5">
-                                    {f.cargo || 'Funcionário'} • Equipe: {originalTeamText}
-                                  </span>
-                                </div>
-                                {isAlreadyInTeam ? (
-                                  <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded border tracking-wide shrink-0", statusColor)}>
-                                    {statusLabel}
-                                  </span>
-                                ) : (
-                                  <span className="text-[8px] font-black uppercase px-2.5 py-1 rounded-lg border tracking-wider shrink-0 bg-primary/10 text-primary border-primary/20 hover:bg-primary hover:text-white transition-colors flex items-center gap-1">
-                                    <UserPlus className="w-3.5 h-3.5" /> Pegar Emprestado
-                                  </span>
-                                )}
-                              </button>
-                            )
-                          })}
+                              return (
+                                <button
+                                  key={f.id}
+                                  type="button"
+                                  onClick={async () => {
+                                    if (isAlreadyInTeam) {
+                                      scrollToEmployee(f.id)
+                                    } else {
+                                      await handleBorrowEmployee(f.id)
+                                    }
+                                  }}
+                                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/50 active:bg-muted/80 transition-all text-left border-none bg-transparent cursor-pointer"
+                                >
+                                  <div className="min-w-0 flex-1 pr-2">
+                                    <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
+                                    <span className="text-[9px] text-muted-foreground uppercase tracking-wider block mt-0.5">
+                                      {f.cargo || 'Funcionário'} • Equipe: {originalTeamText}
+                                    </span>
+                                  </div>
+                                  {isAlreadyInTeam ? (
+                                    <span className={cn("text-[8px] font-black uppercase px-2 py-0.5 rounded border tracking-wide shrink-0", statusColor)}>
+                                      {statusLabel}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[8px] font-black uppercase px-2.5 py-1 rounded-lg border tracking-wider shrink-0 bg-primary/10 text-primary border-primary/20 hover:bg-primary hover:text-white transition-colors flex items-center gap-1">
+                                      <UserPlus className="w-3.5 h-3.5" /> Pegar Emprestado
+                                    </span>
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -4038,11 +4174,13 @@ export function EscalaLocalidadePage() {
                                               {/* Name + tags */}
                                               <div className="flex flex-col min-w-0 flex-1">
                                                 <div className="flex items-center gap-2">
-                                                  <span className={cn("text-xs font-black truncate uppercase tracking-tight", 
-                                                    m.tipo === 'falta' ? "text-rose-600" : isLider ? "text-amber-500" : textClass
-                                                  )}>
-                                                    {m.apelido?.trim() ? m.apelido : m.nome}
-                                                  </span>
+                                                  <FuncionarioName 
+                                                    nome={m.nome} 
+                                                    apelido={m.apelido} 
+                                                    uppercase 
+                                                    size="xs"
+                                                    nicknameClassName={m.tipo === 'falta' ? "text-rose-600" : isLider ? "text-amber-500" : textClass}
+                                                  />
                                                   {isLider && m.tipo !== 'falta' && (
                                                     <span className="text-[7px] font-black bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/20 uppercase tracking-widest leading-none">
                                                       Líder
@@ -4054,15 +4192,6 @@ export function EscalaLocalidadePage() {
                                                     </span>
                                                   )}
                                                 </div>
-                                                {m.apelido?.trim() ? (
-                                                  <span className="text-[9px] font-semibold text-muted-foreground/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">
-                                                    {m.nome}
-                                                  </span>
-                                                ) : (
-                                                  <span className="text-[9px] font-semibold text-primary/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">
-                                                    Apelido: {m.nome.split(' ')[0]}
-                                                  </span>
-                                                )}
                                                 {funcaoConfig && (
                                                   <div className="mt-0.5 flex flex-wrap gap-1 items-center">
                                                     <span className={cn("text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border inline-block leading-none", 
@@ -4222,12 +4351,7 @@ export function EscalaLocalidadePage() {
                                   <div className="flex items-center gap-2 text-[10px] font-black min-w-0 flex-1">
                                     <GripVertical className="w-3.5 h-3.5 text-muted-foreground/45 shrink-0" />
                                     <div className="flex flex-col min-w-0 flex-1">
-                                       <span className="truncate text-xs font-black uppercase">{f.apelido?.trim() ? f.apelido : f.nome}</span>
-                                       {f.apelido?.trim() ? (
-                                         <span className="text-[9px] font-semibold text-muted-foreground/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">{f.nome}</span>
-                                       ) : (
-                                         <span className="text-[9px] font-semibold text-primary/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">Apelido: {f.nome.split(' ')[0]}</span>
-                                       )}
+                                       <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
                                        {(() => {
                                          const fIdStr = String(f.id).trim();
                                          const rec = assistantData.recommendations[f.id]?.[0] || assistantData.recommendations[fIdStr]?.[0];
@@ -4517,7 +4641,7 @@ export function EscalaLocalidadePage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                 {Object.entries(notWorkingGroups).map(([id, group]) => (
-                  group.members.length > 0 && (
+                  group.members.length > 0 ? (
                     <div key={id} className="space-y-6">
                       <div className="flex items-center gap-3 px-2">
                         <div className={cn("p-2 rounded-xl bg-background border border-border/50 shadow-sm", group.color)}>
@@ -4543,18 +4667,7 @@ export function EscalaLocalidadePage() {
                               {(member.apelido || member.nome).substring(0, 2).toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-black text-foreground truncate uppercase">
-                                {member.apelido?.trim() ? member.apelido : member.nome}
-                              </p>
-                              {member.apelido?.trim() ? (
-                                <p className="text-[9px] font-semibold text-muted-foreground/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">
-                                  {member.nome}
-                                </p>
-                              ) : (
-                                <p className="text-[9px] font-semibold text-primary/80 truncate block leading-tight mt-0.5 uppercase tracking-wide">
-                                  Apelido: {member.nome.split(' ')[0]}
-                                </p>
-                              )}
+                              <FuncionarioName nome={member.nome} apelido={member.apelido} uppercase size="xs" />
                               <div className="flex flex-wrap items-center gap-1.5 mt-1">
                                 <p className={cn("text-[9px] font-black uppercase tracking-tighter mr-2", group.color)}>{member.tipoPlanejado}</p>
                                 {employeeTeamMap[member.id]?.map(t => (
@@ -4573,7 +4686,7 @@ export function EscalaLocalidadePage() {
                         ))}
                       </div>
                     </div>
-                  )
+                  ) : null
                 ))}
               </div>
             </div>
@@ -4640,7 +4753,7 @@ export function EscalaLocalidadePage() {
       )}
 
       {/* Assign Modal Matrix */}
-      <Modal open={!!assignModal} onClose={() => { setAssignModal(null); setModalSearchTerm(''); }} title="Alocação Direta" size="lg" className="h-[90vh] sm:h-[90vh]">
+      <Modal open={!!assignModal} onClose={() => { setAssignModal(null); setModalSearchTerm(''); }} title="Alocação Direta" size="xl" className="max-w-4xl h-[90vh] sm:h-[90vh]">
         {assignModal && (() => {
           const currentAssign = assignModal;
           if (!currentAssign) return null;
@@ -4663,15 +4776,15 @@ export function EscalaLocalidadePage() {
                     // Override to keep employee in the view during checkout animation
                     if (successAllocatedIds[f.id]) return true
                     
-                    const { isAlocado } = getEmployeeStatus(f.id, currentAssign.dateStr)
+                    const { isAlocado, isTrabalhando } = getEmployeeStatus(f.id, currentAssign.dateStr)
+
+                    if (!isTrabalhando || isAlocado) return false
 
                     if (modalSearchTerm.trim()) {
-                      const term = modalSearchTerm.toLowerCase()
-                      const matchName = f.nome.toLowerCase().includes(term) || (f.apelido && f.apelido.toLowerCase().includes(term))
-                      return matchName
+                      return matchEmployeeSearch(f, modalSearchTerm)
                     }
                     
-                    return !isAlocado
+                    return true
                   })
  
                   if (list.length === 0) {
@@ -4691,6 +4804,14 @@ export function EscalaLocalidadePage() {
                     const bId = String(b.id).trim()
                     const locDaysA = assistantData.empLocHist?.[aId]?.[normTargetLoc] || 0
                     const locDaysB = assistantData.empLocHist?.[bId]?.[normTargetLoc] || 0
+
+                    const latestA = assistantData.latestAllocationMap?.[aId]
+                    const latestB = assistantData.latestAllocationMap?.[bId]
+                    const isLatestA = latestA && latestA.localityName ? normStr(latestA.localityName) === normTargetLoc : false
+                    const isLatestB = latestB && latestB.localityName ? normStr(latestB.localityName) === normTargetLoc : false
+
+                    const patternCountA = assistantData.localityPatternMap?.[aId]?.[normTargetLoc] || 0
+                    const patternCountB = assistantData.localityPatternMap?.[bId]?.[normTargetLoc] || 0
                     
                     let pairDaysA = 0
                     let pairDaysB = 0
@@ -4700,19 +4821,23 @@ export function EscalaLocalidadePage() {
                       pairDaysB += assistantData.pairHist?.[bId]?.[mId] || 0
                     })
 
-                    const scoreA = (locDaysA * 20) + (pairDaysA * 8)
-                    const scoreB = (locDaysB * 20) + (pairDaysB * 8)
+                    const scoreA = (isLatestA ? 80 : 0) + (patternCountA >= 2 ? 40 : 0) + (locDaysA * 15) + (pairDaysA * 8)
+                    const scoreB = (isLatestB ? 80 : 0) + (patternCountB >= 2 ? 40 : 0) + (locDaysB * 15) + (pairDaysB * 8)
 
                     return scoreB - scoreA
                   })
 
                   return (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 gap-2.5">
                       {sortedList.map((f, idx) => {
                         const fIdStr = String(f.id).trim()
                         const isSuccess = successAllocatedIds[f.id] || successAllocatedIds[fIdStr]
                         const locDays = assistantData.empLocHist?.[fIdStr]?.[normTargetLoc] || 0
                         
+                        const latestAlloc = assistantData.latestAllocationMap?.[fIdStr]
+                        const isLatestLoc = latestAlloc && latestAlloc.localityName ? normStr(latestAlloc.localityName) === normTargetLoc : false
+                        const patternCount = assistantData.localityPatternMap?.[fIdStr]?.[normTargetLoc] || 0
+
                         let topPartnerName: string | null = null
                         let topPartnerDays = 0
                         currentLocMembers.forEach(m => {
@@ -4724,7 +4849,7 @@ export function EscalaLocalidadePage() {
                           }
                         })
 
-                        const score = (locDays * 20) + (topPartnerDays * 8)
+                        const score = (isLatestLoc ? 80 : 0) + (patternCount >= 2 ? 40 : 0) + (locDays * 15) + (topPartnerDays * 8)
                         const isTopAi = idx === 0 && score > 0
 
                         return (
@@ -4739,45 +4864,63 @@ export function EscalaLocalidadePage() {
                               handleAssign(f.id)
                             }} 
                             className={cn(
-                              "w-full flex items-center justify-between p-3.5 rounded-[1.25rem] transition-all group disabled:cursor-not-allowed shadow-sm text-left overflow-hidden border relative min-h-[56px]",
+                              "w-full flex items-center justify-between p-3.5 rounded-[1.25rem] transition-all group disabled:cursor-not-allowed shadow-sm text-left overflow-hidden border relative min-h-[64px]",
                               isSuccess 
                                 ? "animate-cyber-assign" 
                                 : isTopAi
                                   ? "bg-amber-500/10 dark:bg-amber-500/5 border-amber-500/40 hover:border-amber-500/70 shadow-md shadow-amber-500/10"
-                                  : "bg-card/60 dark:bg-card/30 hover:bg-primary/10 border-border/50 hover:border-primary/40 active:scale-[0.98] disabled:opacity-50"
+                                  : "bg-card dark:bg-slate-800/80 hover:bg-primary/10 border-border/50 hover:border-primary/40 active:scale-[0.98] disabled:opacity-50"
                             )}
                           >
                             {/* Normal Content: Cross-fades out smoothly on success */}
                             <div className={cn(
-                              "flex items-center justify-between w-full transition-opacity duration-300",
+                              "flex items-center justify-between w-full gap-3 transition-opacity duration-300",
                               isSuccess ? "opacity-0" : "opacity-100"
                             )}>
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black transition-all uppercase shrink-0",
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black transition-all uppercase shrink-0",
                                   isTopAi ? "bg-amber-500 text-white" : "bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white"
                                 )}>
                                   {assigningId === f.id ? (
-                                    <Clock className="w-3.5 h-3.5 animate-spin text-primary group-hover:text-white" />
+                                    <Clock className="w-4 h-4 animate-spin text-primary group-hover:text-white" />
                                   ) : (
                                     (f.apelido || f.nome).charAt(0)
                                   )}
                                 </div>
-                                <div className="text-left min-w-0">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs sm:text-sm font-black text-foreground uppercase tracking-tight block truncate">
-                                      {f.apelido || f.nome}
-                                    </span>
+                                <div className="text-left min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
                                     {isTopAi && (
-                                      <span className="text-[7px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 animate-pulse">
+                                      <span className="text-[7.5px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0 animate-pulse">
                                         ✨ IA #1
                                       </span>
                                     )}
+                                    {isLatestLoc && (
+                                      <span className="text-[7.5px] font-black bg-emerald-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                                        📍 Última Alocação
+                                      </span>
+                                    )}
+                                    {!isLatestLoc && patternCount >= 2 && (
+                                      <span className="text-[7.5px] font-black bg-blue-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                                        🔁 Padrão Mantido
+                                      </span>
+                                    )}
                                   </div>
-                                  {(locDays > 0 || topPartnerDays > 0) && (
-                                    <span className="text-[8px] font-bold text-amber-600 dark:text-amber-400 block truncate">
-                                      {topPartnerName && topPartnerDays > 0 ? `${locDays}x aqui • ${topPartnerDays}x c/ ${String(topPartnerName).split(' ')[0]}` : `${locDays}x nesta localidade`}
+                                  {f.apelido?.trim() && f.apelido.trim().toLowerCase() !== f.nome.trim().toLowerCase() && (
+                                    <span className="text-[9.5px] font-medium text-muted-foreground/80 leading-tight uppercase block truncate" title={f.nome}>
+                                      {f.nome}
                                     </span>
                                   )}
+                                  {(isLatestLoc || patternCount > 0 || locDays > 0 || topPartnerDays > 0) && (
+                                    <span className="text-[8.5px] font-bold text-amber-600 dark:text-amber-400 block truncate mt-0.5">
+                                      {isLatestLoc
+                                        ? `📍 Última alocação neste posto ${topPartnerName && topPartnerDays > 0 ? `• c/ ${String(topPartnerName).split(' ')[0]}` : ''}`
+                                        : patternCount >= 2
+                                          ? `🔁 Padrão: ${patternCount}/5 escalas recentes aqui`
+                                          : topPartnerName && topPartnerDays > 0 ? `${locDays}x aqui • ${topPartnerDays}x c/ ${String(topPartnerName).split(' ')[0]}` : `${locDays}x nesta localidade`}
+                                    </span>
+                                  )}
+
                                   {f.setor && f.setor !== currentAssign.setor && (
                                     <span className="text-[8px] font-black uppercase tracking-wider text-muted-foreground bg-muted/60 dark:bg-muted/30 px-1.5 py-0.5 rounded-md mt-0.5 inline-block">
                                       {f.setor}
@@ -4785,7 +4928,7 @@ export function EscalaLocalidadePage() {
                                   )}
                                 </div>
                               </div>
-                              <div className="w-8 h-8 rounded-xl bg-muted/50 dark:bg-muted/20 flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all shrink-0">
+                              <div className="w-9 h-9 rounded-xl bg-muted/60 dark:bg-muted/30 flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all shrink-0">
                                 {assigningId === f.id ? (
                                   <Clock className="w-4 h-4 animate-spin text-muted-foreground group-hover:text-white" />
                                 ) : (
@@ -5554,7 +5697,7 @@ export function EscalaLocalidadePage() {
 
           {/* Suggestions Panel */}
           {searchTerm && suggestions.length > 0 && (
-            <div className="w-full bg-card/95 dark:bg-card/90 backdrop-blur-3xl border border-border/40 rounded-[2.25rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden animate-slide-down flex flex-col divide-y divide-border/20 z-[90] cyber-scanline cyber-glow-primary">
+            <div className="absolute bottom-full left-0 right-0 mb-3 w-full bg-card/95 dark:bg-card/90 backdrop-blur-3xl border border-border/40 rounded-[2.25rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden animate-slide-down flex flex-col divide-y divide-border/20 z-[9999] cyber-scanline cyber-glow-primary">
               <div className="p-4.5 px-6 bg-muted/20 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
                 <span>Sugestões</span>
                 <span className="text-primary">{suggestions.length} encontrados</span>
@@ -5676,8 +5819,8 @@ export function EscalaLocalidadePage() {
                           {(f.apelido || f.nome).charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-xs font-black text-foreground uppercase tracking-tight">{f.apelido || f.nome}</p>
-                          <p className="text-[9px] font-medium text-muted-foreground uppercase">{f.nome} • {f.cargo || 'Funcionário'}</p>
+                          <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
+                          <p className="text-[9px] font-medium text-muted-foreground uppercase">{f.cargo || 'Funcionário'}</p>
                           {/* Behavior badges */}
                           <div className="flex flex-wrap gap-1 mt-1">
                             {behavior && behavior.faltaDays > 0 && (
@@ -5782,9 +5925,7 @@ export function EscalaLocalidadePage() {
                 {(borrowModal.funcionario.apelido || borrowModal.funcionario.nome).substring(0, 1).toUpperCase()}
               </div>
               <div>
-                <h4 className="text-sm font-black text-foreground uppercase tracking-wide">
-                  {borrowModal.funcionario.apelido || borrowModal.funcionario.nome}
-                </h4>
+                <FuncionarioName nome={borrowModal.funcionario.nome} apelido={borrowModal.funcionario.apelido} uppercase size="sm" />
                 <p className="text-[10px] text-muted-foreground uppercase mt-0.5">
                   {borrowModal.funcionario.cargo || 'Funcionário'}
                 </p>
@@ -5881,6 +6022,23 @@ export function EscalaLocalidadePage() {
           </div>
         )}
       </Modal>
+
+      <AiAllocationModal
+        open={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        suggestions={aiSuggestions}
+        onApproveAll={handleApproveAiAllocations}
+      />
+
+      <CopilotoIaDrawer
+        open={isCopilotDrawerOpen}
+        onClose={() => setIsCopilotDrawerOpen(false)}
+        localidades={localidadesConfig.map(l => ({ id: l.id, nome: l.nome, setor: l.setor }))}
+        funcionarios={allFuncionarios}
+        engine={aiEngine}
+        dateStr={dateStr}
+        onOpenAutoAllocateAll={handleAutoAllocateAllWithAssistant}
+      />
     </div>
   )
 }

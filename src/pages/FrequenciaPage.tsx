@@ -42,6 +42,7 @@ import { supabase } from '../lib/supabase'
 import { TopHeader } from '../components/layout/TopHeader'
 import { Loading } from '../components/ui/Loading'
 import { useToast } from '../components/ui/Toast'
+import { FuncionarioName } from '../components/ui/FuncionarioName'
 import { useFuncionarios } from '../hooks/useFuncionarios'
 import { useEscalasPeriodo, useUpsertEscala, useUpdateEscala, useBatchUpsertEscalas } from '../hooks/useEscalas'
 import { useFrequenciaData, useUpsertFrequencia, useBatchUpsertFrequencia, FREQUENCIA_KEY } from '../hooks/useFrequencia'
@@ -50,6 +51,7 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../contexts/AuthContext'
 import { useUserTeam } from '../hooks/useUserTeam'
+import { matchEmployeeSearch } from '../lib/searchUtils'
 
 function safeUUID(): string {
   return typeof crypto !== 'undefined' && crypto.randomUUID
@@ -578,54 +580,20 @@ export function FrequenciaPage() {
 
   const handleStatus = async (funcionarioId: string, status: any) => {
     try {
-      // Atualizar frequência
+      // Atualizar APENAS a tabela de frequência (NUNCA altera a tabela de escalas!)
       await upsertFreqMutation.mutateAsync({ 
         funcionario_id: funcionarioId, 
         data: dateStr, 
         status 
       })
       
-      // Sincronizar com a escala
-      const escalaMap: Record<string, string> = {
-        'presente': 'presente',
-        'hora_extra': 'hora_extra',
-        'falta': 'falta',
-        'folga': 'compensar',
-        'ferias': 'ferias',
-        'atestado': 'atestado'
-      }
-      
-      const escalaType = escalaMap[status] || 'presente'
-      const currentEscala = escalas.find(e => e.funcionario_id === funcionarioId && e.data.substring(0, 10) === dateStr)
-      
-      if (currentEscala) {
-        // Atualizar escala existente mantendo a localidade
-        await updateEscalaMutation.mutateAsync({
-          id: currentEscala.id,
-          data: {
-            tipo: escalaType,
-            localidade: currentEscala.localidade
-          }
-        })
-      } else {
-        // Criar nova escala
-        await upsertEscalaMutation.mutateAsync({
-          funcionario_id: funcionarioId,
-          data: dateStr,
-          tipo: escalaType,
-          turno: 'integral'
-        })
-      }
-      
-      // Sincronizar sistema de escala e frequências
       queryClient.invalidateQueries({ queryKey: FREQUENCIA_KEY })
-      queryClient.invalidateQueries({ queryKey: ['escalas'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       
-      toast('Frequência e escala atualizadas', 'success')
+      toast('Frequência registrada com sucesso', 'success')
       clearSearch()
     } catch (err: any) {
-      toast('Erro ao registrar: ' + err.message, 'error')
+      toast('Erro ao registrar frequência: ' + err.message, 'error')
     }
   }
 
@@ -643,41 +611,17 @@ export function FrequenciaPage() {
       }))
       await batchFreqMutation.mutateAsync(updates)
       
-      // Sincronizar escalas em lote - preservar tipos não-trabalho existentes (férias, atestado, folga, etc)
-      const nonWorkTypes = ['ferias', 'atestado', 'repouso', 'compensar']
-      const escalaInserts = pendentes
-        .filter(member => {
-          const currentEscala = escalas.find(e => e.funcionario_id === member.id && e.data.substring(0, 10) === dateStr)
-          // Não sobrescrever se já tem tipo não-trabalho definido
-          return !currentEscala || !nonWorkTypes.includes(currentEscala.tipo)
-        })
-        .map(member => {
-          const currentEscala = escalas.find(e => e.funcionario_id === member.id && e.data.substring(0, 10) === dateStr)
-          return {
-            funcionario_id: member.id,
-            data: dateStr,
-            tipo: 'presente',
-            localidade: currentEscala?.localidade || null,
-            turno: 'integral' as const
-          }
-        })
-      if (escalaInserts.length > 0) {
-        await batchEscalaMutation.mutateAsync(escalaInserts)
-      }
-      
-      // Sincronizar sistema de escala e frequências
       queryClient.invalidateQueries({ queryKey: FREQUENCIA_KEY })
-      queryClient.invalidateQueries({ queryKey: ['escalas'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
 
-      toast(`${pendentes.length} presenças confirmadas e escalas sincronizadas!`, 'success')
+      toast(`${pendentes.length} presenças confirmadas!`, 'success')
       clearSearch()
     } catch (err: any) {
       toast('Erro ao confirmar em lote: ' + err.message, 'error')
     }
   }
 
-  const handleBulkStatus = async (status: 'presente' | 'hora_extra' | 'falta' | 'folga' | 'ferias' | 'atestado' | 'remover') => {
+  const handleBulkStatus = async (status: 'presente' | 'hora_extra' | 'falta' | 'remover') => {
     const selectedIds = Object.entries(selectedMembers)
       .filter(([_, isSelected]) => isSelected)
       .map(([id]) => id)
@@ -686,32 +630,12 @@ export function FrequenciaPage() {
     
     try {
       if (status === 'remover') {
-        // Remover frequência em lote
         const deleteFreqPromises = selectedIds.map(id =>
           supabase.from('frequencia').delete().eq('funcionario_id', id).eq('data', dateStr)
         )
         await Promise.all(deleteFreqPromises)
-        
-        // Sincronizar escalas: resetar para o padrão do dia mantendo localidade
-        const isDiaDomingo = isSunday(currentDate)
-        const feriado = getFeriado(currentDate)
-        const defaultTipo = (isDiaDomingo || feriado) ? 'repouso' : 'presente'
-        
-        const escalaInserts = selectedIds.map(id => {
-          const currentEscala = escalas.find(e => e.funcionario_id === id && e.data.substring(0, 10) === dateStr)
-          return {
-            funcionario_id: id,
-            data: dateStr,
-            tipo: defaultTipo,
-            localidade: currentEscala?.localidade || null,
-            turno: 'integral' as const
-          }
-        })
-        await batchEscalaMutation.mutateAsync(escalaInserts)
-        
-        toast(`${selectedIds.length} frequências resetadas e escalas sincronizadas!`, 'success')
+        toast(`${selectedIds.length} frequências resetadas!`, 'success')
       } else {
-        // Upsert frequências em lote
         const freqUpserts = selectedIds.map(id => ({
           funcionario_id: id,
           data: dateStr,
@@ -719,37 +643,11 @@ export function FrequenciaPage() {
           updated_at: new Date().toISOString()
         }))
         await supabase.from('frequencia').upsert(freqUpserts, { onConflict: 'funcionario_id,data' })
-        
-        // Sincronizar escalas em lote
-        const escalaMap: Record<string, string> = {
-          'presente': 'presente',
-          'hora_extra': 'hora_extra',
-          'falta': 'falta',
-          'folga': 'compensar',
-          'ferias': 'ferias',
-          'atestado': 'atestado'
-        }
-        const escalaType = escalaMap[status] || 'presente'
-        
-        const escalaInserts = selectedIds.map(id => {
-          const currentEscala = escalas.find(e => e.funcionario_id === id && e.data.substring(0, 10) === dateStr)
-          return {
-            funcionario_id: id,
-            data: dateStr,
-            tipo: escalaType,
-            localidade: currentEscala?.localidade || null,
-            turno: 'integral' as const
-          }
-        })
-        await batchEscalaMutation.mutateAsync(escalaInserts)
-        
-        toast(`${selectedIds.length} frequências e escalas atualizadas em lote!`, 'success')
+        toast(`${selectedIds.length} frequências atualizadas em lote!`, 'success')
       }
       
-      // Limpar seleção e invalidar cache
       setSelectedMembers({})
       queryClient.invalidateQueries({ queryKey: FREQUENCIA_KEY })
-      queryClient.invalidateQueries({ queryKey: ['escalas'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       clearSearch()
     } catch (err: any) {
@@ -771,10 +669,7 @@ export function FrequenciaPage() {
   const totalPlanejadoCount = allWorkingMembers.filter(m => !isBorrowed(m.id)).length
   
   const filteredSearch = (m: any) => {
-    const matchesSearch = !searchTerm.trim() || 
-      matchesFuzzy(m.nome, searchTerm) || 
-      (m.apelido && matchesFuzzy(m.apelido, searchTerm))
-    
+    const matchesSearch = matchEmployeeSearch(m, searchTerm)
     if (!matchesSearch) return false
     
     if (statusFilter === 'pendentes') return !m.tipoReal && !isBorrowed(m.id)
@@ -845,7 +740,7 @@ export function FrequenciaPage() {
 
                     {/* Suggestions Panel */}
                     {searchTerm && suggestions.length > 0 && (
-                      <div className="absolute top-full left-0 mt-2 w-full bg-card dark:bg-card/95 border border-border rounded-2xl shadow-xl overflow-hidden z-[9999] flex flex-col divide-y divide-border/20 backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="absolute top-full left-0 right-0 mt-2 w-full bg-card dark:bg-card/95 border border-border/80 rounded-2xl shadow-2xl overflow-hidden z-[9999] flex flex-col divide-y divide-border/20 backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-200">
                         <div className="p-3 bg-muted/20 text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
                           <span>Sugestões</span>
                           <span className="text-primary">{suggestions.length} encontrados</span>
@@ -885,9 +780,7 @@ export function FrequenciaPage() {
                                 className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 active:bg-muted/80 transition-all text-left border-none bg-transparent cursor-pointer"
                               >
                                 <div className="min-w-0 flex-1 pr-2">
-                                  <span className="text-xs font-black text-foreground uppercase truncate block">
-                                    {f.apelido || f.nome}
-                                  </span>
+                                  <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
                                   <span className="text-[9px] text-muted-foreground uppercase tracking-wider block mt-0.5">
                                     {f.cargo || 'Funcionário'} • Equipe: {originalTeamText}
                                   </span>
@@ -1220,8 +1113,9 @@ export function FrequenciaPage() {
                             member.tipoReal === 'falta' ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]" : "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)] animate-pulse"
                           )} />
  
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="flex flex-col justify-between gap-3">
+                            {/* Top Info Block: Checkbox, Avatar, Name, Apelido, Badges */}
+                            <div className="flex items-start gap-3 w-full min-w-0">
                               <div 
                                 onClick={() => {
                                   if (canEdit && !isBorrowed(member.id)) {
@@ -1231,7 +1125,7 @@ export function FrequenciaPage() {
                                     }))
                                   }
                                 }}
-                                className="flex items-center gap-2 select-none cursor-pointer group/select shrink-0"
+                                className="flex items-center gap-2 select-none cursor-pointer group/select shrink-0 pt-0.5"
                               >
                                 {canEdit && !isBorrowed(member.id) && (
                                   <button
@@ -1260,64 +1154,58 @@ export function FrequenciaPage() {
                                 </div>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs sm:text-sm font-black text-foreground truncate leading-tight tracking-tight uppercase">
-                                  {member.apelido?.trim() ? member.apelido : member.nome}
-                                </p>
-                                {member.apelido?.trim() && member.apelido.trim().toLowerCase() !== member.nome.trim().toLowerCase() && (
-                                  <p className="text-[9.5px] font-medium text-muted-foreground/80 truncate leading-tight uppercase">
-                                    {member.nome}
-                                  </p>
-                                )}
-                                <div className="flex flex-wrap items-center gap-1 mt-1">
-                                  <Badge variant="default" className="text-[7px] sm:text-[8px] font-black uppercase px-1.5 py-0.5 bg-muted/40 text-muted-foreground/60 border-transparent shrink-0">
+                                <FuncionarioName nome={member.nome} apelido={member.apelido} uppercase size="xs" />
+                                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                                  <Badge variant="default" className="text-[7.5px] sm:text-[8px] font-black uppercase px-2 py-0.5 bg-muted/60 text-muted-foreground border-transparent shrink-0">
                                     {member.cargo}
                                   </Badge>
                                   {employeeTeamMap[member.id]?.map(t => (
-                                    <span key={t.id} className="text-[7px] font-black bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20 uppercase tracking-widest leading-none shrink-0">
+                                    <span key={t.id} className="text-[7.5px] font-black bg-primary/10 text-primary px-2 py-0.5 rounded border border-primary/20 uppercase tracking-widest leading-none shrink-0">
                                       {t.nome}
                                     </span>
                                   ))}
                                   {borrowedMembers.some((bm: any) => bm.funcionario_id === member.id) && (
-                                    <Badge variant="default" className="text-[7px] font-black uppercase px-1.5 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                                    <Badge variant="default" className="text-[7.5px] font-black uppercase px-2 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
                                       ⇄ Emprestado
                                     </Badge>
                                   )}
                                   {(!employeeTeamMap[member.id] || employeeTeamMap[member.id].length === 0) && (
-                                    <span className="text-[7px] font-black bg-rose-500/10 text-rose-500 px-1.5 py-0.5 rounded border border-rose-500/20 uppercase tracking-widest leading-none shrink-0">
+                                    <span className="text-[7.5px] font-black bg-rose-500/10 text-rose-500 px-2 py-0.5 rounded border border-rose-500/20 uppercase tracking-widest leading-none shrink-0">
                                       Sem Equipe
                                     </span>
                                   )}
                                   {member.tipoReal === 'presente' || member.tipoReal === 'hora_extra' ? (
-                                    <Badge variant="default" className="text-[7px] font-black uppercase px-1.5 py-0.5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-transparent shrink-0">
+                                    <Badge variant="default" className="text-[7.5px] font-black uppercase px-2 py-0.5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-transparent shrink-0">
                                       Presente
                                     </Badge>
                                   ) : member.tipoReal === 'falta' ? (
-                                    <Badge variant="default" className="text-[7px] font-black uppercase px-1.5 py-0.5 bg-rose-500/15 text-rose-600 dark:text-rose-400 border-transparent shrink-0">
+                                    <Badge variant="default" className="text-[7.5px] font-black uppercase px-2 py-0.5 bg-rose-500/15 text-rose-600 dark:text-rose-400 border-transparent shrink-0">
                                       Falta
                                     </Badge>
                                   ) : member.tipoReal === 'folga' ? (
-                                    <Badge variant="default" className="text-[7px] font-black uppercase px-1.5 py-0.5 bg-blue-500/15 text-blue-600 dark:text-blue-400 border-transparent shrink-0">
+                                    <Badge variant="default" className="text-[7.5px] font-black uppercase px-2 py-0.5 bg-blue-500/15 text-blue-600 dark:text-blue-400 border-transparent shrink-0">
                                       Folga
                                     </Badge>
                                   ) : member.tipoReal === 'ferias' ? (
-                                    <Badge variant="default" className="text-[7px] font-black uppercase px-1.5 py-0.5 bg-purple-500/15 text-purple-600 dark:text-purple-400 border-transparent shrink-0">
+                                    <Badge variant="default" className="text-[7.5px] font-black uppercase px-2 py-0.5 bg-purple-500/15 text-purple-600 dark:text-purple-400 border-transparent shrink-0">
                                       Férias
                                     </Badge>
                                   ) : member.tipoReal === 'atestado' ? (
-                                    <Badge variant="default" className="text-[7px] font-black uppercase px-1.5 py-0.5 bg-red-500/15 text-red-600 dark:text-red-400 border-transparent shrink-0">
+                                    <Badge variant="default" className="text-[7.5px] font-black uppercase px-2 py-0.5 bg-red-500/15 text-red-600 dark:text-red-400 border-transparent shrink-0">
                                       Atestado
                                     </Badge>
                                   ) : (
-                                    <Badge variant="default" className="text-[7px] font-black uppercase px-1.5 py-0.5 bg-amber-500/15 text-amber-600 dark:text-amber-400 border-transparent shrink-0 animate-pulse">
+                                    <Badge variant="default" className="text-[7.5px] font-black uppercase px-2 py-0.5 bg-amber-500/15 text-amber-600 dark:text-amber-400 border-transparent shrink-0 animate-pulse">
                                       Pendente
                                     </Badge>
                                   )}
                                 </div>
                               </div>
                             </div>
-  
+
+                            {/* Bottom Action Bar */}
                             {canEdit ? (
-                              <div className="flex items-center gap-1.5 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/10 shrink-0">
+                              <div className="flex items-center justify-end gap-1.5 w-full pt-2.5 border-t border-border/15 shrink-0">
                                 {isBorrowed(member.id) ? (
                                   <>
                                     <span className="text-[8px] font-black uppercase text-muted-foreground mr-1.5 tracking-wider bg-muted/40 px-2.5 py-1.5 rounded-xl border border-border/30">
@@ -1334,13 +1222,11 @@ export function FrequenciaPage() {
                                               .eq('funcionario_id', member.id)
                                               .eq('data', dateStr)
                                             
-                                            // Also delete their escala entry for today if they were allocated to a localidade of this supervisor
                                             const currentEscala = escalas.find(esc => esc.funcionario_id === member.id && esc.data.substring(0, 10) === dateStr)
                                             if (currentEscala) {
                                               await supabase.from('escalas').delete().eq('id', currentEscala.id)
                                             }
                                             
-                                            // And delete frequency record
                                             await supabase.from('frequencia').delete().eq('funcionario_id', member.id).eq('data', dateStr)
 
                                             queryClient.invalidateQueries({ queryKey: ['membros-emprestados', dateStr] })
@@ -1353,7 +1239,7 @@ export function FrequenciaPage() {
                                           }
                                         }
                                       }}
-                                      className="h-10 w-10 rounded-xl flex items-center justify-center bg-rose-500/10 border border-rose-500/20 text-rose-500 hover:bg-rose-500 hover:text-white transition-all cursor-pointer shrink-0"
+                                      className="h-9 w-9 rounded-xl flex items-center justify-center bg-rose-500/10 border border-rose-500/20 text-rose-500 hover:bg-rose-500 hover:text-white transition-all cursor-pointer shrink-0"
                                       title="Devolver colaborador emprestado"
                                     >
                                       <UserMinus className="w-4 h-4" />
@@ -1365,88 +1251,62 @@ export function FrequenciaPage() {
                                       <button 
                                         onClick={async () => {
                                           try {
-                                            // Remover frequência
                                             await supabase.from('frequencia').delete().eq('funcionario_id', member.id).eq('data', dateStr)
                                             
-                                            // Sincronizar com a escala - resetar para padrão (repouso se domingo/feriado, presente se dia de semana) mantendo localidade
-                                            const isDiaDomingo = isSunday(currentDate)
-                                            const feriado = getFeriado(currentDate)
-                                            const defaultTipo = (isDiaDomingo || feriado) ? 'repouso' : 'presente'
-                                            
-                                            const currentEscala = escalas.find(e => e.funcionario_id === member.id && e.data.substring(0, 10) === dateStr)
-                                            if (currentEscala) {
-                                              await updateEscalaMutation.mutateAsync({
-                                                id: currentEscala.id, skipFreqSync: true,
-                                                data: {
-                                                  tipo: defaultTipo,
-                                                  localidade: currentEscala.localidade
-                                                }
-                                              })
-                                            } else {
-                                              // Se não houver escala, criar uma padrão
-                                              await upsertEscalaMutation.mutateAsync({ item: {
-                                                funcionario_id: member.id,
-                                                data: dateStr,
-                                                tipo: defaultTipo,
-                                                turno: 'integral'
-                                              }, skipFreqSync: true })
-                                            }
-                                            
-                                            toast('Frequência resetada e escala sincronizada', 'success')
+                                            toast('Frequência resetada com sucesso', 'success')
                                             clearSearch()
                                             queryClient.invalidateQueries({ queryKey: FREQUENCIA_KEY })
-                                            queryClient.invalidateQueries({ queryKey: ['escalas'] })
                                             queryClient.invalidateQueries({ queryKey: ['dashboard'] })
                                           } catch (err: any) {
                                             toast('Erro ao remover: ' + err.message, 'error')
                                           }
                                         }}
-                                        className="h-10 px-3 sm:px-0 sm:w-10 rounded-xl flex items-center justify-center bg-muted/40 border border-border/30 text-muted-foreground hover:bg-amber-500/10 hover:text-amber-500 hover:border-amber-500/20 transition-all cursor-pointer flex-1 sm:flex-initial gap-1.5 sm:gap-0"
+                                        className="h-9 px-3 rounded-xl flex items-center justify-center bg-muted/40 border border-border/30 text-muted-foreground hover:bg-amber-500/10 hover:text-amber-500 hover:border-amber-500/20 transition-all cursor-pointer gap-1.5 shrink-0"
                                         title="Remover Confirmação"
                                       >
-                                        <RotateCcw className="w-4 h-4" />
-                                        <span className="sm:hidden text-[9px] font-black uppercase tracking-wider">Reset</span>
+                                        <RotateCcw className="w-3.5 h-3.5" />
+                                        <span className="text-[9px] font-black uppercase tracking-wider">Reset</span>
                                       </button>
                                     )}
                                     <button 
                                       onClick={() => handleStatus(member.id, 'falta')}
                                       className={cn(
-                                        "h-10 px-3 sm:w-20 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border cursor-pointer font-black text-[9px] sm:text-[10px] uppercase tracking-widest flex-1 sm:flex-initial",
+                                        "h-9 px-3 sm:px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border cursor-pointer font-black text-[9px] sm:text-[10px] uppercase tracking-widest flex-1 sm:flex-initial",
                                         member.tipoReal === 'falta' 
                                           ? "bg-rose-500 border-rose-500 text-white shadow-md shadow-rose-500/20" 
                                           : "bg-muted/40 border-transparent text-rose-500 hover:bg-rose-500/10 hover:border-rose-500/20"
                                       )}
                                     >
-                                      <X className="w-4 h-4" />
+                                      <X className="w-3.5 h-3.5" />
                                       <span>Falta</span>
                                     </button>
                                     <button 
                                       onClick={() => handleStatus(member.id, 'presente')}
                                       className={cn(
-                                        "h-10 px-3 sm:w-24 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border cursor-pointer font-black text-[9px] sm:text-[10px] uppercase tracking-widest flex-1 sm:flex-initial",
+                                        "h-9 px-3 sm:px-4 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border cursor-pointer font-black text-[9px] sm:text-[10px] uppercase tracking-widest flex-1 sm:flex-initial",
                                         member.tipoReal === 'presente' || member.tipoReal === 'hora_extra' 
                                           ? "bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-500/20" 
                                           : "bg-muted/40 border-transparent text-emerald-500 hover:bg-emerald-500/10 hover:border-emerald-500/20"
                                       )}
                                     >
-                                      <Check className="w-4 h-4 stroke-[3]" />
+                                      <Check className="w-3.5 h-3.5 stroke-[3]" />
                                       <span>Presença</span>
                                     </button>
                                   </>
                                 )}
                               </div>
                             ) : (
-                              <div className="shrink-0 flex sm:justify-end w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/10">
+                              <div className="shrink-0 flex justify-end w-full pt-2 border-t border-border/10">
                                 {isBorrowed(member.id) ? (
-                                  <span className="inline-block px-3 py-1.5 rounded-full text-[8px] font-black bg-muted/40 text-muted-foreground border border-border/30 uppercase tracking-wider">
+                                  <span className="inline-block px-3 py-1 rounded-full text-[8px] font-black bg-muted/40 text-muted-foreground border border-border/30 uppercase tracking-wider">
                                     Controle na Origem
                                   </span>
                                 ) : member.tipoReal === 'presente' || member.tipoReal === 'hora_extra' ? (
-                                  <span className="inline-block px-3 py-1.5 rounded-full text-[9px] font-black bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 uppercase tracking-wider">Presente</span>
+                                  <span className="inline-block px-3 py-1 rounded-full text-[9px] font-black bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 uppercase tracking-wider">Presente</span>
                                 ) : member.tipoReal === 'falta' ? (
-                                  <span className="inline-block px-3 py-1.5 rounded-full text-[9px] font-black bg-rose-500/10 text-rose-500 border border-rose-500/20 uppercase tracking-wider">Falta</span>
+                                  <span className="inline-block px-3 py-1 rounded-full text-[9px] font-black bg-rose-500/10 text-rose-500 border border-rose-500/20 uppercase tracking-wider">Falta</span>
                                 ) : (
-                                  <span className="inline-block px-3 py-1.5 rounded-full text-[9px] font-black bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase tracking-wider">Pendente</span>
+                                  <span className="inline-block px-3 py-1 rounded-full text-[9px] font-black bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase tracking-wider">Pendente</span>
                                 )}
                               </div>
                             )}
@@ -1492,7 +1352,7 @@ export function FrequenciaPage() {
                               {(member.apelido || member.nome).substring(0, 2).toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-black text-foreground truncate uppercase">{member.apelido || member.nome}</p>
+                              <FuncionarioName nome={member.nome} apelido={member.apelido} uppercase size="xs" />
                               <div className="flex items-center gap-2 mt-1">
                                 <p className={cn("text-[9px] font-black uppercase tracking-tighter", group.color)}>
                                   {escalaTipoLabel[member.resolvedStatus as EscalaTipo] || member.resolvedStatus}
@@ -1606,9 +1466,7 @@ export function FrequenciaPage() {
                 {(borrowModal.funcionario.apelido || borrowModal.funcionario.nome).substring(0, 1).toUpperCase()}
               </div>
               <div>
-                <h4 className="text-sm font-black text-foreground uppercase tracking-wide">
-                  {borrowModal.funcionario.apelido || borrowModal.funcionario.nome}
-                </h4>
+                <FuncionarioName nome={borrowModal.funcionario.nome} apelido={borrowModal.funcionario.apelido} uppercase size="sm" />
                 <p className="text-[10px] text-muted-foreground uppercase mt-0.5">
                   {borrowModal.funcionario.cargo || 'Funcionário'}
                 </p>
@@ -1705,6 +1563,58 @@ export function FrequenciaPage() {
           </div>
         )}
       </Modal>
+      {/* FLOATING BALLOON SEARCH BAR ON SCROLL */}
+      {isScrolled && (
+        <div className="fixed top-18 sm:top-20 left-1/2 -translate-x-1/2 z-[45] flex flex-col items-center print:hidden animate-fade-in gap-3 w-[92vw] max-w-xl">
+          <div className="flex items-center gap-3 p-3 px-5 bg-card/95 backdrop-blur-2xl border border-primary/40 rounded-full shadow-[0_16px_36px_rgba(0,0,0,0.25)] transition-all duration-300 w-full">
+            <Search className="w-5 h-5 text-primary shrink-0" />
+            <input
+              type="text"
+              placeholder="Buscar colaborador na chamada..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="flex-1 bg-transparent border-none outline-none text-xs sm:text-sm font-black text-foreground placeholder:text-muted-foreground/60 uppercase tracking-wider"
+            />
+            {searchTerm ? (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-full transition-colors shrink-0 cursor-pointer"
+                title="Limpar busca"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            ) : (
+              <span className="text-[9px] font-black uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-full shrink-0">
+                Chamada
+              </span>
+            )}
+          </div>
+
+          {/* Suggestions Dropdown */}
+          {searchTerm && suggestions.length > 0 && (
+            <div className="w-full bg-card/95 backdrop-blur-2xl border border-border/60 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in duration-200 divide-y divide-border/30 max-h-72 overflow-y-auto scrollbar-thin">
+              <div className="p-3 px-5 bg-muted/40 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
+                <span>Sugestões Encontradas</span>
+                <span className="text-primary">{suggestions.length} resultado(s)</span>
+              </div>
+              {suggestions.map(f => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => scrollToEmployee(f.id)}
+                  className="w-full flex items-center justify-between p-3 px-5 hover:bg-muted/50 transition-colors text-left border-none bg-transparent cursor-pointer"
+                >
+                  <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
+                  <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">
+                    Ir até colaborador
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

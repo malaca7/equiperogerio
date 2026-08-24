@@ -128,37 +128,33 @@ interface StatCardProps {
 
 function StatCard({ label, value, trend, icon: Icon, color, bg, description, comparison }: StatCardProps) {
   return (
-    <div className="bg-card/85 backdrop-blur-xl border border-border/40 rounded-[2.5rem] p-6 shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all duration-500 group relative overflow-hidden cyber-scanline cyber-glow-primary">
-      <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl group-hover:bg-primary/10 transition-colors" />
-      
-      <div className="flex items-start justify-between relative z-10">
-        <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 group-hover:rotate-6 group-hover:scale-110 shadow-inner", bg)}>
-          <Icon className={cn("w-7 h-7", color)} />
+    <div className="bg-card border border-border rounded-xl p-5 transition-all flex flex-col justify-between">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</span>
+        <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center", bg)}>
+          <Icon className={cn("w-5 h-5", color)} />
         </div>
-        {trend && (
-          <div className="flex flex-col items-end">
-            <div className={cn(
-              "flex items-center gap-0.5 px-3 py-1 rounded-full text-[10px] font-black tracking-tighter border",
-              trend.isUp ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border-rose-500/20"
-            )}>
-              {trend.isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-              {trend.value}%
-            </div>
-            <span className="text-[8px] font-black uppercase text-muted-foreground mt-1 opacity-50">{trend.period}</span>
-          </div>
-        )}
       </div>
       
-      <div className="mt-6 relative z-10">
-        <p className="text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em] mb-1">{label}</p>
+      <div className="mt-4">
         <div className="flex items-baseline gap-2">
-          <p className="text-4xl font-black text-foreground tracking-tighter leading-none">{value}</p>
-          {description && <span className="text-[10px] font-bold text-muted-foreground uppercase">{description}</span>}
+          <p className="text-3xl font-bold text-foreground tracking-tight">{value}</p>
+          {description && <span className="text-xs text-muted-foreground font-medium">{description}</span>}
         </div>
-        {comparison && (
-          <p className="text-[9px] font-bold text-muted-foreground/60 mt-3 flex items-center gap-1.5 italic">
-             {comparison}
-          </p>
+        {trend && (
+          <div className="flex items-center gap-1 mt-1">
+            <span className={cn(
+              "text-xs font-semibold flex items-center gap-0.5",
+              trend.isUp ? "text-emerald-500" : "text-rose-500"
+            )}>
+              {trend.isUp ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+              {trend.value}%
+            </span>
+            <span className="text-[10px] text-muted-foreground">{trend.period}</span>
+          </div>
+        )}
+        {comparison && !trend && (
+          <p className="text-[11px] text-muted-foreground mt-1">{comparison}</p>
         )}
       </div>
     </div>
@@ -532,20 +528,33 @@ export function DashboardPage() {
   if (isLoading) return <div className="min-h-screen bg-background"><TopHeader title="Dashboard Administrativo" /><div className="pt-28 sm:pt-32 pb-20"><Loading text="Compilando inteligência analítica..." /></div></div>
 
   return (
-    <div className="min-h-screen bg-background pb-32">
-      <TopHeader title="Dashboard Administrativo" subtitle="Unidade de Inteligência Corporativa" />
+    <div className="min-h-screen bg-background pb-12">
+      <TopHeader title="Painel Operacional" subtitle="Central de Monitoramento e Gestão" />
       
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-28 sm:pt-32 pb-32">
-        {/* ── Compact Filter Bar ── */}
-        <div className="bg-card/85 dark:bg-card/45 backdrop-blur-xl border border-border/40 rounded-2xl px-4 py-2.5 mb-8 shadow-sm flex flex-wrap items-center gap-2 cyber-scanline cyber-glow-primary">
-          {/* Filter icon */}
-          <div className="w-7 h-7 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-            <Filter className="w-3.5 h-3.5" />
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-12 space-y-6">
+        
+        {/* Page Title & Main CTA Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Visão Geral da Operação</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{format(now, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</p>
+          </div>
+          <Link
+            to="/frequencia"
+            className="btn-primary shrink-0 self-start sm:self-auto"
+          >
+            <Clock className="w-4 h-4" /> Registrar Frequência
+          </Link>
+        </div>
+
+        {/* Filter Bar */}
+        <div className="bg-card border border-border rounded-xl p-3 flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium px-2 shrink-0">
+            <Filter className="w-3.5 h-3.5" /> Filtros:
           </div>
 
           {/* Encarregado */}
           <div className="relative">
-            <Shield className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-blue-500 pointer-events-none" />
             <select
               value={selectedEncarregadoId || ''}
               onChange={(e) => {
@@ -554,19 +563,18 @@ export function DashboardPage() {
                 setSelectedTeamId(null)
                 setSelectedFuncId(null)
               }}
-              className="pl-7 pr-6 py-1.5 bg-muted/40 border border-border/40 focus:border-primary/50 rounded-xl text-[11px] font-black text-foreground outline-none transition-all appearance-none cursor-pointer min-w-[140px] max-w-[180px]"
+              className="pl-3 pr-7 py-1.5 bg-secondary border border-border rounded-lg text-xs font-medium text-foreground outline-none appearance-none cursor-pointer"
             >
               <option value="">Todos Encarregados</option>
               {allEncarregados.map((enc) => (
                 <option key={enc.id} value={enc.id}>{enc.nome}</option>
               ))}
             </select>
-            <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 rotate-90 text-muted-foreground/50 pointer-events-none" />
+            <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 rotate-90 text-muted-foreground pointer-events-none" />
           </div>
 
           {/* Equipe */}
           <div className="relative">
-            <Shapes className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-primary pointer-events-none" />
             <select
               value={selectedTeamId || ''}
               onChange={(e) => {
@@ -581,30 +589,30 @@ export function DashboardPage() {
                   }
                 }
               }}
-              className="pl-7 pr-6 py-1.5 bg-muted/40 border border-border/40 focus:border-primary/50 rounded-xl text-[11px] font-black text-foreground outline-none transition-all appearance-none cursor-pointer min-w-[140px] max-w-[180px]"
+              className="pl-3 pr-7 py-1.5 bg-secondary border border-border rounded-lg text-xs font-medium text-foreground outline-none appearance-none cursor-pointer"
             >
               <option value="">Todas as Equipes</option>
               {filteredEquipesForSelect.map((eq) => (
                 <option key={eq.id} value={eq.id}>{eq.nome}</option>
               ))}
             </select>
-            <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 rotate-90 text-muted-foreground/50 pointer-events-none" />
+            <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 rotate-90 text-muted-foreground pointer-events-none" />
           </div>
 
           {/* Busca funcionário */}
-          <div className="relative flex-1 min-w-[160px] max-w-[220px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+          <div className="relative flex-1 min-w-[180px] max-w-[260px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <input
               type="text"
-              placeholder="Buscar funcionário..."
+              placeholder="Buscar colaborador..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
-              className="w-full pl-7 pr-3 py-1.5 bg-muted/40 border border-border/40 focus:border-primary/50 rounded-xl text-[11px] font-black text-foreground placeholder:text-muted-foreground/50 outline-none transition-all"
+              className="w-full pl-8 pr-3 py-1.5 bg-secondary border border-border rounded-lg text-xs font-medium text-foreground placeholder:text-muted-foreground outline-none"
             />
             {searchFocused && searchSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border/50 rounded-xl shadow-xl z-50 overflow-hidden backdrop-blur-xl">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-xl z-50 overflow-hidden">
                 {searchSuggestions.map(f => (
                   <button
                     key={f.id}
@@ -619,12 +627,12 @@ export function DashboardPage() {
                         if (team.encarregados?.length > 0) setSelectedEncarregadoId(team.encarregados[0].id)
                       }
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/60 transition-colors border-b border-border/20 last:border-0"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-muted transition-colors border-b border-border/40 last:border-0"
                   >
-                    <div className="w-6 h-6 rounded-lg bg-primary/10 flex items-center justify-center text-[10px] font-black text-primary shrink-0">{f.nome.charAt(0)}</div>
+                    <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary shrink-0">{f.nome.charAt(0)}</div>
                     <div className="min-w-0">
-                      <p className="text-xs font-black text-foreground truncate">{f.nome}</p>
-                      {f.cargo && <p className="text-[9px] text-muted-foreground uppercase truncate">{f.cargo}</p>}
+                      <p className="text-xs font-medium text-foreground truncate">{f.nome}</p>
+                      {f.cargo && <p className="text-[10px] text-muted-foreground truncate">{f.cargo}</p>}
                     </div>
                   </button>
                 ))}
@@ -635,105 +643,145 @@ export function DashboardPage() {
           {/* Active filter chips */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {selectedEncarregadoId && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-[10px] font-black text-blue-500">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-md text-xs font-medium text-primary">
                 {allEncarregados.find(e => e.id === selectedEncarregadoId)?.nome}
-                <button onClick={() => setSelectedEncarregadoId(null)} className="hover:text-rose-500 transition-colors ml-0.5"><X className="w-2.5 h-2.5" /></button>
+                <button onClick={() => setSelectedEncarregadoId(null)} className="hover:text-rose-500 transition-colors ml-0.5"><X className="w-3 h-3" /></button>
               </span>
             )}
             {selectedTeamId && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-full text-[10px] font-black text-primary">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-md text-xs font-medium text-primary">
                 {equipes.find(eq => eq.id === selectedTeamId)?.nome}
-                <button onClick={() => { setSelectedTeamId(null); setSelectedFuncId(null) }} className="hover:text-rose-500 transition-colors ml-0.5"><X className="w-2.5 h-2.5" /></button>
+                <button onClick={() => { setSelectedTeamId(null); setSelectedFuncId(null) }} className="hover:text-rose-500 transition-colors ml-0.5"><X className="w-3 h-3" /></button>
               </span>
             )}
             {selectedFuncId && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-[10px] font-black text-emerald-500">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-xs font-medium text-emerald-500">
                 {allFuncionarios.find(f => f.id === selectedFuncId)?.nome}
-                <button onClick={() => setSelectedFuncId(null)} className="hover:text-rose-500 transition-colors ml-0.5"><X className="w-2.5 h-2.5" /></button>
+                <button onClick={() => setSelectedFuncId(null)} className="hover:text-rose-500 transition-colors ml-0.5"><X className="w-3 h-3" /></button>
               </span>
             )}
           </div>
 
-          {/* Summary + Clear */}
-          <div className="ml-auto flex items-center gap-2 shrink-0">
-            <span className="text-[10px] font-bold text-muted-foreground/50 hidden md:block">
-              {(selectedEncarregadoId || selectedTeamId || selectedFuncId)
-                ? 'Filtro ativo'
-                : `${equipes.length} equipes · ${allFuncionarios.length} func.`}
-            </span>
-            {(selectedEncarregadoId || selectedTeamId || selectedFuncId) && (
-              <button
-                onClick={() => { setSelectedEncarregadoId(null); setSelectedTeamId(null); setSelectedFuncId(null) }}
-                className="flex items-center gap-1 px-2.5 py-1 bg-rose-500/10 text-rose-500 text-[10px] font-black rounded-xl border border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all active:scale-95"
+          {(selectedEncarregadoId || selectedTeamId || selectedFuncId) && (
+            <button
+              onClick={() => { setSelectedEncarregadoId(null); setSelectedTeamId(null); setSelectedFuncId(null) }}
+              className="ml-auto flex items-center gap-1 text-xs text-rose-500 hover:underline font-medium"
+            >
+              <X className="w-3 h-3" /> Limpar filtros
+            </button>
+          )}
+        </div>
+
+        {/* Bento Hub Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Main Operational Hero Bento Card */}
+          <div className="lg:col-span-7 bg-card border border-border rounded-xl p-6 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Efetivo Operacional</span>
+                <h3 className="text-lg font-bold text-foreground mt-0.5">Status de Presença do Dia</h3>
+              </div>
+              <div className="text-right">
+                <span className="text-3xl font-bold text-foreground tracking-tight">{metrics?.currentYield || 0}%</span>
+                <p className="text-[10px] text-muted-foreground uppercase font-medium">Taxa de Presença</p>
+              </div>
+            </div>
+
+            {/* Linear Progress Bar */}
+            <div className="my-6 space-y-2">
+              <div className="w-full h-3 bg-secondary rounded-full overflow-hidden flex">
+                <div
+                  className="bg-emerald-500 transition-all duration-500"
+                  style={{ width: `${stats?.presentes && stats?.totalRegistros ? Math.round((stats.presentes / stats.totalRegistros) * 100) : 0}%` }}
+                  title="Presentes"
+                />
+                <div
+                  className="bg-amber-500 transition-all duration-500"
+                  style={{ width: `${stats?.pendentes && stats?.totalRegistros ? Math.round((stats.pendentes / stats.totalRegistros) * 100) : 0}%` }}
+                  title="Pendentes"
+                />
+                <div
+                  className="bg-rose-500 transition-all duration-500"
+                  style={{ width: `${stats?.faltas && stats?.totalRegistros ? Math.round(((stats.faltas + stats.atestados) / stats.totalRegistros) * 100) : 0}%` }}
+                  title="Ausentes"
+                />
+              </div>
+            </div>
+
+            {/* Status Counters Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div className="bg-secondary/60 p-3 rounded-lg border border-border/50">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase">Presentes</span>
+                <p className="text-xl font-bold text-emerald-500 mt-0.5">{stats?.presentes || 0}</p>
+              </div>
+              <div className="bg-secondary/60 p-3 rounded-lg border border-border/50">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase">Ausências</span>
+                <p className="text-xl font-bold text-rose-500 mt-0.5">{(stats?.faltas || 0) + (stats?.atestados || 0)}</p>
+              </div>
+              <div className="bg-secondary/60 p-3 rounded-lg border border-border/50">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase">Pendentes</span>
+                <p className="text-xl font-bold text-amber-500 mt-0.5">{stats?.pendentes || 0}</p>
+              </div>
+              <div className="bg-secondary/60 p-3 rounded-lg border border-border/50">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase">Total Ativos</span>
+                <p className="text-xl font-bold text-foreground mt-0.5">{filteredFuncionarios.length}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Action Matrix Bento Card */}
+          <div className="lg:col-span-5 bg-card border border-border rounded-xl p-6 flex flex-col justify-between">
+            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider mb-4">Ações Rápidas</h3>
+            <div className="grid grid-cols-2 gap-3 flex-1">
+              <Link
+                to="/frequencia"
+                className="p-4 bg-secondary/70 hover:bg-secondary border border-border rounded-lg flex flex-col justify-between transition-all group"
               >
-                <X className="w-3 h-3" /> Limpar
-              </button>
-            )}
-          </div>
-        </div>
+                <Clock className="w-5 h-5 text-primary group-hover:scale-110 transition-transform" />
+                <div>
+                  <h4 className="text-xs font-bold text-foreground uppercase">Frequência</h4>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Chamada em 1-toque</p>
+                </div>
+              </Link>
 
-        {/* Command Center Header */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-12">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 px-4 py-1.5 bg-primary/10 border border-primary/20 rounded-full w-fit">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(var(--primary),0.6)]" />
-              <span className="text-[10px] font-black uppercase text-primary tracking-[0.3em]">Status: Em Operação</span>
-            </div>
-            <h2 className="text-5xl font-black text-foreground tracking-tighter leading-none">Visão Estratégica</h2>
-            <p className="text-base font-bold text-muted-foreground/60 max-w-xl italic">Consolidado tático de presença, eficácia por setor e movimentação de efetivo.</p>
-          </div>
-          
-          <div className="grid grid-cols-2 md:flex items-center gap-4">
-             <div className="bg-card/80 dark:bg-card/40 backdrop-blur-2xl border border-border/50 p-5 rounded-[2rem] shadow-sm flex items-center gap-4 group hover:border-primary/30 transition-all">
-              <div className="w-12 h-12 rounded-[1.25rem] bg-indigo-500/10 flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform shadow-inner">
-                <Users className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest leading-none mb-1.5">Total Efetivo</p>
-                <p className="text-lg font-black text-foreground">{filteredFuncionarios.length} <span className="text-[10px] text-muted-foreground/40 font-bold uppercase">Ativos</span></p>
-              </div>
-            </div>
-            <div className="bg-card/80 dark:bg-card/40 backdrop-blur-2xl border border-border/50 p-5 rounded-[2rem] shadow-sm flex items-center gap-4 group hover:border-emerald-500/30 transition-all">
-              <div className="w-12 h-12 rounded-[1.25rem] bg-emerald-500/10 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform shadow-inner">
-                <Target className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest leading-none mb-1.5">Meta de Fluxo</p>
-                <p className="text-lg font-black text-foreground">95.0%</p>
-              </div>
-            </div>
-          </div>
-        </div>
+              <Link
+                to="/escala"
+                className="p-4 bg-secondary/70 hover:bg-secondary border border-border rounded-lg flex flex-col justify-between transition-all group"
+              >
+                <CalendarDays className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
+                <div>
+                  <h4 className="text-xs font-bold text-foreground uppercase">Escalas</h4>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Localidades e turnos</p>
+                </div>
+              </Link>
 
-        {/* State-of-the-Art Dashboard Tab Navigation */}
-        <div className="flex bg-muted/30 p-1.5 rounded-[2rem] border border-border/30 gap-2 mb-10 w-fit">
-          <button
-            onClick={() => setDashboardTab('control')}
-            className={cn(
-              "px-8 py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all flex items-center gap-2.5 cursor-pointer",
-              dashboardTab === 'control'
-                ? "bg-card text-primary shadow-lg border border-border/10 font-black scale-105"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Activity className="w-4 h-4" /> Command Center
-          </button>
-          <button
-            onClick={() => setDashboardTab('forecast')}
-            className={cn(
-              "px-8 py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all flex items-center gap-2.5 cursor-pointer",
-              dashboardTab === 'forecast'
-                ? "bg-card text-primary shadow-lg border border-border/10 font-black scale-105"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Zap className="w-4 h-4 text-amber-500 animate-pulse" /> Previsão & Simulador AI
-          </button>
+              <Link
+                to="/atestados"
+                className="p-4 bg-secondary/70 hover:bg-secondary border border-border rounded-lg flex flex-col justify-between transition-all group"
+              >
+                <HeartPulse className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform" />
+                <div>
+                  <h4 className="text-xs font-bold text-foreground uppercase">Atestados</h4>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Licenças e médica</p>
+                </div>
+              </Link>
+
+              <Link
+                to="/frota"
+                className="p-4 bg-secondary/70 hover:bg-secondary border border-border rounded-lg flex flex-col justify-between transition-all group"
+              >
+                <Activity className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                <div>
+                  <h4 className="text-xs font-bold text-foreground uppercase">Frota</h4>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Veículos e rotas</p>
+                </div>
+              </Link>
+            </div>
+          </div>
         </div>
 
         {dashboardTab === 'control' ? (
           <>
-            {/* Intelligence Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
           <StatCard 
             label="Presenças Reais" 

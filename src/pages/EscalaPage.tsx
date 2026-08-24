@@ -1,4 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react'
+import { matchEmployeeSearch } from '../lib/searchUtils'
+import { createPortal } from 'react-dom'
 import { format, parseISO, startOfWeek, addDays, subWeeks, addWeeks, isSunday, isToday, getWeek, endOfMonth, startOfMonth, subMonths, addMonths, isSameDay } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { 
@@ -14,6 +16,7 @@ import { Modal } from '../components/ui/Modal'
 import { Button } from '../components/ui/Button'
 import { Loading } from '../components/ui/Loading'
 import { useToast } from '../components/ui/Toast'
+import { FuncionarioName } from '../components/ui/FuncionarioName'
 import { useFuncionarios, useSetores } from '../hooks/useFuncionarios'
 import { useEscalasMensal, useBatchUpsertEscalas, useUpdateEscala, useDeleteEscala } from '../hooks/useEscalas'
 import { useFrequenciaMensal } from '../hooks/useFrequencia'
@@ -71,6 +74,15 @@ export function EscalaPage() {
   const [selectedShareTeams, setSelectedShareTeams] = useState<string[]>([])
   const [selectedShareFuncs, setSelectedShareFuncs] = useState<string[]>([])
   const [shareFilterSearchTerm, setShareFilterSearchTerm] = useState('')
+
+  // Grid Employee Multi-Selection Filter Modal States
+  const [employeeFilterModalOpen, setEmployeeFilterModalOpen] = useState(false)
+  const [selectedFuncIds, setSelectedFuncIds] = useState<string[]>([])
+  const [funcFilterSearchTerm, setFuncFilterSearchTerm] = useState('')
+
+  // Grid Work/Folga Status Filter States
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'trabalho' | 'folga'>('todos')
+  const [statusFilterDate, setStatusFilterDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
 
   const [scaleFactor, setScaleFactor] = useState(1)
   const [isHeaderStuck, setIsHeaderStuck] = useState(false)
@@ -148,27 +160,42 @@ export function EscalaPage() {
   useEffect(() => {
     const handleScroll = () => {
       if (tableContainerRef.current) {
-        const rect = tableContainerRef.current.getBoundingClientRect()
-        // The fixed TopHeader height is 64px (h-16).
-        // The table header starts sticking as soon as the table container's top reaches 64px from viewport top.
-        setIsHeaderStuck(rect.top <= 64)
+        const tableRect = tableContainerRef.current.getBoundingClientRect()
+        // O TopHeader tem altura de 56px. Ativar a barra flutuante quando o topo da tabela se aproxima do TopHeader (<= 100px)
+        const shouldStick = tableRect.top <= 100 && tableRect.bottom > 50
+        setIsHeaderStuck(shouldStick)
       }
     }
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    // Check initial state
+
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true })
+    document.addEventListener('scroll', handleScroll, { capture: true, passive: true })
+    
+    const interval = setInterval(handleScroll, 100)
+
     handleScroll()
-    return () => window.removeEventListener('scroll', handleScroll)
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll, { capture: true } as any)
+      document.removeEventListener('scroll', handleScroll, { capture: true } as any)
+      clearInterval(interval)
+    }
   }, [])
 
   // Instantly synchronize horizontal scroll position on mounting of Floating Active Dock Bar
   useEffect(() => {
     if (isHeaderStuck) {
-      const timeout = setTimeout(() => {
+      const syncScroll = () => {
         if (floatingHeaderRef.current && tableContainerRef.current) {
           floatingHeaderRef.current.scrollLeft = tableContainerRef.current.scrollLeft
         }
-      }, 30)
-      return () => clearTimeout(timeout)
+      }
+      syncScroll()
+      const t1 = setTimeout(syncScroll, 20)
+      const t2 = setTimeout(syncScroll, 100)
+      return () => {
+        clearTimeout(t1)
+        clearTimeout(t2)
+      }
     }
   }, [isHeaderStuck])
 
@@ -205,7 +232,21 @@ export function EscalaPage() {
     if (!list.some(t => t.id === 'suspensao')) {
       list.push({ id: 'suspensao', letra: 'S', nome: 'Suspensão', bg: 'bg-rose-700', text: 'text-white', ring: 'ring-rose-600' })
     }
-    return list
+    if (!list.some(t => t.id === 'atestado')) {
+      list.push({ id: 'atestado', letra: 'AT', nome: 'Atestado', bg: 'bg-red-500', text: 'text-white', ring: 'ring-red-400' })
+    }
+    if (!list.some(t => t.id === 'afastamento')) {
+      list.push({ id: 'afastamento', letra: 'AF', nome: 'Afastamento', bg: 'bg-orange-950', text: 'text-white', ring: 'ring-orange-800' })
+    }
+    return list.map(t => {
+      if (t.id === 'atestado') {
+        return { ...t, letra: 'A', nome: 'Atestado', bg: t.bg || 'bg-red-500' }
+      }
+      if (t.id === 'afastamento') {
+        return { ...t, letra: 'AF', nome: 'Afastamento', bg: 'bg-orange-950', ring: 'ring-orange-800' }
+      }
+      return t
+    })
   }, [dbTiposEscala])
   const { data: feriados = [] } = useConfiguracao<any[]>('feriados', [])
   const { data: frequencias = [] } = useFrequenciaMensal(monthStr)
@@ -370,37 +411,86 @@ export function EscalaPage() {
   const batchMutation = useBatchUpsertEscalas()
   const deleteMutation = useDeleteEscala()
 
-  // Status mapping for fast lookups (customized Trabajo color settings)
-  const STATUS_MAP = useMemo(() => {
-    const list = [...(tiposEscala || DEFAULT_TIPOS_ESCALA)]
-    if (!list.some(t => t.id === 'hora_extra')) {
-      list.push({ id: 'hora_extra', letra: 'HE', nome: 'Hora Extra', bg: 'bg-blue-500', text: 'text-white', ring: 'ring-blue-400' })
-    }
-    if (!list.some(t => t.id === 'suspensao')) {
-      list.push({ id: 'suspensao', letra: 'S', nome: 'Suspensão', bg: 'bg-rose-700', text: 'text-white', ring: 'ring-rose-600' })
-    }
-    return list.reduce((acc: Record<string, TipoEscala>, t) => {
-      acc[t.id] = t
-      return acc
-    }, {})
-  }, [tiposEscala])
+  // Lookup scale details
+  const escalaMap = useMemo(() => {
+    const map: Record<string, any> = {}
+    escalas.forEach((e: any) => {
+      if (e.funcionario_id && e.data) {
+        const dStr = typeof e.data === 'string' ? e.data.substring(0, 10) : ''
+        if (dStr) {
+          map[`${e.funcionario_id}_${dStr}`] = e
+        }
+      }
+    })
+    return map
+  }, [escalas])
 
-  // Filter employees with active team validation
+  // Lookup frequency details
+  const freqMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    frequencias.forEach((f: any) => {
+      if (f.funcionario_id && f.data) {
+        const dateStr = typeof f.data === 'string' ? f.data.substring(0, 10) : ''
+        if (dateStr) {
+          map[`${f.funcionario_id}_${dateStr}`] = f.status
+        }
+      }
+    })
+    return map
+  }, [frequencias])
+
+  // Filter employees with active team validation and custom live filters
   const funcionarios = useMemo(() => {
     let list = allFuncionarios.filter(f => f.cargo?.toLowerCase() !== 'encarregado')
     if (teamInfo?.isRestricted) {
       list = list.filter(f => teamInfo.teamMemberIds.includes(f.id))
     }
+
     if (searchTerm) {
-      const s = searchTerm.toLowerCase()
-      list = list.filter(f => 
-        f.nome.toLowerCase().includes(s) || 
-        (f.apelido && f.apelido.toLowerCase().includes(s)) ||
-        f.matricula.toLowerCase().includes(s)
-      )
+      list = list.filter(f => matchEmployeeSearch(f, searchTerm))
     }
+
+    if (selectedFuncIds.length > 0) {
+      const set = new Set(selectedFuncIds)
+      list = list.filter(f => set.has(f.id))
+    }
+
+    if (statusFilter !== 'todos' && statusFilterDate) {
+      const freqToEscalaMap: Record<string, string> = {
+        'presente': 'presente',
+        'falta': 'folga',
+        'atestado': 'atestado',
+        'folga': 'repouso',
+        'ferias': 'ferias',
+        'licenca': 'licenca',
+        'suspensao': 'suspensao',
+        'hora_extra': 'hora_extra',
+      }
+
+      try {
+        const dateObj = parseISO(statusFilterDate)
+        const isSun = isSunday(dateObj)
+        const feriado = getFeriado(dateObj)
+
+        list = list.filter(f => {
+          const cellKey = `${f.id}_${statusFilterDate}`
+          const freqStatus = freqMap[cellKey]
+          const escala = escalaMap[cellKey]
+          const resolvedTipoId = escala?.tipo || (freqStatus ? freqToEscalaMap[freqStatus] : null) || ((isSun || feriado) ? 'repouso' : 'presente')
+          
+          const isFolga = ['repouso', 'compensar', 'folga_domingo', 'folga_feriado', 'ferias', 'atestado', 'folga'].includes(resolvedTipoId)
+          
+          if (statusFilter === 'trabalho') return !isFolga
+          if (statusFilter === 'folga') return isFolga
+          return true
+        })
+      } catch (err) {
+        console.error('Error filtering status date:', err)
+      }
+    }
+
     return list
-  }, [allFuncionarios, teamInfo, searchTerm])
+  }, [allFuncionarios, teamInfo, searchTerm, selectedFuncIds, statusFilter, statusFilterDate, escalaMap, freqMap, getFeriado])
 
   // Setores group
   const setores = useMemo(() => {
@@ -487,33 +577,20 @@ export function EscalaPage() {
     setSelectedShareFuncs([])
   }
 
-  // Lookup scale details
-  const escalaMap = useMemo(() => {
-    const map: Record<string, any> = {}
-    escalas.forEach((e: any) => {
-      if (e.funcionario_id && e.data) {
-        const dStr = typeof e.data === 'string' ? e.data.substring(0, 10) : ''
-        if (dStr) {
-          map[`${e.funcionario_id}_${dStr}`] = e
-        }
-      }
-    })
-    return map
-  }, [escalas])
-
-  // Lookup frequency details
-  const freqMap = useMemo(() => {
-    const map: Record<string, string> = {}
-    frequencias.forEach((f: any) => {
-      if (f.funcionario_id && f.data) {
-        const dateStr = typeof f.data === 'string' ? f.data.substring(0, 10) : ''
-        if (dateStr) {
-          map[`${f.funcionario_id}_${dateStr}`] = f.status
-        }
-      }
-    })
-    return map
-  }, [frequencias])
+  // Status mapping for fast lookups (customized Trabajo color settings)
+  const STATUS_MAP = useMemo(() => {
+    const list = [...(tiposEscala || DEFAULT_TIPOS_ESCALA)]
+    if (!list.some(t => t.id === 'hora_extra')) {
+      list.push({ id: 'hora_extra', letra: 'HE', nome: 'Hora Extra', bg: 'bg-blue-500', text: 'text-white', ring: 'ring-blue-400' })
+    }
+    if (!list.some(t => t.id === 'suspensao')) {
+      list.push({ id: 'suspensao', letra: 'S', nome: 'Suspensão', bg: 'bg-rose-700', text: 'text-white', ring: 'ring-rose-600' })
+    }
+    return list.reduce((acc: Record<string, TipoEscala>, t) => {
+      acc[t.id] = t
+      return acc
+    }, {})
+  }, [tiposEscala])
 
   // Synchronize observation input when activeCell changes
   useEffect(() => {
@@ -1278,13 +1355,15 @@ export function EscalaPage() {
         // Employee name
         ctx.fillStyle = '#1e293b'
         ctx.font = 'bold 10px Arial, Helvetica, sans-serif'
-        const displayName = func.nome.split(' ').slice(0, 2).join(' ').toUpperCase()
-        ctx.fillText(displayName, avatarX + avatarSize + 8, rowY + ROW_H / 2 + 0)
+        const hasApelido = Boolean(func.apelido && func.apelido.trim())
+        const mainText = (hasApelido ? func.apelido : func.nome.split(' ').slice(0, 2).join(' ')).toUpperCase()
+        ctx.fillText(mainText, avatarX + avatarSize + 8, rowY + ROW_H / 2 + (hasApelido ? -2 : 4))
 
-        // Apelido
-        ctx.fillStyle = '#94a3b8'
-        ctx.font = 'bold 8px Arial, Helvetica, sans-serif'
-        ctx.fillText((func.apelido || '—').toUpperCase(), avatarX + avatarSize + 8, rowY + ROW_H / 2 + 12)
+        if (hasApelido) {
+          ctx.fillStyle = '#94a3b8'
+          ctx.font = 'bold 8px Arial, Helvetica, sans-serif'
+          ctx.fillText(func.nome.toUpperCase(), avatarX + avatarSize + 8, rowY + ROW_H / 2 + 10)
+        }
 
         // Name column right border
         ctx.strokeStyle = '#e2e8f0'
@@ -1322,9 +1401,12 @@ export function EscalaPage() {
           const badgeY = rowY + (ROW_H - BADGE_SIZE) / 2
 
           // Badge background
+          const isAfastado = tipo.id === 'afastamento'
+          if (isAfastado) ctx.globalAlpha = 0.55
           ctx.fillStyle = colors.bg
           roundRect(badgeX, badgeY, BADGE_SIZE, BADGE_SIZE, 5)
           ctx.fill()
+          if (isAfastado) ctx.globalAlpha = 1.0
 
           // Badge text
           ctx.fillStyle = colors.text
@@ -1632,20 +1714,72 @@ export function EscalaPage() {
             </div>
 
             {/* Live Filter Inputs */}
-            <div className="flex flex-col md:flex-row items-center gap-2.5">
+            <div className="flex flex-col lg:flex-row items-center gap-2.5">
               {/* Search Bar */}
               <div className="relative flex-1 w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary animate-pulse" />
                 <input
                   type="text" 
-                  placeholder="Pesquisar por nome ou matrícula..."
+                  placeholder="Pesquisar por nome, apelido ou matrícula..."
                   value={searchTerm} 
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2.5 bg-muted/40 border border-transparent focus:border-primary/20 rounded-xl text-xs font-bold text-foreground placeholder:text-muted-foreground/30 outline-none transition-all focus:bg-card/50"
+                  className="w-full pl-10 pr-10 py-2.5 bg-muted/40 border border-border/30 focus:border-primary/40 rounded-xl text-xs font-bold text-foreground placeholder:text-muted-foreground/40 outline-none transition-all focus:bg-card/50"
                 />
                 {searchTerm && (
                   <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground">
                     <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Multi-Employee Filter Button */}
+              <button
+                onClick={() => setEmployeeFilterModalOpen(true)}
+                className={cn(
+                  "h-10 px-3.5 rounded-xl border flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shrink-0 w-full lg:w-auto",
+                  selectedFuncIds.length > 0
+                    ? "bg-primary text-white border-primary shadow-sm"
+                    : "bg-muted/40 text-muted-foreground border-border/30 hover:bg-card hover:text-foreground"
+                )}
+              >
+                <Filter className="w-4 h-4" />
+                <span>{selectedFuncIds.length > 0 ? `${selectedFuncIds.length} Colaborador(es)` : 'Filtrar Funcionários'}</span>
+              </button>
+
+              {/* Status Filter (Trabalho / Folga) */}
+              <div className="flex items-center gap-2 w-full lg:w-auto shrink-0">
+                <select
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value as any)}
+                  className="h-10 px-3 bg-muted/40 border border-border/30 rounded-xl text-[10px] font-black uppercase tracking-wider text-foreground focus:outline-none focus:border-primary/40 cursor-pointer flex-1 lg:flex-none"
+                >
+                  <option value="todos">Todos Status</option>
+                  <option value="trabalho">💼 Apenas Trabalhando</option>
+                  <option value="folga">💤 Apenas Em Folga</option>
+                </select>
+
+                {/* Date Picker for Status Filter */}
+                {statusFilter !== 'todos' && (
+                  <input
+                    type="date"
+                    value={statusFilterDate}
+                    onChange={e => setStatusFilterDate(e.target.value)}
+                    className="h-10 px-3 bg-muted/40 border border-border/30 rounded-xl text-xs font-bold text-foreground focus:outline-none focus:border-primary/40 cursor-pointer shrink-0"
+                  />
+                )}
+
+                {/* Clear All Filters Button */}
+                {(selectedFuncIds.length > 0 || statusFilter !== 'todos' || searchTerm) && (
+                  <button
+                    onClick={() => {
+                      setSelectedFuncIds([])
+                      setStatusFilter('todos')
+                      setSearchTerm('')
+                    }}
+                    className="h-10 px-3 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                    title="Limpar todos os filtros"
+                  >
+                    <X className="w-3.5 h-3.5" /> Limpar
                   </button>
                 )}
               </div>
@@ -1690,18 +1824,18 @@ export function EscalaPage() {
 
 
 
-        {/* FLOATING ACTIVE DOCK BAR - SYNCHRONIZED SCROLL */}
-        {isHeaderStuck && columnWidths.length > 0 && (
+        {/* FLOATING ACTIVE DOCK BAR - SYNCHRONIZED SCROLL VIA PORTAL */}
+        {isHeaderStuck && createPortal(
           <div 
             className={cn(
-              "fixed top-16 right-0 z-40 bg-card border-b-2 border-b-primary shadow-2xl flex select-none transition-all duration-300 md:pl-0 h-14",
+              "fixed top-14 right-0 z-50 bg-card border-b-2 border-b-primary shadow-2xl flex select-none md:pl-0 h-14",
               isSidebarCollapsed ? "left-0 md:left-20" : "left-0 md:left-64"
             )}
           >
             {/* Left spacer block for name alignment (pixel-perfect matching corner th!) */}
             <div 
               className="bg-card border-b border-r border-border/50 px-4 py-3 flex items-center justify-between shrink-0 shadow-[2px_0_10px_rgba(0,0,0,0.02)]"
-              style={{ width: columnWidths[0], minWidth: columnWidths[0] }}
+              style={{ width: columnWidths[0] || (isMobile ? 150 : 200), minWidth: columnWidths[0] || (isMobile ? 150 : 200) }}
             >
               <div className="flex items-center gap-2">
                 <Grid className="w-4 h-4 text-primary rotate-90 scale-105 text-primary animate-pulse" />
@@ -1719,14 +1853,15 @@ export function EscalaPage() {
                 const isT = isToday(day)
                 const isSun = isSunday(day)
                 const feriado = getFeriado(day)
-                const w = columnWidths[index + 1] ?? 42
+                const defaultW = viewMode === 'month' ? (isT ? 150 : 42) : (isT ? 240 : 80)
+                const w = columnWidths[index + 1] || defaultW
                 const dStr = format(day, 'yyyy-MM-dd')
                 return (
                   <div 
                     key={day.toISOString()}
                     onClick={() => handleDayHeaderClick(dStr)}
                     className={cn(
-                      "px-1 py-2 text-center border-b border-border/50 shrink-0 flex flex-col items-center justify-center transition-all relative",
+                      "px-1 py-2 text-center border-b border-border/50 shrink-0 flex flex-col items-center justify-center transition-all relative cursor-pointer",
                       isT && "z-10 bg-primary/[0.12] dark:bg-primary/[0.08] shadow-[5px_0_8px_-1px_rgba(0,0,0,0.12),-5px_0_8px_-1px_rgba(0,0,0,0.12)] dark:shadow-[5px_0_10px_-1px_rgba(0,0,0,0.45),-5px_0_10px_-1px_rgba(0,0,0,0.45)] border-x-transparent",
                       isSun && "bg-rose-500/35 dark:bg-rose-500/25 border-x border-x-rose-500/20",
                       feriado && "bg-purple-500/35 dark:bg-purple-500/25 border-b-purple-400 border-x border-x-purple-500/20",
@@ -1750,7 +1885,8 @@ export function EscalaPage() {
                 )
               })}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* Interactive Excel-like Grid Layout */}
@@ -1848,12 +1984,7 @@ export function EscalaPage() {
                                 {func.nome.charAt(0)}
                               </div>
                               <div className="min-w-0">
-                                <p className="text-[11px] sm:text-xs font-black text-foreground truncate max-w-[100px] sm:max-w-[140px] uppercase leading-tight colab-name">
-                                  {func.nome.split(' ').slice(0, 2).join(' ')}
-                                </p>
-                                <p className="text-[8px] font-black text-muted-foreground/60 uppercase tracking-widest mt-0.5 colab-matricula">
-                                  {func.apelido || '—'}
-                                </p>
+                                <FuncionarioName nome={func.nome} apelido={func.apelido} uppercase size="xs" />
                               </div>
                             </div>
                           </td>
@@ -1921,13 +2052,14 @@ export function EscalaPage() {
                                   </div>
                                 ) : (
                                   <div className={cn(
-                                    "mx-auto rounded-lg flex items-center justify-center font-black transition-all select-none border shadow-sm status-badge relative",
-                                    viewMode === 'month' 
-                                      ? 'w-7 h-7 text-[9px]' 
-                                      : 'w-9 h-9 sm:w-11 sm:h-11 text-xs',
-                                    tipo.bg, tipo.text,
-                                    "border-black/5 hover:scale-105 active:scale-95"
-                                  )}>
+                                     "mx-auto rounded-lg flex items-center justify-center font-black transition-all select-none border shadow-sm status-badge relative",
+                                     viewMode === 'month' 
+                                       ? 'w-7 h-7 text-[9px]' 
+                                       : 'w-9 h-9 sm:w-11 sm:h-11 text-xs',
+                                     tipo.bg, tipo.text,
+                                     tipo.id === 'afastamento' && "opacity-55 hover:opacity-100 transition-opacity",
+                                     "border-black/5 hover:scale-105 active:scale-95"
+                                   )}>
                                     {tipo.id === 'repouso' ? ((isSun || feriado) ? 'D' : 'R') : tipo.letra}
                                      {escala?.observacoes?.includes('[ADVERTÊNCIA]') && !isSharing && (
                                        <div 
@@ -2035,55 +2167,28 @@ export function EscalaPage() {
         </div>
       </div>
 
-      {/* BACKDROP OVERLAY FOR MOBILE BOTTOM SHEET */}
-      {activeCell && activeCell.rect && isMobile && (
-        <div 
-          className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
-          onClick={() => setActiveCell(null)}
-        />
-      )}
-
-      {/* QUICK STATUS POPOVER SELECTOR (EXCEL INSPIRED / RESPONSIVE DRAWER) */}
-      {activeCell && activeCell.rect && (
-        <div 
-          id="quick-status-popover"
-          className={cn(
-            "fixed z-[100] bg-card/95 backdrop-blur-md shadow-2xl transition-all duration-300 ring-1 ring-black/5 flex flex-col",
-            isMobile 
-              ? "bottom-0 left-0 right-0 w-full rounded-t-3xl border-t border-border/80 p-4 pb-6 animate-in slide-in-from-bottom duration-250"
-              : "border border-border/80 rounded-2xl p-4 w-80 animate-in fade-in zoom-in-95 duration-150"
-          )}
-          style={isMobile ? undefined : {
-            top: `${Math.min(window.innerHeight - 450, Math.max(10, activeCell.rect.bottom + window.scrollY - (typeof window !== 'undefined' ? window.pageYOffset : 0)))}px`,
-            left: `${Math.min(window.innerWidth - 340, Math.max(10, activeCell.rect.left - 100))}px`
-          }}
-        >
-          {/* Drag Indicator Handle only on Mobile */}
-          {isMobile && (
-            <div className="w-12 h-1 bg-muted rounded-full mx-auto mb-2 shrink-0" />
-          )}
-
-          {/* Popover Header */}
-          <div className="pb-2 mb-2 border-b border-border/30 flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-[12px] font-black text-foreground uppercase tracking-widest truncate">{activeCell.funcNome}</p>
-              <p className="text-[9px] text-muted-foreground font-bold tracking-wider uppercase mt-0.5">{activeCell.dateLabel}</p>
+      {/* QUICK STATUS MODAL (NATIVE APP MODAL - CENTERED ON SCREEN) */}
+      <Modal
+        open={!!activeCell}
+        onClose={() => setActiveCell(null)}
+        title="Modificação Rápida de Status"
+      >
+        {activeCell && (
+          <div className="space-y-4">
+            {/* Modal Subheader */}
+            <div className="bg-primary/5 border border-primary/20 p-3 rounded-2xl flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-black text-foreground uppercase tracking-tight truncate">{activeCell.funcNome}</p>
+                <p className="text-[10px] text-primary font-black tracking-widest uppercase mt-0.5">{activeCell.dateLabel}</p>
+              </div>
             </div>
-            <button 
-              onClick={() => setActiveCell(null)}
-              className="w-6 h-6 rounded-lg bg-muted/50 hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-all"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
 
-          <div className="space-y-3.5">
             {/* 1. Scale Status (Tipo de Escala) */}
             <div>
-              <p className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-widest mb-1.5 flex items-center gap-1">
-                <Grid className="w-3 h-3 text-primary" /> Status da Escala
+              <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-1.5 flex items-center gap-1.5">
+                <Grid className="w-3.5 h-3.5 text-primary" /> Status da Escala
               </p>
-              <div className="grid grid-cols-3 gap-1 max-h-36 overflow-y-auto pr-0.5 scrollbar-none">
+              <div className="grid grid-cols-4 gap-1 sm:gap-1.5">
                 {(tiposEscala || DEFAULT_TIPOS_ESCALA).map(t => {
                   const active = activeCell.currentTipo === t.id
                   const mapped = STATUS_MAP[t.id] || t
@@ -2092,13 +2197,13 @@ export function EscalaPage() {
                       key={t.id}
                       onClick={() => applySingleStatus(t.id)}
                       className={cn(
-                        "flex flex-col items-center justify-center text-center p-1 rounded-xl h-[38px] transition-all hover:scale-[1.02] active:scale-95 border hover:shadow-sm cursor-pointer",
+                        "flex flex-col items-center justify-center text-center p-1 sm:p-1.5 rounded-xl h-9 sm:h-10 transition-all hover:scale-[1.02] active:scale-95 border cursor-pointer",
                         mapped.bg, mapped.text,
-                        active ? "border-foreground ring-2 ring-primary" : "border-black/5"
+                        active ? "border-foreground ring-2 ring-primary font-black shadow-md" : "border-black/5"
                       )}
                     >
-                      <span className="text-[10px] font-black leading-none">{mapped.letra}</span>
-                      <span className="text-[6.5px] font-black opacity-75 uppercase tracking-wider mt-0.5 truncate max-w-full">{mapped.nome}</span>
+                      <span className="text-[10px] sm:text-xs font-black leading-none">{mapped.letra}</span>
+                      <span className="text-[7.5px] sm:text-[8px] font-black opacity-80 uppercase tracking-tight mt-0.5 truncate max-w-full">{mapped.nome}</span>
                     </button>
                   )
                 })}
@@ -2107,60 +2212,60 @@ export function EscalaPage() {
 
             {/* 2. Frequency / Attendance Status */}
             <div>
-              <p className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-widest mb-1.5 flex items-center gap-1">
-                <CheckSquare className="w-3 h-3 text-emerald-500" /> Presença / Chamada
+              <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2 flex items-center gap-1.5">
+                <CheckSquare className="w-3.5 h-3.5 text-emerald-500" /> Presença / Chamada
               </p>
-              <div className="flex gap-1.5">
+              <div className="flex gap-2">
                 <button
                   onClick={() => updateCellFrequency('presente')}
                   className={cn(
-                    "flex-1 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer",
+                    "flex-1 py-2.5 rounded-xl border text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer",
                     freqMap[`${activeCell.funcId}_${activeCell.dateStr}`] === 'presente' || freqMap[`${activeCell.funcId}_${activeCell.dateStr}`] === 'hora_extra'
-                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                      : "bg-muted/40 border-border/20 text-muted-foreground hover:bg-emerald-500/10 hover:text-emerald-500 hover:border-emerald-500/20"
+                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-black"
+                      : "bg-muted/40 border-border/20 text-muted-foreground hover:bg-emerald-500/10 hover:text-emerald-500"
                   )}
                 >
-                  <Check className="w-3 h-3" /> Presente
+                  <Check className="w-4 h-4 text-emerald-500" /> Presente
                 </button>
                 <button
                   onClick={() => updateCellFrequency('falta')}
                   className={cn(
-                    "flex-1 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer",
+                    "flex-1 py-2.5 rounded-xl border text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer",
                     freqMap[`${activeCell.funcId}_${activeCell.dateStr}`] === 'falta'
-                      ? "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400"
-                      : "bg-muted/40 border-border/20 text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/20"
+                      ? "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400 font-black"
+                      : "bg-muted/40 border-border/20 text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500"
                   )}
                 >
-                  <X className="w-3 h-3" /> Falta
+                  <X className="w-4 h-4 text-rose-500" /> Falta
                 </button>
                 <button
                   onClick={() => updateCellFrequency(null)}
-                  className="px-2.5 py-1.5 bg-muted/50 hover:bg-muted/80 border border-border/20 text-muted-foreground rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                  className="px-3 py-2.5 bg-muted/50 hover:bg-muted/80 border border-border/20 text-muted-foreground rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
                   title="Limpar chamada"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
             {/* 3. Notes / Observations */}
             <div>
-              <p className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-widest mb-1.5 flex items-center justify-between">
-                <span className="flex items-center gap-1">
-                  <Edit3 className="w-3 h-3 text-indigo-500" /> Observações do Dia
+              <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Edit3 className="w-3.5 h-3.5 text-indigo-500" /> Observações do Dia
                 </span>
                 {escalaMap[`${activeCell.funcId}_${activeCell.dateStr}`]?.observacoes && (
-                  <span className="text-[7.5px] bg-indigo-500/10 text-indigo-600 px-1 py-0.2 rounded font-black tracking-normal uppercase">Possui nota</span>
+                  <span className="text-[8px] bg-indigo-500/10 text-indigo-600 px-1.5 py-0.5 rounded font-black uppercase">Possui nota</span>
                 )}
               </p>
-              <div className="flex gap-1.5 items-stretch">
+              <div className="flex gap-2 items-stretch">
                 <input
                   type="text"
                   placeholder="Escreva uma observação..."
                   value={cellObservation}
                   onChange={(e) => setCellObservation(e.target.value)}
                   onBlur={() => saveCellObservation()}
-                  className="flex-1 px-3 py-1.5 bg-muted/40 border border-border/20 focus:border-indigo-500/40 rounded-xl text-[10px] font-bold text-foreground placeholder:text-muted-foreground/45 outline-none transition-all focus:bg-card/50"
+                  className="flex-1 px-3.5 py-2.5 bg-muted/40 border border-border/30 focus:border-indigo-500/40 rounded-xl text-xs font-bold text-foreground placeholder:text-muted-foreground/45 outline-none transition-all focus:bg-card"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       saveCellObservation()
@@ -2176,10 +2281,10 @@ export function EscalaPage() {
                       saveCellObservation('')
                       setActiveCell(null)
                     }}
-                    className="px-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                    className="px-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl flex items-center justify-center transition-all active:scale-95 cursor-pointer"
                     title="Apagar observação"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 )}
                 <button
@@ -2187,26 +2292,125 @@ export function EscalaPage() {
                     saveCellObservation()
                     setActiveCell(null)
                   }}
-                  className="px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center shadow-md shadow-indigo-600/10 transition-all active:scale-95 cursor-pointer"
+                  className="px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center shadow-md shadow-indigo-600/10 transition-all active:scale-95 cursor-pointer"
                 >
                   Salvar
                 </button>
               </div>
             </div>
-          </div>
 
-          <div className="mt-3 pt-2 border-t border-border/30 flex gap-2">
+            {/* Footer Action */}
+            <div className="pt-3 border-t border-border/30 flex gap-2">
+              <button
+                onClick={() => applySingleStatus(null)}
+                className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" /> Limpar Escala deste Dia
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* MODAL DE FILTRO DE FUNCIONÁRIOS DA GRADE */}
+      <Modal
+        open={employeeFilterModalOpen}
+        onClose={() => setEmployeeFilterModalOpen(false)}
+        title="Filtrar Funcionários na Grade"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground font-semibold">
+            Marque os funcionários específicos que você deseja visualizar na grade da escala:
+          </p>
+
+          <div className="flex items-center justify-between gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/45" />
+              <input
+                type="text"
+                placeholder="Pesquisar por nome ou apelido..."
+                value={funcFilterSearchTerm}
+                onChange={e => setFuncFilterSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-muted/30 border border-border/30 rounded-xl text-xs font-bold focus:outline-none focus:border-primary/40"
+              />
+            </div>
             <button
-              onClick={() => applySingleStatus(null)}
-              className="flex-1 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+              onClick={() => {
+                if (selectedFuncIds.length === allFuncionarios.length) {
+                  setSelectedFuncIds([])
+                } else {
+                  setSelectedFuncIds(allFuncionarios.map(f => f.id))
+                }
+              }}
+              className="px-3 py-2.5 bg-muted/50 hover:bg-muted text-muted-foreground text-[9px] font-black uppercase tracking-wider rounded-xl transition-all shrink-0 cursor-pointer"
             >
-              <Trash2 className="w-3.5 h-3.5" /> Limpar Escala
+              {selectedFuncIds.length === allFuncionarios.length ? 'Desmarcar Todos' : 'Marcar Todos'}
             </button>
           </div>
+
+          <div className="max-h-[320px] overflow-y-auto space-y-1.5 pr-1 border border-border/20 p-2 rounded-2xl bg-muted/10">
+            {allFuncionarios
+              .filter(f => f.cargo?.toLowerCase() !== 'encarregado')
+              .filter(f => {
+                if (!funcFilterSearchTerm) return true
+                const s = funcFilterSearchTerm.toLowerCase()
+                return f.nome.toLowerCase().includes(s) || (f.apelido && f.apelido.toLowerCase().includes(s))
+              })
+              .sort((a, b) => (a.apelido || a.nome).localeCompare(b.apelido || b.nome))
+              .map(f => {
+                const isSelected = selectedFuncIds.includes(f.id)
+                const dispName = (f.apelido && f.apelido.trim().toLowerCase() !== f.nome.trim().toLowerCase()) ? f.apelido : f.nome
+                return (
+                  <label
+                    key={f.id}
+                    className={cn(
+                      "flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer select-none",
+                      isSelected ? "bg-primary/10 border-primary/30 text-foreground" : "bg-card/40 border-transparent hover:bg-muted/40 text-muted-foreground"
+                    )}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          setSelectedFuncIds(prev =>
+                            prev.includes(f.id) ? prev.filter(id => id !== f.id) : [...prev, f.id]
+                          )
+                        }}
+                        className="rounded border-border text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                      />
+                      <div className="min-w-0">
+                        <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
+                      </div>
+                    </div>
+                    {f.setor && (
+                      <span className="text-[8px] font-black uppercase tracking-wider text-muted-foreground/60 px-2 py-0.5 rounded bg-muted/40 shrink-0">
+                        {f.setor}
+                      </span>
+                    )}
+                  </label>
+                )
+              })}
+          </div>
+
+          <div className="pt-3 border-t border-border/30 flex gap-2">
+            <button
+              onClick={() => setEmployeeFilterModalOpen(false)}
+              className="flex-1 py-3 bg-primary hover:bg-primary/95 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md cursor-pointer"
+            >
+              Aplicar Filtro ({selectedFuncIds.length > 0 ? selectedFuncIds.length : 'Todos'})
+            </button>
+            {selectedFuncIds.length > 0 && (
+              <button
+                onClick={() => setSelectedFuncIds([])}
+                className="px-4 py-3 bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
         </div>
-      )}
-
-
+      </Modal>
 
       {/* BULK SELECTION ACTIONS MODAL */}
       <Modal
@@ -2430,8 +2634,7 @@ export function EscalaPage() {
                             className="rounded border-border text-primary focus:ring-primary w-3.5 h-3.5"
                           />
                           <div className="flex-1 min-w-0">
-                            <span className="text-xs font-bold text-foreground block truncate">{func.nome}</span>
-                            {func.apelido && <span className="text-[9px] font-semibold text-muted-foreground block">{func.apelido}</span>}
+                            <FuncionarioName nome={func.nome} apelido={func.apelido} uppercase size="xs" />
                           </div>
                         </label>
                       )
@@ -2486,8 +2689,7 @@ export function EscalaPage() {
                             className="rounded border-border text-primary focus:ring-primary w-3.5 h-3.5"
                           />
                           <div className="flex-1 min-w-0">
-                            <span className="text-xs font-bold text-foreground block truncate">{func.nome}</span>
-                            {func.apelido && <span className="text-[9px] font-semibold text-muted-foreground block">{func.apelido}</span>}
+                            <FuncionarioName nome={func.nome} apelido={func.apelido} uppercase size="xs" />
                           </div>
                         </label>
                       )

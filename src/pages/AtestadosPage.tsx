@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { format, parseISO, eachDayOfInterval, differenceInDays, isSunday } from 'date-fns'
+import { format, parseISO, eachDayOfInterval, differenceInDays, isSunday, addDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { 
   Plus, FileText, Calendar, Trash2, Search, FileUp, Eye, Activity, 
@@ -99,6 +99,7 @@ export function AtestadosPage() {
   const emptyForm = {
     funcionario_id: '',
     data_inicio: format(new Date(), 'yyyy-MM-dd'),
+    dias: 1,
     data_fim: format(new Date(), 'yyyy-MM-dd'),
     cid: '',
     motivo: '',
@@ -108,6 +109,20 @@ export function AtestadosPage() {
     pdf_sst_name: ''
   }
   const [formData, setFormData] = useState(emptyForm)
+
+  useEffect(() => {
+    if (formData.data_inicio && formData.dias > 0) {
+      try {
+        const start = parseISO(formData.data_inicio)
+        const computedFim = format(addDays(start, formData.dias - 1), 'yyyy-MM-dd')
+        if (computedFim !== formData.data_fim) {
+          setFormData(prev => ({ ...prev, data_fim: computedFim }))
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [formData.data_inicio, formData.dias])
 
   const { data: allFuncionarios = [], isLoading: loadF } = useFuncionarios({ status: 'ativo' })
   const { data: atestados = [], isLoading: loadA } = useConfiguracao<AtestadoRecord[]>('atestados_records', [])
@@ -352,12 +367,21 @@ export function AtestadosPage() {
   }
 
   const openEdit = (a: AtestadoRecord) => {
+    let computedDays = 1
+    try {
+      if (a.data_inicio && a.data_fim) {
+        computedDays = Math.max(1, differenceInDays(parseISO(a.data_fim), parseISO(a.data_inicio)) + 1)
+      }
+    } catch {
+      computedDays = 1
+    }
     setFormData({
       funcionario_id: a.funcionario_id,
       data_inicio: a.data_inicio,
+      dias: computedDays,
       data_fim: a.data_fim,
-      cid: a.cid,
-      motivo: a.motivo,
+      cid: a.cid || '',
+      motivo: a.motivo || '',
       pdf_url: a.pdf_url || '',
       pdf_name: a.pdf_name || '',
       pdf_sst_url: a.pdf_sst_url || '',
@@ -369,7 +393,7 @@ export function AtestadosPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.funcionario_id || !formData.data_inicio || !formData.data_fim) {
+    if (!formData.funcionario_id || !formData.data_inicio || !formData.dias) {
       return toast('Preencha os campos obrigatórios', 'warning')
     }
 
@@ -1197,12 +1221,13 @@ export function AtestadosPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-muted-foreground/70 ml-2 tracking-widest flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5" /> Fim *
+                  <Clock className="w-3.5 h-3.5" /> Quantidade de Dias *
                 </label>
                 <input 
-                  type="date" 
-                  value={formData.data_fim} 
-                  onChange={e => setFormData({ ...formData, data_fim: e.target.value })} 
+                  type="number" 
+                  min="1"
+                  value={formData.dias} 
+                  onChange={e => setFormData({ ...formData, dias: Math.max(1, parseInt(e.target.value) || 1) })} 
                   className="w-full px-4 py-3 bg-card border border-border/50 focus:border-primary/45 rounded-2xl text-sm font-bold text-foreground outline-none transition-all" 
                 />
               </div>
@@ -1211,17 +1236,15 @@ export function AtestadosPage() {
             {/* Live days display badge */}
             <div className="flex items-center justify-between border-t border-border/20 pt-3">
               <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground/60 flex items-center gap-1">
-                <Info className="w-3.5 h-3.5" /> Período Estimado
+                <Info className="w-3.5 h-3.5" /> Período Calculado
               </span>
-              {formCalculatedDays > 0 ? (
+              {formData.dias > 0 ? (
                 <span className="text-[10.5px] font-black uppercase px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 tracking-wider">
-                  {formCalculatedDays} Dia{formCalculatedDays > 1 ? 's' : ''} de Afastamento
+                  {formData.dias} Dia{formData.dias > 1 ? 's' : ''} (Até {safeFormatDate(formData.data_fim)})
                 </span>
-              ) : formCalculatedDays === 0 ? (
-                <span className="text-[9px] font-bold uppercase text-muted-foreground/45">Insira as datas</span>
               ) : (
                 <span className="text-[10px] font-black uppercase px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/25 text-rose-500 tracking-wider flex items-center gap-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> Datas inválidas
+                  <AlertCircle className="w-3.5 h-3.5" /> Quantidade inválida
                 </span>
               )}
             </div>
@@ -1230,11 +1253,11 @@ export function AtestadosPage() {
           {/* CID input */}
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase text-muted-foreground/70 ml-2 tracking-widest flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5" /> CID (Classificação Internacional de Doenças)
+              <Activity className="w-3.5 h-3.5" /> CID (Opcional - Classificação Internacional de Doenças)
             </label>
             <input 
               type="text" 
-              placeholder="Ex: M54.5 (Dor lombar baixa)" 
+              placeholder="Ex: M54.5 (Opcional)" 
               value={formData.cid} 
               onChange={e => setFormData({ ...formData, cid: e.target.value.toUpperCase() })} 
               className="w-full px-4 py-3.5 bg-muted/40 dark:bg-muted/15 border border-border/50 focus:border-primary/40 rounded-2xl text-sm font-bold text-foreground outline-none transition-colors" 

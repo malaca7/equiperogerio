@@ -53,7 +53,8 @@ export function useMenuConfig(fallback: MenuConfig) {
           if (mod.paginas) {
             mod.paginas = mod.paginas.map(pag => {
               if (pag.id === 'localidades') {
-                if (pag.rota === '/escala/localidades') {
+                if (pag.rota === '/escala/localidades' || pag.rota === '/metaerota') {
+                  pag.rota = '/metaerota'
                   if (pag.label !== 'Meta e Rota' || pag.icone !== 'Navigation2') {
                     pag.label = 'Meta e Rota'
                     pag.icone = 'Navigation2'

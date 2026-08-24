@@ -811,7 +811,7 @@ export function OrganizacaoVarricaoPage() {
             </Link>
 
             <Link
-              to="/escala/localidades"
+              to="/metaerota"
               className="px-4 py-2.5 rounded-2xl bg-muted/60 hover:bg-muted text-foreground text-xs font-bold transition-all border border-border/50 flex items-center gap-1.5 shadow-sm"
             >
               <Target className="w-4 h-4 text-blue-500" />

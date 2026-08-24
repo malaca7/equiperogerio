@@ -84,17 +84,19 @@ export function EquipesPage() {
   const { hasPermission, user } = useAuth()
   const { data: userTeam, isLoading: isLoadingUserTeam } = useUserTeam()
   
-  // Permissão de gerenciamento global (Admin / Gerente Geral)
-  const hasGlobalManage = hasPermission('equipes', 'gerenciar') || hasPermission('equipes', 'administrar') || hasPermission('funcionarios', 'gerenciar') || !!user?.isAdmin
-  const isEncarregado = (userTeam?.isRestricted ?? false) || (user?.roles?.some(r => r.nome.toUpperCase().includes('ENCARREGADO')) ?? false)
-  const isEncarregadoOnly = !hasGlobalManage && isEncarregado
+  const isRestrictedUser = userTeam?.isRestricted ?? false
   const userTeamIds = userTeam?.teamIds ?? []
 
-  const canEdit = hasGlobalManage || isEncarregado
+  // Permissão de gerenciamento global (Apenas Admin / Gerente Geral sem restrição de equipe)
+  const hasGlobalManage = (!!user?.isAdmin || (hasPermission('equipes', 'administrar') && !isRestrictedUser)) && !isRestrictedUser
+  const isEncarregado = isRestrictedUser || (user?.roles?.some(r => r.nome.toUpperCase().includes('ENCARREGADO')) ?? false)
+  const isEncarregadoOnly = isRestrictedUser || !hasGlobalManage
+
+  const canEdit = hasGlobalManage || isRestrictedUser
   const canAdmin = hasGlobalManage
 
-  // O cargo com permissão de gerenciamento pode gerenciar todas as equipes.
-  // O cargo com permissão de visualização só gerencia a equipe da qual ele for encarregado.
+  // O cargo com permissão de gerenciamento global pode gerenciar todas as equipes.
+  // O encarregado só gerencia a equipe da qual ele for encarregado.
   const canManageTeam = (equipeId: string) => {
     if (hasGlobalManage) return true
     return userTeamIds.includes(equipeId)
@@ -411,8 +413,9 @@ export function EquipesPage() {
 
   const filtered = equipes
     .filter(eq => {
-      if (hasGlobalManage) return true
-      if (isEncarregado && userTeamIds.length > 0) return userTeamIds.includes(eq.id)
+      if (isRestrictedUser || !hasGlobalManage) {
+        return userTeamIds.includes(eq.id)
+      }
       return true
     })
     .filter(eq => eq.nome.toLowerCase().includes(search.toLowerCase()))
@@ -807,16 +810,10 @@ export function EquipesPage() {
                   <div className="flex gap-2 w-full">
                     {canManageTeam(eq.id) && (
                       <Button onClick={() => { setSelectedEquipeId(eq.id); setTab('membros'); setMemSearch('') }}
-                        className="flex-1 h-10 rounded-xl bg-primary/10 text-primary font-black text-[11px] uppercase tracking-wider hover:bg-primary/20 transition-all flex items-center justify-center">
-                        <UserCheck className="w-3.5 h-3.5 mr-1.5" /> {isEncarregadoOnly ? "Membros" : "Gerenciar"}
+                        className="w-full h-10 rounded-xl bg-primary/10 text-primary font-black text-[11px] uppercase tracking-wider hover:bg-primary/20 transition-all flex items-center justify-center">
+                        <UserCheck className="w-3.5 h-3.5 mr-1.5" /> {isEncarregadoOnly ? "Membros da Equipe" : "Gerenciar Equipe"}
                       </Button>
                     )}
-                    <Link
-                      to={`/escala/mapeamento?equipeId=${eq.id}`}
-                      className="flex-1 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-black text-[11px] uppercase tracking-wider hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <Route className="w-3.5 h-3.5" /> Varrição
-                    </Link>
                   </div>
                 </div>
               )
