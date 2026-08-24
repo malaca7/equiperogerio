@@ -475,7 +475,7 @@ export function Sidebar() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-black text-foreground truncate group-hover:text-primary transition-colors">
-                    {user?.profile?.apelido || user?.profile?.nome}
+                    {(user?.profile as any)?.apelido || user?.profile?.nome}
                   </p>
                   <p className="text-[11px] font-bold text-muted-foreground truncate uppercase tracking-wider">
                     {userRole || 'Colaborador'}
