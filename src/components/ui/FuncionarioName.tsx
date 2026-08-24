@@ -32,34 +32,34 @@ export function FuncionarioName({
   const displayNome = uppercase ? cleanNome.toUpperCase() : cleanNome
 
   const mainSizeClass = {
-    xs: 'text-xs',
-    sm: 'text-sm font-semibold',
-    md: 'text-base font-semibold',
-    lg: 'text-lg font-bold',
+    xs: 'text-xs font-black tracking-tight',
+    sm: 'text-sm font-black tracking-tight',
+    md: 'text-base font-black tracking-tight',
+    lg: 'text-lg font-black tracking-tight',
   }[size]
 
   const subSizeClass = {
-    xs: 'text-[10px]',
-    sm: 'text-[11px]',
-    md: 'text-xs',
-    lg: 'text-sm',
+    xs: 'text-[9.5px] font-medium opacity-75',
+    sm: 'text-[10.5px] font-medium opacity-75',
+    md: 'text-xs font-medium opacity-75',
+    lg: 'text-sm font-medium opacity-75',
   }[size]
 
   if (inline) {
     if (hasApelido) {
       return (
         <span className={cn('inline-flex items-baseline gap-1.5 min-w-0', className)}>
-          <span className={cn(mainSizeClass, 'text-foreground truncate', nicknameClassName)}>
+          <span className={cn(mainSizeClass, 'text-foreground truncate drop-shadow-xs', nicknameClassName)}>
             {displayApelido}
           </span>
-          <span className={cn(subSizeClass, 'text-muted-foreground font-normal truncate', nameClassName)}>
+          <span className={cn(subSizeClass, 'text-muted-foreground truncate', nameClassName)}>
             ({displayNome})
           </span>
         </span>
       )
     }
     return (
-      <span className={cn(mainSizeClass, 'text-foreground truncate', className)}>
+      <span className={cn(mainSizeClass, 'text-foreground truncate font-black', className)}>
         {displayNome}
       </span>
     )
@@ -68,10 +68,10 @@ export function FuncionarioName({
   if (hasApelido) {
     return (
       <div className={cn('flex flex-col justify-center leading-tight min-w-0', className)}>
-        <span className={cn(mainSizeClass, 'text-foreground truncate', nicknameClassName)}>
+        <span className={cn(mainSizeClass, 'text-foreground truncate leading-snug drop-shadow-xs', nicknameClassName)}>
           {displayApelido}
         </span>
-        <span className={cn(subSizeClass, 'text-muted-foreground font-normal truncate leading-tight', nameClassName)}>
+        <span className={cn(subSizeClass, 'text-muted-foreground truncate leading-none mt-0.5', nameClassName)}>
           {displayNome}
         </span>
       </div>
@@ -80,7 +80,7 @@ export function FuncionarioName({
 
   return (
     <div className={cn('flex flex-col justify-center leading-tight min-w-0', className)}>
-      <span className={cn(mainSizeClass, 'text-foreground truncate', nicknameClassName)}>
+      <span className={cn(mainSizeClass, 'text-foreground truncate font-black', nicknameClassName)}>
         {displayNome}
       </span>
     </div>

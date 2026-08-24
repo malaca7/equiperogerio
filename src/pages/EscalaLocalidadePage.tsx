@@ -278,7 +278,7 @@ export function EscalaLocalidadePage() {
 
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 150)
+      setIsScrolled(window.scrollY > 120)
     }
     window.addEventListener('scroll', handleScroll, { passive: true })
     handleScroll()

@@ -154,7 +154,7 @@ function ProtectedLayout() {
     <>
       <Sidebar />
       <GlobalTopHeader />
-      <main className={`transition-all duration-300 min-h-screen ${isSidebarCollapsed ? 'md:pl-20' : 'md:pl-72'} pb-24 md:pb-0 pt-16`}>
+      <main className={`transition-all duration-300 min-h-screen ${isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'} pt-16`}>
         <Suspense fallback={<Loading size="lg" text="Carregando..." fullscreen variant="dots" />}>
           <Routes>
             <Route path="/" element={<DefaultRedirect />} />
@@ -208,7 +208,6 @@ function ProtectedLayout() {
           </Routes>
         </Suspense>
       </main>
-      <BottomNavBar />
     </>
   )
 }
