@@ -5669,36 +5669,41 @@ export function EscalaLocalidadePage() {
         </Modal>
       )}
 
-      {/* FLOATING BALLOON SEARCH BAR */}
+      {/* FLOATING BALLOON SEARCH BAR ON SCROLL */}
       {isScrolled && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center print:hidden animate-fade-in gap-3.5 w-[90vw] max-w-xl">
+        <div className="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center print:hidden animate-in fade-in slide-in-from-top-4 duration-300 gap-3 w-[92vw] max-w-xl">
           {/* Input container balloon */}
-          <div className="flex items-center gap-3.5 p-3.5 px-6 bg-card/95 dark:bg-card/85 backdrop-blur-3xl border border-primary/40 rounded-full shadow-[0_25px_50px_-12px_rgba(var(--primary),0.25)] dark:shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] transition-all duration-300 ease-out cyber-glow-primary w-full">
-            <Search className="w-5 h-5 text-primary shrink-0" />
+          <div className="flex items-center gap-3 p-3.5 px-6 bg-card/95 dark:bg-card/90 backdrop-blur-2xl border-2 border-primary/50 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.3)] transition-all duration-300 w-full">
+            <Search className="w-5 h-5 text-primary shrink-0 animate-pulse" />
             <input
               type="text"
-              placeholder="Pesquisar colaborador..."
+              placeholder="Pesquisar colaborador na escala..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="flex-1 bg-transparent border-none outline-none text-xs sm:text-sm md:text-base font-black text-foreground placeholder:text-muted-foreground/45 focus:ring-0 p-0 uppercase tracking-wider"
+              className="flex-1 bg-transparent border-none outline-none text-xs sm:text-sm md:text-base font-black text-foreground placeholder:text-muted-foreground/60 focus:ring-0 p-0 uppercase tracking-wider"
             />
-            {searchTerm && (
+            {searchTerm ? (
               <button
                 type="button"
                 onClick={clearSearch}
-                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-full transition-colors shrink-0"
+                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-full transition-colors shrink-0 cursor-pointer"
+                title="Limpar busca"
               >
                 <X className="w-4.5 h-4.5" />
               </button>
+            ) : (
+              <span className="text-[9px] font-black uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-full shrink-0 border border-primary/20">
+                Meta & Rota
+              </span>
             )}
           </div>
 
-          {/* Suggestions Panel */}
+          {/* Suggestions Panel Opening Below */}
           {searchTerm && suggestions.length > 0 && (
-            <div className="absolute bottom-full left-0 right-0 mb-3 w-full bg-card/95 dark:bg-card/90 backdrop-blur-3xl border border-border/40 rounded-[2.25rem] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden animate-slide-down flex flex-col divide-y divide-border/20 z-[9999] cyber-scanline cyber-glow-primary">
-              <div className="p-4.5 px-6 bg-muted/20 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
-                <span>Sugestões</span>
-                <span className="text-primary">{suggestions.length} encontrados</span>
+            <div className="w-full bg-card/95 dark:bg-card/90 backdrop-blur-2xl border border-border/60 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in duration-200 divide-y divide-border/20 z-[9999]">
+              <div className="p-3.5 px-6 bg-muted/40 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
+                <span>Sugestões Encontradas</span>
+                <span className="text-primary">{suggestions.length} resultado(s)</span>
               </div>
               <div className="max-h-72 overflow-y-auto scrollbar-thin">
                 {suggestions.map(f => {

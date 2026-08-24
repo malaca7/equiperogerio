@@ -1566,9 +1566,9 @@ export function FrequenciaPage() {
       </Modal>
       {/* FLOATING BALLOON SEARCH BAR ON SCROLL */}
       {isScrolled && (
-        <div className="fixed top-18 sm:top-20 left-1/2 -translate-x-1/2 z-[45] flex flex-col items-center print:hidden animate-fade-in gap-3 w-[92vw] max-w-xl">
-          <div className="flex items-center gap-3 p-3 px-5 bg-card/95 backdrop-blur-2xl border border-primary/40 rounded-full shadow-[0_16px_36px_rgba(0,0,0,0.25)] transition-all duration-300 w-full">
-            <Search className="w-5 h-5 text-primary shrink-0" />
+        <div className="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center print:hidden animate-in fade-in slide-in-from-top-4 duration-300 gap-3 w-[92vw] max-w-xl">
+          <div className="flex items-center gap-3 p-3.5 px-6 bg-card/95 dark:bg-card/90 backdrop-blur-2xl border-2 border-primary/50 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.3)] transition-all duration-300 w-full">
+            <Search className="w-5 h-5 text-primary shrink-0 animate-pulse" />
             <input
               type="text"
               placeholder="Buscar colaborador na chamada..."
@@ -1583,10 +1583,10 @@ export function FrequenciaPage() {
                 className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-full transition-colors shrink-0 cursor-pointer"
                 title="Limpar busca"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4.5 h-4.5" />
               </button>
             ) : (
-              <span className="text-[9px] font-black uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-full shrink-0">
+              <span className="text-[9px] font-black uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-full shrink-0 border border-primary/20">
                 Chamada
               </span>
             )}
@@ -1594,8 +1594,8 @@ export function FrequenciaPage() {
 
           {/* Suggestions Dropdown */}
           {searchTerm && suggestions.length > 0 && (
-            <div className="w-full bg-card/95 backdrop-blur-2xl border border-border/60 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in duration-200 divide-y divide-border/30 max-h-72 overflow-y-auto scrollbar-thin">
-              <div className="p-3 px-5 bg-muted/40 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
+            <div className="w-full bg-card/95 backdrop-blur-2xl border border-border/60 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in duration-200 divide-y divide-border/30 max-h-72 overflow-y-auto scrollbar-thin z-[9999]">
+              <div className="p-3.5 px-6 bg-muted/40 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
                 <span>Sugestões Encontradas</span>
                 <span className="text-primary">{suggestions.length} resultado(s)</span>
               </div>
@@ -1604,7 +1604,7 @@ export function FrequenciaPage() {
                   key={f.id}
                   type="button"
                   onClick={() => scrollToEmployee(f.id)}
-                  className="w-full flex items-center justify-between p-3 px-5 hover:bg-muted/50 transition-colors text-left border-none bg-transparent cursor-pointer"
+                  className="w-full flex items-center justify-between p-3.5 px-6 hover:bg-muted/50 transition-colors text-left border-none bg-transparent cursor-pointer"
                 >
                   <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
                   <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">
