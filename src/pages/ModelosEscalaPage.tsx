@@ -28,7 +28,11 @@ import {
   ShieldCheck,
   Building2,
   Calendar,
-  Filter
+  Filter,
+  ArrowLeft,
+  ArrowRight,
+  Sliders,
+  CheckSquare
 } from 'lucide-react'
 import { useModelosEscala, useSalvarModelosEscala, type ModeloEscala, type ModeloEscalaFuncionario } from '../hooks/useModelosEscala'
 import { useFuncionarios } from '../hooks/useFuncionarios'
@@ -42,22 +46,24 @@ import { supabase } from '../lib/supabase'
 import { useUserTeam } from '../hooks/useUserTeam'
 import { useConfiguracao } from '../hooks/useConfiguracoes'
 
-const DIAS_COMPENSADO = [
-  { value: 'segunda', label: 'Segunda-feira', offset: 1 },
-  { value: 'terca', label: 'Terça-feira', offset: 2 },
-  { value: 'quarta', label: 'Quarta-feira', offset: 3 },
-  { value: 'quinta', label: 'Quinta-feira', offset: -3 },
-  { value: 'sexta', label: 'Sexta-feira', offset: -2 },
-  { value: 'sabado', label: 'Sábado', offset: -1 },
+// Options for Folga 1 - COMPENSADO (Semana Anterior ao Domingo)
+const COMPENSADO_SEMANA_ANTERIOR = [
+  { value: 'segunda', label: 'Segunda-feira (Anterior)', offset: -6 },
+  { value: 'terca', label: 'Terça-feira (Anterior)', offset: -5 },
+  { value: 'quarta', label: 'Quarta-feira (Anterior)', offset: -4 },
+  { value: 'quinta', label: 'Quinta-feira (Anterior)', offset: -3 },
+  { value: 'sexta', label: 'Sexta-feira (Anterior)', offset: -2 },
+  { value: 'sabado', label: 'Sábado (Anterior)', offset: -1 },
 ] as const
 
-const DIAS_REPOUSO = [
-  { value: 'segunda', label: 'Segunda-feira', offset: 1 },
-  { value: 'terca', label: 'Terça-feira', offset: 2 },
-  { value: 'quarta', label: 'Quarta-feira', offset: 3 },
-  { value: 'quinta', label: 'Quinta-feira', offset: 4 },
-  { value: 'sexta', label: 'Sexta-feira', offset: 5 },
-  { value: 'sabado', label: 'Sábado', offset: 6 },
+// Options for Folga 2 - REPOUSO (Semana Posterior ao Domingo)
+const REPOUSO_SEMANA_POSTERIOR = [
+  { value: 'segunda', label: 'Segunda-feira (Posterior)', offset: 1 },
+  { value: 'terca', label: 'Terça-feira (Posterior)', offset: 2 },
+  { value: 'quarta', label: 'Quarta-feira (Posterior)', offset: 3 },
+  { value: 'quinta', label: 'Quinta-feira (Posterior)', offset: 4 },
+  { value: 'sexta', label: 'Sexta-feira (Posterior)', offset: 5 },
+  { value: 'sabado', label: 'Sábado (Posterior)', offset: 6 },
 ] as const
 
 function parseLocalDate(dateStr: string): Date {
@@ -70,45 +76,25 @@ function generateId() {
 }
 
 function getCompensadoOffset(dia: string): number {
-  const map: Record<string, number> = {
-    segunda: -6,
-    terca: -5,
-    quarta: -4,
-    quinta: -3,
-    sexta: -2,
-    sabado: -1,
-  }
-  return map[dia] ?? 0
+  const item = COMPENSADO_SEMANA_ANTERIOR.find(d => d.value === dia)
+  return item ? item.offset : -4 // Default Quarta anterior
 }
 
 function getRepousoOffset(dia: string): number {
-  const map: Record<string, number> = {
-    segunda: 1,
-    terca: 2,
-    quarta: 3,
-    quinta: 4,
-    sexta: 5,
-    sabado: 6,
-  }
-  return map[dia] ?? 0
+  const item = REPOUSO_SEMANA_POSTERIOR.find(d => d.value === dia)
+  return item ? item.offset : 2 // Default Terça posterior
 }
 
 function labelDia(dia: string): string {
   const map: Record<string, string> = {
-    segunda: 'Seg',
-    terca: 'Ter',
-    quarta: 'Qua',
-    quinta: 'Qui',
-    sexta: 'Sex',
-    sabado: 'Sáb',
+    segunda: 'Segunda',
+    terca: 'Terça',
+    quarta: 'Quarta',
+    quinta: 'Quinta',
+    sexta: 'Sexta',
+    sabado: 'Sábado',
   }
   return map[dia] || dia
-}
-
-function isProtectedScaleType(tipo: string | null | undefined): boolean {
-  if (!tipo) return false
-  const t = tipo.toLowerCase()
-  return t === 'ferias' || t.includes('atestado') || t.includes('afastamento') || t === 'falta' || t.includes('abonad')
 }
 
 // Calculate upcoming Sunday
@@ -125,7 +111,14 @@ interface AIProposalItem {
   cargo: string
   domingosTrabalhados: number
   modalidade: 'folga' | 'hora_extra'
-  diaCompensacao: string
+  
+  // Regra das 2 Folgas
+  diaCompensadoAnterior: string   // ex: 'quarta' (Semana Anterior)
+  dataCompensadoAnteriorStr: string
+  
+  diaRepousoPosterior: string     // ex: 'terca' (Semana Posterior)
+  dataRepousoPosteriorStr: string
+
   localidade: string
   statusAprovacao: 'aprovado' | 'sugestao_pendente'
 }
@@ -157,7 +150,7 @@ export function ModelosEscalaPage() {
   })
 
   // Query past 90 days Sunday scale history to calculate fair rotation
-  const { data: pastSundayEscalas = [], isLoading: isLoadingHistory } = useQuery<any[]>({
+  const { data: pastSundayEscalas = [] } = useQuery<any[]>({
     queryKey: ['past-sunday-escalas'],
     queryFn: async () => {
       const today = new Date()
@@ -238,21 +231,25 @@ export function ModelosEscalaPage() {
         const statB = sundayStatsMap.get(b.id)?.count ?? 0
         if (statA !== statB) return statA - statB
         
-        // Secondary sort: longest time since last worked Sunday
         const lastA = sundayStatsMap.get(a.id)?.lastSundayStr ?? ''
         const lastB = sundayStatsMap.get(b.id)?.lastSundayStr ?? ''
         return lastA.localeCompare(lastB)
       })
   }, [funcionarios, sundayStatsMap])
 
-  // Active Tab: 'ia' (IA Escala Assistant), 'modelos' (Recurrent Templates), 'historico' (History & Approvals)
+  // Navigation Tabs: 'ia' (IA Wizard), 'modelos' (Saved Templates), 'historico' (Rotation Ranking)
   const [activeTab, setActiveTab] = useState<'ia' | 'modelos' | 'historico'>('ia')
   const [selectedTeamId, setSelectedTeamId] = useState<string>('all')
 
-  // IA Escala Assistant State
+  // Encarregado Interactive Wizard Options State
   const [aiTargetDate, setAiTargetDate] = useState<string>(getNextSundayDate())
   const [aiWorkersPerSector, setAiWorkersPerSector] = useState<number>(1)
   const [aiCompensationStrategy, setAiCompensationStrategy] = useState<'folga' | 'hora_extra'>('folga')
+
+  // Preferred 2 Folgas Configuration
+  const [prefCompensadoAnterior, setPrefCompensadoAnterior] = useState<string>('auto') // 'auto' or 'quarta', 'terca', etc.
+  const [prefRepousoPosterior, setPrefRepousoPosterior] = useState<string>('auto')   // 'auto' or 'terca', 'quarta', etc.
+
   const [aiProposal, setAiProposal] = useState<AIProposalItem[]>([])
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
   const [showAIProposalModal, setShowAIProposalModal] = useState(false)
@@ -270,25 +267,11 @@ export function ModelosEscalaPage() {
     setOriginalEditando(model ? JSON.parse(JSON.stringify(model)) : null)
   }, [])
 
-  const hasChanges = useMemo(() => {
-    if (!editando || !originalEditando) return false
-    return JSON.stringify(editando) !== JSON.stringify(originalEditando)
-  }, [editando, originalEditando])
-
-  const [modeloParaAplicar, setModeloParaAplicar] = useState<ModeloEscala | null>(null)
-  const [showAddFunc, setShowAddFunc] = useState(false)
-  const [showAplicar, setShowAplicar] = useState(false)
-  const [aplicarData, setAplicarData] = useState('')
-  const [saving, setSaving] = useState(false)
   const [aplicando, setAplicando] = useState(false)
-  const [desaplicando, setDesaplicando] = useState(false)
   const [msg, setMsg] = useState('')
   const [msgType, setMsgType] = useState<'success' | 'error'>('success')
 
-  const [confirmRemover, setConfirmRemover] = useState<{ date: string; modeloId: string; nome: string; formattedDateStr: string } | null>(null)
-  const [modelosAplicados, setModelosAplicados] = useState<Record<string, { modeloId: string; nome: string }>>({})
-
-  // Generate AI Schedule Proposal based on Fair Rotation & Constraints
+  // Generate AI Schedule Proposal with 2-Folgas Rule
   const handleGenerateAISchedule = () => {
     if (!aiTargetDate) {
       setMsg('Selecione a data do domingo ou feriado!')
@@ -299,6 +282,8 @@ export function ModelosEscalaPage() {
     setIsGeneratingAI(true)
 
     setTimeout(() => {
+      const targetDateObj = parseISO(aiTargetDate)
+
       // Group available active employees by setor
       const sectorGroups = new Map<string, typeof fairRotationRanking>()
       fairRotationRanking.forEach(f => {
@@ -309,21 +294,36 @@ export function ModelosEscalaPage() {
       })
 
       const proposal: AIProposalItem[] = []
-      const daysCycle = ['segunda', 'terca', 'quarta', 'quinta', 'sexta']
+      
+      const compCycle = ['quarta', 'terca', 'quinta', 'segunda', 'sexta']
+      const repCycle = ['terca', 'quarta', 'quinta', 'segunda', 'sexta']
       let cycleIdx = 0
 
-      // Select top candidates per sector from fair rotation ranking
       sectorGroups.forEach((sectorFuncs, sectorName) => {
-        // Take up to aiWorkersPerSector from this sector
         const selected = sectorFuncs.slice(0, Math.max(1, aiWorkersPerSector))
 
         selected.forEach(f => {
           const stats = sundayStatsMap.get(f.id)
           const workedCount = stats?.count ?? 0
-          const compDay = daysCycle[cycleIdx % daysCycle.length]
+
+          // Determine Folga 1 (Compensado - Semana Anterior)
+          const chosenCompDay = prefCompensadoAnterior !== 'auto' 
+            ? prefCompensadoAnterior 
+            : compCycle[cycleIdx % compCycle.length]
+
+          // Determine Folga 2 (Repouso - Semana Posterior)
+          const chosenRepDay = prefRepousoPosterior !== 'auto' 
+            ? prefRepousoPosterior 
+            : repCycle[cycleIdx % repCycle.length]
+
           cycleIdx++
 
-          // Find a matching locality for this sector if configured
+          const compOffset = getCompensadoOffset(chosenCompDay)
+          const repOffset = getRepousoOffset(chosenRepDay)
+
+          const dataCompStr = format(addDays(targetDateObj, compOffset), 'yyyy-MM-dd')
+          const dataRepStr = format(addDays(targetDateObj, repOffset), 'yyyy-MM-dd')
+
           const locObj = dbLocalidades.find(l => l.setor === sectorName)
           const locName = locObj ? locObj.nome : sectorName
 
@@ -334,7 +334,13 @@ export function ModelosEscalaPage() {
             cargo: f.cargo || 'Operacional',
             domingosTrabalhados: workedCount,
             modalidade: aiCompensationStrategy,
-            diaCompensacao: compDay,
+            
+            diaCompensadoAnterior: chosenCompDay,
+            dataCompensadoAnteriorStr: dataCompStr,
+            
+            diaRepousoPosterior: chosenRepDay,
+            dataRepousoPosteriorStr: dataRepStr,
+
             localidade: locName,
             statusAprovacao: aiCompensationStrategy === 'hora_extra' ? 'sugestao_pendente' : 'aprovado'
           })
@@ -344,7 +350,7 @@ export function ModelosEscalaPage() {
       setAiProposal(proposal)
       setIsGeneratingAI(false)
       setShowAIProposalModal(true)
-      setMsg('Sugestão de Escala com IA gerada com sucesso!')
+      setMsg('Sugestão de Escala com 2 Folgas gerada com sucesso!')
       setMsgType('success')
     }, 400)
   }
@@ -368,7 +374,30 @@ export function ModelosEscalaPage() {
     }))
   }
 
-  // Confirm and Apply AI Scale to Database
+  // Update specific day-off choice in modal
+  const handleUpdateProposalFolgas = (funcionarioId: string, compDay?: string, repDay?: string) => {
+    setAiProposal(prev => prev.map(item => {
+      if (item.funcionarioId === funcionarioId) {
+        const targetDateObj = parseISO(aiTargetDate)
+        const newCompDay = compDay || item.diaCompensadoAnterior
+        const newRepDay = repDay || item.diaRepousoPosterior
+
+        const newCompOffset = getCompensadoOffset(newCompDay)
+        const newRepOffset = getRepousoOffset(newRepDay)
+
+        return {
+          ...item,
+          diaCompensadoAnterior: newCompDay,
+          dataCompensadoAnteriorStr: format(addDays(targetDateObj, newCompOffset), 'yyyy-MM-dd'),
+          diaRepousoPosterior: newRepDay,
+          dataRepousoPosteriorStr: format(addDays(targetDateObj, newRepOffset), 'yyyy-MM-dd')
+        }
+      }
+      return item
+    }))
+  }
+
+  // Confirm and Apply AI Scale (with 3 records per employee: Sunday + Folga 1 + Folga 2)
   const handleApplyAISchedule = async () => {
     if (aiProposal.length === 0 || !aiTargetDate) return
     setAplicando(true)
@@ -390,28 +419,35 @@ export function ModelosEscalaPage() {
           localidade: item.localidade,
           observacoes: isHE 
             ? (item.statusAprovacao === 'aprovado' ? 'HORA EXTRA APROVADA' : 'SUGESTÃO DE HORA EXTRA (PENDENTE)') 
-            : `TRABALHAR POR FOLGA (${labelDia(item.diaCompensacao)})`
+            : `ESCALA DOMINICAL (FOLGAS: ${labelDia(item.diaCompensadoAnterior)} ANTERIOR & ${labelDia(item.diaRepousoPosterior)} POSTERIOR)`
         })
 
-        // 2. Compensatory Rest Day Entry (if working for Folga)
-        if (!isHE && item.diaCompensacao) {
-          const offset = getCompensadoOffset(item.diaCompensacao)
-          const compDateStr = format(addDays(targetDateObj, offset), 'yyyy-MM-dd')
-
+        // If working for Folga, insert the 2 Folga Records:
+        if (!isHE) {
+          // 2. Folga 1 - COMPENSADO (Semana Anterior)
           itemsToUpsert.push({
             funcionario_id: item.funcionarioId,
-            data: compDateStr,
+            data: item.dataCompensadoAnteriorStr,
             tipo: 'compensar',
             turno: 'integral',
-            observacoes: `FOLGA COMPENSATÓRIA (DOMINGO ${format(targetDateObj, 'dd/MM')})`
+            observacoes: `FOLGA 1 (COMPENSADO SEMANA ANTERIOR DO DOMINGO ${format(targetDateObj, 'dd/MM')})`
+          })
+
+          // 3. Folga 2 - REPOUSO (Semana Posterior)
+          itemsToUpsert.push({
+            funcionario_id: item.funcionarioId,
+            data: item.dataRepousoPosteriorStr,
+            tipo: 'repouso',
+            turno: 'integral',
+            observacoes: `FOLGA 2 (REPOUSO SEMANA POSTERIOR DO DOMINGO ${format(targetDateObj, 'dd/MM')})`
           })
         }
       }
 
-      // Upsert to Escalas database
+      // Atomic batch upsert to database
       await batchUpsert({ items: itemsToUpsert, skipFreqSync: true })
 
-      // Clear frequency table entries for the Sunday so attendance remains pending in Chamada!
+      // Clear frequency records for Sunday so attendance remains pending in Chamada!
       const deletePromises = aiProposal.map(item =>
         supabase.from('frequencia').delete().eq('funcionario_id', item.funcionarioId).eq('data', aiTargetDate)
       )
@@ -422,7 +458,7 @@ export function ModelosEscalaPage() {
       await queryClient.invalidateQueries({ queryKey: ['dashboard'] })
 
       setShowAIProposalModal(false)
-      setMsg(`Escala do Domingo ${format(targetDateObj, 'dd/MM/yyyy')} aplicada com sucesso!`)
+      setMsg(`Escala do Domingo ${format(targetDateObj, 'dd/MM/yyyy')} com 2 Folgas aplicada com sucesso!`)
       setMsgType('success')
     } catch (err: any) {
       console.error('Erro ao aplicar escala de IA:', err)
@@ -433,33 +469,37 @@ export function ModelosEscalaPage() {
     }
   }
 
-  // Generate WhatsApp Share Text Report
+  // Generate WhatsApp Share Text Report with 2 Folgas Details
   const handleOpenShareReport = () => {
     if (!aiTargetDate) return
     const targetDateObj = parseISO(aiTargetDate)
     const formattedDate = format(targetDateObj, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()
 
     let text = `📅 *ESCALA DE DOMINGO E FERIADO*\n`
-    text += `📆 *Data:* ${formattedDate}\n`
-    text += `🤖 *Gerado por Assistente de IA de Escala*\n`
+    text += `📆 *Data do Domingo:* ${formattedDate}\n`
+    text += `🤖 *Gerado por Assistente de IA (Regra de 2 Folgas)*\n`
     text += `─────────────────────────\n\n`
 
     const folgaList = aiProposal.filter(i => i.modalidade === 'folga')
     const heList = aiProposal.filter(i => i.modalidade === 'hora_extra')
 
     if (folgaList.length > 0) {
-      text += `👷 *TRABALHAM POR FOLGA COMPENSATÓRIA (${folgaList.length}):*\n`
+      text += `👷 *TRABALHAM POR 2 FOLGAS COMPENSATÓRIAS (${folgaList.length}):*\n\n`
       folgaList.forEach(i => {
-        text += `• *${i.funcionarioNome}* (${i.setor}) - Folga: *${labelDia(i.diaCompensacao)}*\n`
+        const compDateFmt = format(parseISO(i.dataCompensadoAnteriorStr), 'dd/MM')
+        const repDateFmt = format(parseISO(i.dataRepousoPosteriorStr), 'dd/MM')
+
+        text += `• *${i.funcionarioNome}* (${i.setor})\n`
+        text += `  - ⏪ *Folga 1 (Compensado Ant.):* ${labelDia(i.diaCompensadoAnterior)} (${compDateFmt})\n`
+        text += `  - ⏩ *Folga 2 (Repouso Post.):* ${labelDia(i.diaRepousoPosterior)} (${repDateFmt})\n\n`
       })
-      text += `\n`
     }
 
     if (heList.length > 0) {
       text += `⚠️ *SUGESTÕES DE HORA EXTRA (${heList.length}):*\n`
       heList.forEach(i => {
         const statusStr = i.statusAprovacao === 'aprovado' ? '✅ Aprovado' : '⏳ Pendente de Aprovação'
-        text += `• *${i.funcionarioNome}* (${i.setor}) [HE] - Status: ${statusStr}\n`
+        text += `• *${i.funcionarioNome}* (${i.setor}) [HE] - ${statusStr}\n`
       })
       text += `\n`
     }
@@ -477,7 +517,7 @@ export function ModelosEscalaPage() {
     <div className="min-h-screen bg-background pb-32 cyber-grid">
       <TopHeader 
         title="Escala de Domingos & Feriados" 
-        subtitle="Rodízio dominical justo, assistente de IA e sugestões de compensação" 
+        subtitle="Gerador guiado do encarregado, rodízio justo e regra das 2 folgas" 
       />
 
       <div className="max-w-[1500px] mx-auto px-4 sm:px-6 pt-28 sm:pt-32">
@@ -517,7 +557,7 @@ export function ModelosEscalaPage() {
                 )}
               >
                 <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-                Assistente de IA
+                Assistente de IA & 2 Folgas
               </button>
 
               <button
@@ -549,7 +589,7 @@ export function ModelosEscalaPage() {
           </div>
         )}
 
-        {/* TAB 1: ASSISTENTE DE IA DE ESCALA */}
+        {/* TAB 1: ASSISTENTE DE IA DE ESCALA (PASSO A PASSO DO ENCARREGADO COM REGRA DE 2 FOLGAS) */}
         {!editando && activeTab === 'ia' && (
           <div className="space-y-8 animate-fade-in">
             {/* Banner do Assistente de IA */}
@@ -563,11 +603,11 @@ export function ModelosEscalaPage() {
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-black uppercase tracking-wider text-foreground">Assistente de Escala de Domingos & Feriados</h2>
                       <span className="bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border border-amber-500/30">
-                        IA Ativa
+                        Regra das 2 Folgas Ativa
                       </span>
                     </div>
                     <p className="text-xs font-bold text-muted-foreground mt-1 max-w-2xl leading-relaxed">
-                      Gerador inteligente de rodízio dominical. Prioriza automaticamente colaboradores com menos domingos trabalhados e favorece a compensação por folga.
+                      Gerador guiado para o encarregado. Toda atribuição inclui **2 Folgas**: Folga 1 (Compensado na semana anterior) + Folga 2 (Repouso na semana posterior).
                     </p>
                   </div>
                 </div>
@@ -580,62 +620,120 @@ export function ModelosEscalaPage() {
                     className="flex-1 lg:flex-none flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-500/25 hover:scale-[1.02] transition-all cursor-pointer border border-amber-400/30 active:scale-95"
                   >
                     <Sparkles className={cn("w-4 h-4", isGeneratingAI && "animate-spin")} />
-                    {isGeneratingAI ? 'Analisando Histórico...' : '⚡ Gerar Escala Inteligente'}
+                    {isGeneratingAI ? 'Analisando Rodízio...' : '⚡ Gerar Sugestão de Escala'}
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Painel de Configurações do Gerador de IA */}
-            <div className="bg-card/80 backdrop-blur-xl border border-border/50 rounded-3xl p-6 shadow-md space-y-6">
-              <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                <Filter className="w-4 h-4 text-primary" /> Parâmetros de Geração do Rodízio
-              </h3>
+            {/* FLUXO GUIADO EM ETAPAS PARA O ENCARREGADO */}
+            <div className="bg-card/80 backdrop-blur-xl border border-border/50 rounded-3xl p-6 sm:p-8 shadow-md space-y-8">
+              <div className="flex items-center justify-between border-b border-border/20 pb-4">
+                <h3 className="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-primary" /> Passo a Passo de Opções do Encarregado
+                </h3>
+                <span className="text-[9.5px] font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
+                  Configuração Detalhada
+                </span>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                {/* Data do Domingo / Feriado */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground block">
-                    Data do Domingo ou Feriado
-                  </label>
-                  <input
-                    type="date"
-                    value={aiTargetDate}
-                    onChange={e => setAiTargetDate(e.target.value)}
-                    className="w-full bg-muted/50 border border-border/30 rounded-2xl px-4 py-3 text-xs font-bold text-foreground outline-none focus:ring-4 focus:ring-primary/10 transition-all uppercase"
-                  />
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* ETAPA 1: DATA E EFETIVO */}
+                <div className="space-y-4 bg-muted/30 border border-border/30 rounded-2xl p-5 relative">
+                  <div className="flex items-center gap-2 text-primary font-black text-xs uppercase tracking-wider">
+                    <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-[10px]">1</span>
+                    Data & Efetivo
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <div>
+                      <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground block mb-1">
+                        Domingo ou Feriado Alvo
+                      </label>
+                      <input
+                        type="date"
+                        value={aiTargetDate}
+                        onChange={e => setAiTargetDate(e.target.value)}
+                        className="w-full bg-background border border-border/40 rounded-xl px-3.5 py-2.5 text-xs font-bold text-foreground outline-none uppercase"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground block mb-1">
+                        Trabalhadores por Setor
+                      </label>
+                      <select
+                        value={aiWorkersPerSector}
+                        onChange={e => setAiWorkersPerSector(Number(e.target.value))}
+                        className="w-full bg-background border border-border/40 rounded-xl px-3.5 py-2.5 text-xs font-bold text-foreground outline-none uppercase"
+                      >
+                        <option value={1}>1 por Setor</option>
+                        <option value={2}>2 por Setor</option>
+                        <option value={3}>3 por Setor</option>
+                        <option value={4}>4 por Setor</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Quantidade de Colaboradores por Setor */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground block">
-                    Colaboradores por Setor
-                  </label>
-                  <select
-                    value={aiWorkersPerSector}
-                    onChange={e => setAiWorkersPerSector(Number(e.target.value))}
-                    className="w-full bg-muted/50 border border-border/30 rounded-2xl px-4 py-3 text-xs font-bold text-foreground outline-none focus:ring-4 focus:ring-primary/10 transition-all uppercase"
-                  >
-                    <option value={1}>1 por Setor</option>
-                    <option value={2}>2 por Setor</option>
-                    <option value={3}>3 por Setor</option>
-                    <option value={4}>4 por Setor</option>
-                  </select>
+                {/* ETAPA 2: CONFIGURAÇÃO DA FOLGA 1 (SEMANA ANTERIOR) */}
+                <div className="space-y-4 bg-muted/30 border border-border/30 rounded-2xl p-5 relative">
+                  <div className="flex items-center gap-2 text-amber-500 font-black text-xs uppercase tracking-wider">
+                    <span className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px]">2</span>
+                    Folga 1: Compensado (Semana Anterior)
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <div>
+                      <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground block mb-1">
+                        Dia da Folga Anterior ao Domingo
+                      </label>
+                      <select
+                        value={prefCompensadoAnterior}
+                        onChange={e => setPrefCompensadoAnterior(e.target.value)}
+                        className="w-full bg-background border border-border/40 rounded-xl px-3.5 py-2.5 text-xs font-bold text-foreground outline-none uppercase"
+                      >
+                        <option value="auto">🤖 Equilibrar Automático pela IA</option>
+                        {COMPENSADO_SEMANA_ANTERIOR.map(d => (
+                          <option key={d.value} value={d.value}>{d.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <p className="text-[10px] text-muted-foreground font-bold leading-relaxed pt-1">
+                      Concedida na semana QUE ANTECEDE o domingo trabalhado.
+                    </p>
+                  </div>
                 </div>
 
-                {/* Estratégia Preferencial */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground block">
-                    Modalidade Preferencial
-                  </label>
-                  <select
-                    value={aiCompensationStrategy}
-                    onChange={e => setAiCompensationStrategy(e.target.value as any)}
-                    className="w-full bg-muted/50 border border-border/30 rounded-2xl px-4 py-3 text-xs font-bold text-foreground outline-none focus:ring-4 focus:ring-primary/10 transition-all uppercase"
-                  >
-                    <option value="folga">Trabalhar por Folga (Recomendado)</option>
-                    <option value="hora_extra">Sugestão de Hora Extra (Sujeito a Aprovação)</option>
-                  </select>
+                {/* ETAPA 3: CONFIGURAÇÃO DA FOLGA 2 (SEMANA POSTERIOR) */}
+                <div className="space-y-4 bg-muted/30 border border-border/30 rounded-2xl p-5 relative">
+                  <div className="flex items-center gap-2 text-emerald-500 font-black text-xs uppercase tracking-wider">
+                    <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px]">3</span>
+                    Folga 2: Repouso (Semana Posterior)
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <div>
+                      <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground block mb-1">
+                        Dia do Repouso Após o Domingo
+                      </label>
+                      <select
+                        value={prefRepousoPosterior}
+                        onChange={e => setPrefRepousoPosterior(e.target.value)}
+                        className="w-full bg-background border border-border/40 rounded-xl px-3.5 py-2.5 text-xs font-bold text-foreground outline-none uppercase"
+                      >
+                        <option value="auto">🤖 Equilibrar Automático pela IA</option>
+                        {REPOUSO_SEMANA_POSTERIOR.map(d => (
+                          <option key={d.value} value={d.value}>{d.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <p className="text-[10px] text-muted-foreground font-bold leading-relaxed pt-1">
+                      Descanso semanal concedido na semana QUE SUCEDE o domingo.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -648,7 +746,7 @@ export function ModelosEscalaPage() {
                     <ShieldCheck className="w-4 h-4 text-emerald-500" /> Fila do Rodízio (Menos Domingos Trabalhados)
                   </h3>
                   <p className="text-[10px] font-bold text-muted-foreground mt-0.5">
-                    Histórico dos últimos 90 dias. Colaboradores no topo são os prioritários para o próximo domingo.
+                    Histórico dos últimos 90 dias. Colaboradores no topo são os prioritários para a sugestão da IA.
                   </p>
                 </div>
 
@@ -706,7 +804,6 @@ export function ModelosEscalaPage() {
         {/* TAB 2: MODELOS RECORRENTES */}
         {!editando && activeTab === 'modelos' && (
           <div className="space-y-8 animate-fade-in">
-            {/* Modelos cadastrados existentes */}
             <div className="flex items-center justify-between gap-4 bg-card/80 backdrop-blur-xl border border-border/50 p-6 rounded-3xl">
               <div>
                 <h3 className="text-sm font-black uppercase tracking-wider text-foreground">Modelos de Escala Salvos</h3>
@@ -768,18 +865,18 @@ export function ModelosEscalaPage() {
           </div>
         )}
 
-        {/* MODAL PROPOSTA DA IA */}
+        {/* MODAL PROPOSTA DA IA COM 2 FOLGAS DETALHADAS */}
         {showAIProposalModal && (
           <Modal
             open={showAIProposalModal}
             onClose={() => setShowAIProposalModal(false)}
-            title="Sugestão de Escala de Domingo (IA Assistente)"
+            title="Proposta de Escala de Domingo (2 Folgas Atribuídas)"
           >
             <div className="space-y-6">
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center justify-between gap-4">
                 <div>
-                  <h4 className="text-xs font-black uppercase text-amber-600 dark:text-amber-400">Escala de Domingo Gerada</h4>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Data: {aiTargetDate}</p>
+                  <h4 className="text-xs font-black uppercase text-amber-600 dark:text-amber-400">Escala Gerada para o Domingo</h4>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Data Alvo: {aiTargetDate}</p>
                 </div>
 
                 <button
@@ -791,50 +888,88 @@ export function ModelosEscalaPage() {
                 </button>
               </div>
 
-              <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
-                {aiProposal.map((item, idx) => (
-                  <div key={item.funcionarioId} className="bg-muted/40 border border-border/30 rounded-2xl p-4 flex items-center justify-between gap-4">
-                    <div>
-                      <h5 className="text-xs font-black uppercase text-foreground">{item.funcionarioNome}</h5>
-                      <span className="text-[9px] font-bold text-muted-foreground uppercase block">{item.setor} • {item.cargo}</span>
-                      <span className="text-[8.5px] font-black text-emerald-500 uppercase block mt-1">
-                        Domingos Trabalhados (90d): {item.domingosTrabalhados}
+              <div className="max-h-[55vh] overflow-y-auto space-y-4 pr-1">
+                {aiProposal.map((item) => (
+                  <div key={item.funcionarioId} className="bg-muted/40 border border-border/40 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-4 border-b border-border/20 pb-3">
+                      <div>
+                        <h5 className="text-xs font-black uppercase text-foreground">{item.funcionarioNome}</h5>
+                        <span className="text-[9px] font-bold text-muted-foreground uppercase block">{item.setor} • {item.cargo}</span>
+                      </div>
+
+                      <span className="text-[8.5px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                        {item.domingosTrabalhados} Domingos (90d)
                       </span>
                     </div>
 
-                    <div className="text-right space-y-2">
-                      {item.modalidade === 'folga' ? (
-                        <span className="text-[9px] font-black uppercase px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 block">
-                          Trabalho por Folga ({labelDia(item.diaCompensacao)})
-                        </span>
-                      ) : (
-                        <div className="space-y-1">
-                          <span className="text-[9px] font-black uppercase px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20 block">
-                            ⚠️ Sugestão HE ({item.statusAprovacao === 'aprovado' ? 'Aprovado' : 'Pendente Encarregado'})
+                    {/* Exibição detalhada das 2 Folgas */}
+                    {item.modalidade === 'folga' ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        {/* Folga 1 (Compensado - Semana Anterior) */}
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 space-y-1">
+                          <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-black text-[9px] uppercase">
+                            <ArrowLeft className="w-3 h-3" /> Folga 1 (Compensado Ant.)
+                          </div>
+                          <select
+                            value={item.diaCompensadoAnterior}
+                            onChange={e => handleUpdateProposalFolgas(item.funcionarioId, e.target.value, undefined)}
+                            className="w-full bg-background border border-amber-500/30 rounded-lg px-2.5 py-1.5 text-[10px] font-black text-foreground outline-none uppercase mt-1"
+                          >
+                            {COMPENSADO_SEMANA_ANTERIOR.map(d => (
+                              <option key={d.value} value={d.value}>{d.label}</option>
+                            ))}
+                          </select>
+                          <span className="text-[8.5px] font-bold text-muted-foreground uppercase block pt-0.5">
+                            Data: {format(parseISO(item.dataCompensadoAnteriorStr), 'dd/MM/yyyy')}
                           </span>
-
-                          {item.statusAprovacao !== 'aprovado' && (
-                            <div className="flex items-center gap-2 justify-end">
-                              <button
-                                type="button"
-                                onClick={() => handleApproveHE(item.funcionarioId)}
-                                className="text-[8px] font-black uppercase px-2 py-1 bg-emerald-500 text-white rounded-lg shadow cursor-pointer"
-                              >
-                                Aprovar HE
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleConvertToFolga(item.funcionarioId)}
-                                className="text-[8px] font-black uppercase px-2 py-1 bg-blue-500 text-white rounded-lg shadow cursor-pointer"
-                              >
-                                Virar Folga
-                              </button>
-                            </div>
-                          )}
                         </div>
-                      )}
-                    </div>
+
+                        {/* Folga 2 (Repouso - Semana Posterior) */}
+                        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 space-y-1">
+                          <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-black text-[9px] uppercase">
+                            <ArrowRight className="w-3 h-3" /> Folga 2 (Repouso Post.)
+                          </div>
+                          <select
+                            value={item.diaRepousoPosterior}
+                            onChange={e => handleUpdateProposalFolgas(item.funcionarioId, undefined, e.target.value)}
+                            className="w-full bg-background border border-emerald-500/30 rounded-lg px-2.5 py-1.5 text-[10px] font-black text-foreground outline-none uppercase mt-1"
+                          >
+                            {REPOUSO_SEMANA_POSTERIOR.map(d => (
+                              <option key={d.value} value={d.value}>{d.label}</option>
+                            ))}
+                          </select>
+                          <span className="text-[8.5px] font-bold text-muted-foreground uppercase block pt-0.5">
+                            Data: {format(parseISO(item.dataRepousoPosteriorStr), 'dd/MM/yyyy')}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between gap-4">
+                        <span className="text-[9px] font-black uppercase text-amber-600">
+                          ⚠️ Sugestão HE ({item.statusAprovacao === 'aprovado' ? 'Aprovado' : 'Pendente Encarregado'})
+                        </span>
+
+                        {item.statusAprovacao !== 'aprovado' && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleApproveHE(item.funcionarioId)}
+                              className="text-[8px] font-black uppercase px-2.5 py-1 bg-emerald-500 text-white rounded-lg cursor-pointer"
+                            >
+                              Aprovar HE
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleConvertToFolga(item.funcionarioId)}
+                              className="text-[8px] font-black uppercase px-2.5 py-1 bg-blue-500 text-white rounded-lg cursor-pointer"
+                            >
+                              Aplicar 2 Folgas
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -855,7 +990,7 @@ export function ModelosEscalaPage() {
                   className="px-6 py-2.5 rounded-xl bg-primary text-white text-xs font-black uppercase shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all cursor-pointer flex items-center gap-2"
                 >
                   <Check className="w-4 h-4" />
-                  {aplicando ? 'Aplicando Escala...' : 'Confirmar e Aplicar no Domingo'}
+                  {aplicando ? 'Aplicando Escala com 2 Folgas...' : 'Confirmar e Gravar 2 Folgas + Domingo'}
                 </button>
               </div>
             </div>
@@ -873,7 +1008,7 @@ export function ModelosEscalaPage() {
               <textarea
                 value={shareText}
                 onChange={e => setShareText(e.target.value)}
-                rows={10}
+                rows={12}
                 className="w-full bg-muted/50 border border-border/40 rounded-2xl p-4 text-xs font-mono text-foreground outline-none focus:ring-4 focus:ring-primary/10 transition-all"
               />
 
