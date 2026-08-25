@@ -294,7 +294,7 @@ export function useUpdateEscala() {
 
       // Sincronizar com tabela de frequência APENAS se o tipo foi alterado na mutation e skipFreqSync for falso
       if (!skipFreqSync && data.tipo !== undefined && result.tipo) {
-        if (result.tipo !== 'presente') {
+        if (result.tipo !== 'presente' && result.tipo !== 'trabalho') {
           const freqStatusMap: Record<string, string> = {
             'hora_extra': 'hora_extra',
             'falta': 'falta',
@@ -312,6 +312,9 @@ export function useUpdateEscala() {
               updated_at: new Date().toISOString()
             }, { onConflict: 'funcionario_id,data' })
           }
+        } else {
+          // Quando altera tipo para 'presente' ou 'trabalho', remove a frequência para que a chamada fique PENDENTE (a marcar)
+          await supabase.from('frequencia').delete().eq('funcionario_id', result.funcionario_id).eq('data', result.data)
         }
       }
 

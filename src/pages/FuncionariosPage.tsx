@@ -524,7 +524,7 @@ export function FuncionariosPage() {
     <div className="min-h-screen bg-background pb-32">
       <TopHeader title="Equipe Operacional" />
       
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-32">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-28 sm:pt-32 pb-32">
         {/* Compact Filters & Toolbar */}
         <div className="bg-gradient-to-r from-card/85 via-card/70 to-card/50 backdrop-blur-xl border border-border/40 rounded-3xl p-4 sm:p-5 shadow-xl mb-8 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl pointer-events-none" />

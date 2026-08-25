@@ -3471,7 +3471,7 @@ export function EscalaLocalidadePage() {
         )}
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-32 relative print:hidden cyber-grid">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-28 sm:pt-32 pb-32 relative print:hidden cyber-grid">
 
         {/* Headers Wrapper (Scrolls with content) */}
         <div className="space-y-4 mb-10">

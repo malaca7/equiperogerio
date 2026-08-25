@@ -531,7 +531,7 @@ export function DashboardPage() {
     <div className="min-h-screen bg-background pb-12">
       <TopHeader title="Painel Operacional" subtitle="Central de Monitoramento e Gestão" />
       
-      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-12 space-y-6">
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 pt-28 sm:pt-32 pb-12 space-y-6">
         
         {/* Page Title & Main CTA Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

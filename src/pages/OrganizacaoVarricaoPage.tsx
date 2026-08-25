@@ -775,7 +775,7 @@ export function OrganizacaoVarricaoPage() {
     <div className="min-h-screen bg-background pb-12 font-sans selection:bg-primary/20">
       <TopHeader title="Mapeamento Operacional" subtitle="Visualização em tempo real das rotas, ruas e localidades sincronizadas com Meta e Rota" />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 sm:pt-32 pb-32 space-y-6">
 
         {/* Top Header & Integrated Quick Nav Links */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card/60 backdrop-blur-md border border-border/60 rounded-3xl p-6 shadow-sm">

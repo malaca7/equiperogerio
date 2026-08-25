@@ -701,7 +701,7 @@ export function EquipesPage() {
   const sectorsForDropdown = teamSetores.length > 0 ? teamSetores : allSetores
 
   return (
-    <div className="space-y-6 animate-fade-in pb-32">
+    <div className="space-y-6 animate-fade-in pt-28 sm:pt-32 pb-32">
       <TopHeader title={isEncarregadoOnly ? 'Minha Equipe' : 'Equipes e Regiões'} subtitle={isEncarregadoOnly ? 'Gerencie os membros da sua equipe' : 'Gerenciamento operacional de equipes'} />
 
       {/* Tab Switcher - only for admins */}

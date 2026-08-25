@@ -772,7 +772,7 @@ export function GerarRelatorioPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in pb-32">
+    <div className="space-y-6 animate-fade-in pt-28 sm:pt-32 pb-32">
       <TopHeader 
         title="Gerar Relatório de Equipe" 
         subtitle="Dossiê Operacional, Formato Texto WhatsApp e Impressão Folha A4" 

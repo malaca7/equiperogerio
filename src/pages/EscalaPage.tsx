@@ -898,11 +898,9 @@ export function EscalaPage() {
           localidade: existing?.localidade || null
         }])
 
-        // Sincronizar com a frequência
+        // Sincronizar com a frequência (apenas para ausências/folgas/atestados/férias)
+        // Quando marca 'trabalho' ou 'presente', o funcionário deve ficar PENDENTE (sem check na chamada)
         const freqMap: Record<string, string> = {
-          'presente': 'presente',
-          'trabalho': 'presente',
-          'trabalhando': 'presente',
           'hora_extra': 'hora_extra',
           'he': 'hora_extra',
           'falta': 'falta',
@@ -920,13 +918,18 @@ export function EscalaPage() {
           'licenca': 'atestado',
           'suspensao': 'falta'
         }
-        const freqStatus = freqMap[statusId] || 'presente'
-        await supabase.from('frequencia').upsert({
-          funcionario_id: funcId,
-          data: dateStr,
-          status: freqStatus,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'funcionario_id,data' })
+        const freqStatus = freqMap[statusId]
+        if (freqStatus) {
+          await supabase.from('frequencia').upsert({
+            funcionario_id: funcId,
+            data: dateStr,
+            status: freqStatus,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'funcionario_id,data' })
+        } else {
+          // Quando marca 'trabalho' ou 'presente', deleta o registro da frequência para que fique PENDENTE (a marcar) na chamada!
+          await supabase.from('frequencia').delete().eq('funcionario_id', funcId).eq('data', dateStr)
+        }
 
         // Sincronizar cache
         queryClient.invalidateQueries({ queryKey: ['escalas'] })
@@ -988,11 +991,9 @@ export function EscalaPage() {
         }))
         await batchMutation.mutateAsync(batchData)
 
-        // Sincronizar com a frequência em lote
+        // Sincronizar com a frequência em lote (apenas para ausências/folgas/atestados/férias)
+        // Quando marca 'trabalho' ou 'presente', o funcionário deve ficar PENDENTE (sem check na chamada)
         const freqMap: Record<string, string> = {
-          'presente': 'presente',
-          'trabalho': 'presente',
-          'trabalhando': 'presente',
           'hora_extra': 'hora_extra',
           'he': 'hora_extra',
           'falta': 'falta',
@@ -1010,14 +1011,22 @@ export function EscalaPage() {
           'licenca': 'atestado',
           'suspensao': 'falta'
         }
-        const freqStatus = freqMap[statusId] || 'presente'
-        const freqUpserts = cells.map(c => ({
-          funcionario_id: c.funcId,
-          data: c.dateStr,
-          status: freqStatus,
-          updated_at: new Date().toISOString()
-        }))
-        await batchUpsert('frequencia', freqUpserts, { onConflict: 'funcionario_id,data', chunkSize: 35 })
+        const freqStatus = freqMap[statusId]
+        if (freqStatus) {
+          const freqUpserts = cells.map(c => ({
+            funcionario_id: c.funcId,
+            data: c.dateStr,
+            status: freqStatus,
+            updated_at: new Date().toISOString()
+          }))
+          await batchUpsert('frequencia', freqUpserts, { onConflict: 'funcionario_id,data', chunkSize: 35 })
+        } else {
+          // Quando marca 'trabalho' ou 'presente' em lote, deleta os registros da frequência para ficarem PENDENTES (a marcar)!
+          const deleteFreqPromises = cells.map(c => 
+            supabase.from('frequencia').delete().eq('funcionario_id', c.funcId).eq('data', c.dateStr)
+          )
+          await Promise.all(deleteFreqPromises)
+        }
 
         // Sincronizar cache
         queryClient.invalidateQueries({ queryKey: ['escalas'] })
@@ -1532,7 +1541,7 @@ export function EscalaPage() {
       <TopHeader title="Escala Geral" subtitle="Gestão Avançada Corporativa de Plantões e Folgas" />
 
       <div 
-        className="w-full max-w-full px-0 pt-20 sm:pt-24 pb-32 scale-table-container"
+        className="w-full max-w-full px-0 pt-28 sm:pt-32 pb-32 scale-table-container"
         style={scaleStyles}
       >
         <style>{`

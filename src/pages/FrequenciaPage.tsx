@@ -695,7 +695,7 @@ export function FrequenciaPage() {
         subtitle={format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })} 
       />
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-32 relative">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-28 sm:pt-32 pb-32 relative">
         {/* Headers Wrapper (Scrolls with content) */}
         <div className="space-y-4 mb-10">
           {/* Card de Filtros e Configurações */}

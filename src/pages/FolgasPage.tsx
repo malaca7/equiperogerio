@@ -148,15 +148,62 @@ export function FolgasPage() {
     return map
   }, [frequenciasData])
 
+  // Detect if user is an encarregado / supervisor with team restrictions
+  const isEncarregadoUser = useMemo(() => {
+    if (teamInfo?.isRestricted) return true
+    if (!user || !user.roles) return false
+    return user.roles.some(r => r.nome.toUpperCase().includes('ENCARREGADO'))
+  }, [teamInfo, user])
+
+  // Get active team ID for encarregado
+  const activeEncarregadoTeamId = useMemo(() => {
+    if (teamInfo?.teamId && teamInfo.teamId !== 'none') return teamInfo.teamId
+    if (teamInfo?.teamIds && teamInfo.teamIds.length > 0) return teamInfo.teamIds[0]
+    return null
+  }, [teamInfo])
+
+  // Query equipe_membros directly to guarantee all team members are fetched for encarregados
+  const { data: teamMembers = [] } = useQuery<any[]>({
+    queryKey: ['team-members-folgas', activeEncarregadoTeamId, teamInfo?.teamIds],
+    queryFn: async () => {
+      const targetIds = teamInfo?.teamIds || (activeEncarregadoTeamId ? [activeEncarregadoTeamId] : [])
+      if (targetIds.length === 0) return []
+
+      const { data } = await supabase
+        .from('equipe_membros')
+        .select('funcionario_id, equipe_id')
+        .in('equipe_id', targetIds)
+
+      return data || []
+    },
+    enabled: isEncarregadoUser && !!(teamInfo?.teamIds?.length || activeEncarregadoTeamId)
+  })
+
   // Filtered employees list based on scope/team restrictions
   const filteredFuncionarios = useMemo(() => {
     let list = allFuncionarios.filter(f => f.cargo?.toLowerCase() !== 'encarregado')
 
-    if (teamInfo?.isRestricted) {
-      const allowedIds = (teamInfo.teamMemberIds || []).map((id: any) => String(id).trim())
-      list = list.filter(f => allowedIds.includes(String(f.id).trim()))
+    if (isEncarregadoUser) {
+      // Build set of allowed employee IDs strictly for this encarregado's team
+      const allowedSet = new Set<string>();
+
+      // 1. From teamInfo.teamMemberIds
+      (teamInfo?.teamMemberIds || []).forEach((id: any) => allowedSet.add(String(id).trim()))
+
+      // 2. From equipe_membros query
+      teamMembers.forEach((m: any) => allowedSet.add(String(m.funcionario_id).trim()))
+
+      // 3. From allFuncionarios where (f as any).equipe_id is in teamInfo.teamIds
+      allFuncionarios.forEach(f => {
+        const eqId = (f as any).equipe_id
+        if (eqId && teamInfo?.teamIds?.includes(eqId)) {
+          allowedSet.add(String(f.id).trim())
+        }
+      })
+
+      list = list.filter(f => allowedSet.has(String(f.id).trim()))
     } else if (selectedTeamId) {
-      // Find members of selected team
+      // For Admin / Manager: filter by selected team
       const team = allTeams.find(t => t.id === selectedTeamId)
       if (team) {
         list = list.filter(f => f.setor === team.setor || (f as any).equipe_id === selectedTeamId)
@@ -176,7 +223,7 @@ export function FolgasPage() {
     }
 
     return list
-  }, [allFuncionarios, teamInfo, selectedTeamId, allTeams, filterSetor, searchTerm])
+  }, [allFuncionarios, isEncarregadoUser, teamInfo, teamMembers, selectedTeamId, allTeams, filterSetor, searchTerm])
 
   // List of all days in the chosen interval
   const daysInPeriod = useMemo(() => {
@@ -543,7 +590,37 @@ export function FolgasPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+            {/* Equipe / Encarregado Status */}
+            {isEncarregadoUser ? (
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground block">
+                  Equipe Atribuída
+                </label>
+                <div className="bg-primary/10 border border-primary/20 rounded-2xl px-4 py-3 text-xs font-black text-primary uppercase flex items-center gap-2">
+                  <Users className="w-4 h-4 shrink-0 text-primary" />
+                  <span className="truncate">Sua Equipe ({filteredFuncionarios.length})</span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground block">
+                  Equipe
+                </label>
+                <select
+                  value={selectedTeamId || ''}
+                  onChange={e => {
+                    setSelectedTeamId(e.target.value || null)
+                    setFilterSetor('')
+                  }}
+                  className="w-full bg-muted/50 border border-border/30 rounded-2xl px-4 py-3 text-xs font-bold text-foreground outline-none focus:ring-4 focus:ring-primary/10 transition-all uppercase"
+                >
+                  <option value="">Todas as Equipes</option>
+                  {allTeams.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                </select>
+              </div>
+            )}
+
             {/* Data Inicial */}
             <div className="space-y-1.5">
               <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground block">
