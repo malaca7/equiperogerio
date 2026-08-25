@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { batchUpsert } from '../lib/batchUtils'
 import type { Frequencia, FrequenciaInsert, FrequenciaUpdate } from '../lib/database.types'
 import { today } from '../lib/utils'
 
@@ -137,17 +138,8 @@ export function useBatchUpsertFrequencia() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (data: FrequenciaInsert[]) => {
-      const { data: result, error } = await supabase
-        .from('frequencia')
-        .upsert(
-          data.map(d => ({ ...d, updated_at: new Date().toISOString() })),
-          { onConflict: 'funcionario_id,data' }
-        )
-        .select()
-      if (error) throw error
-      if (!result || result.length === 0) {
-        throw new Error('Sem permissão ou RLS bloqueando a gravação de frequência no banco de dados!')
-      }
+      const items = data.map(d => ({ ...d, updated_at: new Date().toISOString() }))
+      const result = await batchUpsert('frequencia', items, { onConflict: 'funcionario_id,data', chunkSize: 35 })
       return result as Frequencia[]
     },
     onSuccess: () => {

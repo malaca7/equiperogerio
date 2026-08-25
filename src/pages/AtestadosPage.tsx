@@ -20,6 +20,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useUserTeam } from '../hooks/useUserTeam'
 import { cn } from '../lib/utils'
 import { supabase } from '../lib/supabase'
+import { batchUpsert } from '../lib/batchUtils'
 
 interface AtestadoRecord {
   id: string
@@ -492,8 +493,7 @@ export function AtestadosPage() {
           status: 'atestado',
           updated_at: new Date().toISOString()
         }))
-        const { error: freqError } = await supabase.from('frequencia').upsert(freqUpserts, { onConflict: 'funcionario_id,data' })
-        if (freqError) throw freqError
+        await batchUpsert('frequencia', freqUpserts, { onConflict: 'funcionario_id,data', chunkSize: 35 })
 
         // Buscar escalas existentes para mesclar observações e preservar localidade/turno
         const { data: existingEscalasToUpdate, error: updateFindError } = await supabase

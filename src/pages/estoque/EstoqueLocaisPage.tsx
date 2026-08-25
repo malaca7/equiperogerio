@@ -296,8 +296,8 @@ export function EstoqueLocaisPage() {
       {/* Modal */}
       <Dialog.Root open={isModalOpen} onOpenChange={setIsModalOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-all duration-300" />
-          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-card border border-border/50 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[90vh]">
+          <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1000000] transition-all duration-300" />
+          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-card border border-border/50 rounded-2xl shadow-2xl z-[1000000] overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-5 border-b border-border/50 flex items-center justify-between bg-muted/20 shrink-0">
               <Dialog.Title className="text-lg font-black text-foreground">
                 {editing ? 'Editar Local' : 'Novo Local'}

@@ -89,7 +89,7 @@ export function GlobalTopHeader() {
   return (
     <header className={cn(
       "fixed top-0 left-0 right-0 z-40 print:hidden transition-all duration-300",
-      isSidebarCollapsed ? "md:left-20" : "md:left-72"
+      isSidebarCollapsed ? "md:left-20" : "md:left-64"
     )}>
       <div className="h-16 flex items-center px-4 sm:px-6 gap-3.5 bg-card/90 backdrop-blur-xl border-b border-border/60 shadow-xs">
 

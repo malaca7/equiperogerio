@@ -1162,7 +1162,7 @@ export function ModelosEscalaPage() {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-24 sm:pt-28">
         {/* Floating Popup Toast - Centered Top */}
         {msg && (
-          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[99999] max-w-md w-[92vw] sm:w-auto min-w-[320px] animate-in fade-in slide-in-from-top-6 duration-300 pointer-events-auto">
+          <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[10000000] max-w-md w-[92vw] sm:w-auto min-w-[320px] animate-in fade-in slide-in-from-top-6 duration-300 pointer-events-auto">
             <div className={cn(
               "flex items-center justify-between gap-4 px-5 py-4 rounded-2xl text-xs font-black uppercase tracking-wider border shadow-2xl backdrop-blur-2xl transition-all bg-card/95 text-foreground border-border/80 shadow-black/40 ring-1 ring-white/10",
               msgType === 'success' ? "border-emerald-500/40" : "border-rose-500/40"
@@ -1191,7 +1191,7 @@ export function ModelosEscalaPage() {
 
         {/* Confirmation Modal for Removing Applied Model */}
         {confirmRemover && (
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
             <div className="bg-card/95 border border-border/80 rounded-[2rem] p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-6 relative overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="w-12 h-12 rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center border border-rose-500/30 shadow-inner">
                 <Trash2 className="w-6 h-6" />
@@ -2068,9 +2068,6 @@ export function ModelosEscalaPage() {
                               <div className="flex items-center gap-2.5 min-w-0">
                                 <div className="min-w-0">
                                   <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
-                                  <span className="text-[8px] text-muted-foreground/60 uppercase tracking-widest font-black block mt-0.5 truncate mb-1">
-                                    {f.nome}
-                                  </span>
                                   {pertencentes.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mt-1">
                                       {pertencentes.map(m => (

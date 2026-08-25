@@ -1,6 +1,7 @@
 import { endOfMonth, format, parseISO, addDays, subDays } from 'date-fns'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { batchUpsert } from '../lib/batchUtils'
 import type { Escala, EscalaInsert, EscalaUpdate } from '../lib/database.types'
 
 export const ESCALAS_KEY = ['escalas']
@@ -231,12 +232,7 @@ export function useBatchUpsertEscalas() {
 
       const upsertPayloads = Array.from(itemMap.values())
 
-      const { data: results, error: upsertError } = await supabase
-        .from('escalas')
-        .upsert(upsertPayloads, { onConflict: 'funcionario_id,data' })
-        .select()
-
-      if (upsertError) throw upsertError
+      const results = await batchUpsert('escalas', upsertPayloads, { onConflict: 'funcionario_id,data', chunkSize: 35 })
 
       // Sincronizar com tabela de frequência se não skipFreqSync (apenas para não-trabalho)
       if (results && results.length > 0 && !skipFreqSync) {
@@ -267,11 +263,7 @@ export function useBatchUpsertEscalas() {
         const freqUpserts = Array.from(freqMap.values())
 
         if (freqUpserts.length > 0) {
-          const { error: freqError } = await supabase
-            .from('frequencia')
-            .upsert(freqUpserts, { onConflict: 'funcionario_id,data' })
-
-          if (freqError) throw freqError
+          await batchUpsert('frequencia', freqUpserts, { onConflict: 'funcionario_id,data', chunkSize: 35 })
         }
       }
 

@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { matchEmployeeSearch, normalizeSearchText } from '../lib/searchUtils'
 import { 
@@ -60,7 +62,6 @@ import {
   RotateCcw,
   Bot
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { TopHeader } from '../components/layout/TopHeader'
 import { Loading } from '../components/ui/Loading'
 import { Modal } from '../components/ui/Modal'
@@ -275,14 +276,20 @@ export function EscalaLocalidadePage() {
   const [highlightedEmployeeId, setHighlightedEmployeeId] = useState<string | null>(null)
   const [modalSearchTerm, setModalSearchTerm] = useState('')
   const [isScrolled, setIsScrolled] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 120)
+      const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0
+      setIsScrolled(scrollY > 15)
     }
-    window.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('scroll', handleScroll, { passive: true, capture: true })
+    document.addEventListener('scroll', handleScroll, { passive: true, capture: true })
     handleScroll()
-    return () => window.removeEventListener('scroll', handleScroll)
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      document.removeEventListener('scroll', handleScroll)
+    }
   }, [])
   const clearSearch = useCallback(() => {
     setSearchTerm('')
@@ -1540,6 +1547,49 @@ export function EscalaLocalidadePage() {
       text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
     })
 
+    // Append Folgas & Ausências section to Roteiro report
+    const folgasList: string[] = []
+    const feriasList: string[] = []
+    const atestadosList: string[] = []
+    const faltasList: string[] = []
+
+    filteredFuncionarios.forEach(f => {
+      if (f.cargo?.toLowerCase() === 'encarregado') return
+      if (filterSetor && f.setor !== filterSetor) return
+
+      const { isTrabalhando, tipo } = getEmployeeStatus(f.id, dateStr)
+      if (!isTrabalhando) {
+        const name = getEmployeeDisplayName(f).toUpperCase()
+        const normTipo = tipo ? String(tipo).toLowerCase().trim() : ''
+        if (['repouso', 'compensar', 'folga', 'folga_domingo', 'folga_feriado', 'descanso', 'r', 'f', 'c'].includes(normTipo) || !normTipo) {
+          folgasList.push(name)
+        } else if (['ferias', 'feria', 'fe'].includes(normTipo)) {
+          feriasList.push(name)
+        } else if (['atestado', 'afastamento', 'afastado', 'licenca', 'a', 'af'].includes(normTipo)) {
+          atestadosList.push(name)
+        } else {
+          faltasList.push(name)
+        }
+      }
+    })
+
+    if (folgasList.length > 0 || feriasList.length > 0 || atestadosList.length > 0 || faltasList.length > 0) {
+      text += `\n🌴 *FOLGAS E AUSÊNCIAS DO DIA:*\n`
+      if (folgasList.length > 0) {
+        text += `🔹 *FOLGAS (${folgasList.length}):* ${folgasList.join(', ')}\n`
+      }
+      if (feriasList.length > 0) {
+        text += `🔹 *FÉRIAS (${feriasList.length}):* ${feriasList.join(', ')}\n`
+      }
+      if (atestadosList.length > 0) {
+        text += `🔹 *ATESTADOS/AFASTAMENTOS (${atestadosList.length}):* ${atestadosList.join(', ')}\n`
+      }
+      if (faltasList.length > 0) {
+        text += `🔹 *FALTAS/OUTROS (${faltasList.length}):* ${faltasList.join(', ')}\n`
+      }
+      text += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+    }
+
     return text.toUpperCase()
   }, [currentDate, dateStr, getEmployeeStatus, localidadesConfig, dailyDistribution, equipesMeta, allFuncionarios, dynamicFuncoes, getEmployeeDisplayName, allTeams, demandasHistorico, globalDemandas])
 
@@ -1956,10 +2006,10 @@ export function EscalaLocalidadePage() {
 
   const notWorkingGroups = useMemo(() => {
     const groups: Record<string, { label: string; icon: any; members: any[]; color: string }> = {
-      'folga': { label: 'Folgas', icon: <Activity className="w-4 h-4" />, members: [], color: 'text-blue-500' },
+      'folga': { label: 'Folgas / Repouso', icon: <Activity className="w-4 h-4" />, members: [], color: 'text-blue-500' },
       'ferias': { label: 'Férias', icon: <CalendarIcon className="w-4 h-4" />, members: [], color: 'text-purple-500' },
-      'atestado': { label: 'Afastamentos', icon: <Activity className="w-4 h-4" />, members: [], color: 'text-amber-500' },
-      'outros': { label: 'Outros / Faltas', icon: <Clock className="w-4 h-4" />, members: [], color: 'text-rose-500' },
+      'atestado': { label: 'Afastamentos / Atestados', icon: <Activity className="w-4 h-4" />, members: [], color: 'text-amber-500' },
+      'outros': { label: 'Faltas / Suspensões / Outros', icon: <Clock className="w-4 h-4" />, members: [], color: 'text-rose-500' },
     }
 
     filteredFuncionarios.forEach((f) => {
@@ -1969,12 +2019,19 @@ export function EscalaLocalidadePage() {
       const { isTrabalhando, tipo, escala } = getEmployeeStatus(f.id, dateStr)
 
       if (!isTrabalhando) {
-        const member = { ...f, tipoPlanejado: tipo, escalaId: escala?.id }
-        const normTipo = tipo ? String(tipo).toLowerCase().trim() : ''
-        if (normTipo === 'repouso' || normTipo === 'compensar' || normTipo === 'folga') groups['folga'].members.push(member)
-        else if (normTipo === 'ferias') groups['ferias'].members.push(member)
-        else if (normTipo === 'atestado') groups['atestado'].members.push(member)
-        else groups['outros'].members.push(member)
+        const tipoFinal = tipo || escala?.tipo || 'repouso'
+        const member = { ...f, tipoPlanejado: tipoFinal, escalaId: escala?.id }
+        const normTipo = String(tipoFinal).toLowerCase().trim()
+        
+        if (['repouso', 'compensar', 'folga', 'folga_domingo', 'folga_feriado', 'descanso', 'r', 'f', 'c'].includes(normTipo) || !normTipo) {
+          groups['folga'].members.push(member)
+        } else if (['ferias', 'feria', 'fe'].includes(normTipo)) {
+          groups['ferias'].members.push(member)
+        } else if (['atestado', 'afastamento', 'afastado', 'licenca', 'a', 'af'].includes(normTipo)) {
+          groups['atestado'].members.push(member)
+        } else {
+          groups['outros'].members.push(member)
+        }
       }
     })
 
@@ -3414,7 +3471,7 @@ export function EscalaLocalidadePage() {
         )}
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-28 sm:pt-32 pb-32 relative print:hidden cyber-grid">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-32 relative print:hidden cyber-grid">
 
         {/* Headers Wrapper (Scrolls with content) */}
         <div className="space-y-4 mb-10">
@@ -3536,7 +3593,7 @@ export function EscalaLocalidadePage() {
 
                     {/* Suggestions Panel for Inline Search (only when not scrolled) */}
                     {!isScrolled && searchTerm && suggestions.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-card/95 dark:bg-card/90 backdrop-blur-xl border border-border/40 rounded-2xl shadow-2xl overflow-hidden animate-slide-down flex flex-col divide-y divide-border/20 z-[9999] cyber-scanline cyber-glow-primary">
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-card/95 dark:bg-card/90 backdrop-blur-xl border border-border/40 rounded-2xl shadow-2xl overflow-hidden animate-slide-down flex flex-col divide-y divide-border/20 z-40 cyber-scanline cyber-glow-primary">
                         <div className="p-3 bg-muted/20 text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
                           <span>Sugestões</span>
                           <span className="text-primary">{suggestions.length} encontrados</span>
@@ -3674,10 +3731,20 @@ export function EscalaLocalidadePage() {
               </p>
             </div>
 
-            {/* Card 4: Ausências */}
-            <div className="bg-card/90 dark:bg-card/45 backdrop-blur-xl border border-border/40 rounded-3xl p-4 sm:p-5 transition-all duration-300 hover:-translate-y-0.5 shadow-sm relative overflow-hidden group">
+            {/* Card 4: Ausências & Folgas */}
+            <div 
+              onClick={() => {
+                const el = document.getElementById('secao-ausencias')
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+              className="bg-card/90 dark:bg-card/45 backdrop-blur-xl border border-border/40 rounded-3xl p-4 sm:p-5 transition-all duration-300 hover:-translate-y-0.5 shadow-sm relative overflow-hidden group cursor-pointer hover:border-primary/40"
+              title="Clique para ver lista detalhada de colaboradores em folga"
+            >
               <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-rose-500 to-purple-500" />
-              <p className="text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground">Ausências & Folgas</p>
+              <div className="flex items-center justify-between">
+                <p className="text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground">Ausências & Folgas</p>
+                <span className="text-[9px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase">Ver Lista</span>
+              </div>
               <div className="flex items-baseline gap-2 mt-2">
                 <span className="text-2xl sm:text-3xl font-black text-foreground">{totalAusentes}</span>
                 <span className="text-[10px] font-bold text-muted-foreground uppercase">Ausentes</span>
@@ -4632,11 +4699,21 @@ export function EscalaLocalidadePage() {
           )}
 
           {/* Exception Section */}
-          {Object.values(notWorkingGroups).some(g => g.members.length > 0) && viewMode === 'daily' && (
-            <div className="pt-20 border-t border-border/30">
-              <div className="flex items-center gap-3 mb-10 px-4">
-                 <div className="w-1.5 h-6 bg-slate-400 rounded-full" />
-                 <h3 className="text-xs font-black uppercase text-slate-500 tracking-[0.2em]">Planejamento e Ausências</h3>
+          {Object.values(notWorkingGroups).some(g => g.members.length > 0) && (
+            <div id="secao-ausencias" className="pt-20 border-t border-border/30 scroll-mt-24">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10 px-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-1.5 h-6 bg-slate-400 rounded-full" />
+                  <h3 className="text-xs font-black uppercase text-slate-500 tracking-[0.2em]">Planejamento de Folgas e Ausências ({totalAusentes})</h3>
+                </div>
+
+                <Link 
+                  to="/folgas"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-black text-[10px] uppercase tracking-widest border border-blue-500/20 transition-all shadow-sm cursor-pointer w-fit"
+                >
+                  <CalendarIcon className="w-3.5 h-3.5" />
+                  Abrir Painel Completo de Folgas ➔
+                </Link>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -4696,7 +4773,7 @@ export function EscalaLocalidadePage() {
 
       {/* Register Demand Type Modal */}
       {registerDemandModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
           <div className="bg-card border border-border/50 rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl space-y-6 animate-scale-in">
             <div className="flex justify-between items-center">
               <h3 className="text-xs font-black uppercase tracking-widest text-foreground">Registrar Demanda</h3>
@@ -4904,11 +4981,6 @@ export function EscalaLocalidadePage() {
                                       </span>
                                     )}
                                   </div>
-                                  {f.apelido?.trim() && f.apelido.trim().toLowerCase() !== f.nome.trim().toLowerCase() && (
-                                    <span className="text-[9.5px] font-medium text-muted-foreground/80 leading-tight uppercase block truncate" title={f.nome}>
-                                      {f.nome}
-                                    </span>
-                                  )}
                                   {(isLatestLoc || patternCount > 0 || locDays > 0 || topPartnerDays > 0) && (
                                     <span className="text-[8.5px] font-bold text-amber-600 dark:text-amber-400 block truncate mt-0.5">
                                       {isLatestLoc
@@ -5669,11 +5741,11 @@ export function EscalaLocalidadePage() {
         </Modal>
       )}
 
-      {/* FLOATING BALLOON SEARCH BAR ON SCROLL */}
-      {isScrolled && (
-        <div className="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center print:hidden animate-in fade-in slide-in-from-top-4 duration-300 gap-3 w-[92vw] max-w-xl">
+      {/* FLOATING BALLOON SEARCH BAR (FIXED FLOATING ON SCREEN VIA PORTAL) */}
+      {(isScrolled || Boolean(searchTerm)) && createPortal(
+        <div className="fixed top-18 sm:top-20 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center print:hidden animate-in fade-in slide-in-from-top-4 duration-300 gap-3 w-[92vw] max-w-xl">
           {/* Input container balloon */}
-          <div className="flex items-center gap-3 p-3.5 px-6 bg-card/95 dark:bg-card/90 backdrop-blur-2xl border-2 border-primary/50 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.3)] transition-all duration-300 w-full">
+          <div className="flex items-center gap-3 p-3 sm:p-3.5 px-5 bg-card/98 dark:bg-card/95 backdrop-blur-3xl border-2 border-primary rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.4)] transition-all duration-300 w-full">
             <Search className="w-5 h-5 text-primary shrink-0 animate-pulse" />
             <input
               type="text"
@@ -5682,26 +5754,22 @@ export function EscalaLocalidadePage() {
               onChange={e => setSearchTerm(e.target.value)}
               className="flex-1 bg-transparent border-none outline-none text-xs sm:text-sm md:text-base font-black text-foreground placeholder:text-muted-foreground/60 focus:ring-0 p-0 uppercase tracking-wider"
             />
-            {searchTerm ? (
+            {searchTerm && (
               <button
                 type="button"
                 onClick={clearSearch}
-                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-full transition-colors shrink-0 cursor-pointer"
+                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-lg transition-colors shrink-0 cursor-pointer"
                 title="Limpar busca"
               >
                 <X className="w-4.5 h-4.5" />
               </button>
-            ) : (
-              <span className="text-[9px] font-black uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-full shrink-0 border border-primary/20">
-                Meta & Rota
-              </span>
             )}
           </div>
 
           {/* Suggestions Panel Opening Below */}
           {searchTerm && suggestions.length > 0 && (
-            <div className="w-full bg-card/95 dark:bg-card/90 backdrop-blur-2xl border border-border/60 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in duration-200 divide-y divide-border/20 z-[9999]">
-              <div className="p-3.5 px-6 bg-muted/40 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
+            <div className="w-full bg-card/98 dark:bg-card/95 backdrop-blur-3xl border-2 border-border/80 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in duration-200 divide-y divide-border/20 z-[200]">
+              <div className="p-3.5 px-6 bg-muted/50 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
                 <span>Sugestões Encontradas</span>
                 <span className="text-primary">{suggestions.length} resultado(s)</span>
               </div>
@@ -5762,7 +5830,8 @@ export function EscalaLocalidadePage() {
               </div>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
 
 

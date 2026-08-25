@@ -59,6 +59,7 @@ const FrotaObservacoesPage = lazyWithRetry(() => import('./pages/frota/FrotaObse
 const FrotaRendimentoPage = lazyWithRetry(() => import('./pages/frota/FrotaRendimentoPage').then(m => ({ default: m.FrotaRendimentoPage })))
 const FrotaNotificacoesPage = lazyWithRetry(() => import('./pages/frota/FrotaNotificacoesPage').then(m => ({ default: m.FrotaNotificacoesPage })))
 const SstSolicitacaoEpiPage = lazyWithRetry(() => import('./pages/sst/SstSolicitacaoEpiPage').then(m => ({ default: m.SstSolicitacaoEpiPage })))
+const FolgasPage = lazyWithRetry(() => import('./pages/FolgasPage').then(m => ({ default: m.FolgasPage })))
 const DownloadPage = lazyWithRetry(() => import('./pages/DownloadPage').then(m => ({ default: m.DownloadPage })))
 const NotFoundPage = lazyWithRetry(() => import('./pages/NotFoundPage').then(m => ({ default: m.NotFoundPage })))
 
@@ -154,7 +155,7 @@ function ProtectedLayout() {
     <>
       <Sidebar />
       <GlobalTopHeader />
-      <main className={`transition-all duration-300 min-h-screen ${isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'} pt-16`}>
+      <main className={`transition-all duration-300 min-h-screen ${isSidebarCollapsed ? 'md:pl-20' : 'md:pl-64'}`}>
         <Suspense fallback={<Loading size="lg" text="Carregando..." fullscreen variant="dots" />}>
           <Routes>
             <Route path="/" element={<DefaultRedirect />} />
@@ -173,6 +174,7 @@ function ProtectedLayout() {
             <Route path="/escala/imprimir-mensal" element={<RouteGuard page="escala"><EscalaMensalPrint /></RouteGuard>} />
             <Route path="/notificacoes" element={<RouteGuard page="notificacoes"><NotificacoesPage /></RouteGuard>} />
             <Route path="/observacoes" element={<RouteGuard page="observacoes"><ObservacoesPage /></RouteGuard>} />
+            <Route path="/folgas" element={<RouteGuard page="folgas"><FolgasPage /></RouteGuard>} />
             <Route path="/rendimento" element={<RouteGuard page="rendimento"><RendimentoPage /></RouteGuard>} />
             <Route path="/atestados" element={<RouteGuard page="atestados"><AtestadosPage /></RouteGuard>} />
             <Route path="/equipes" element={<RouteGuard page="equipes"><EquipesPage /></RouteGuard>} />

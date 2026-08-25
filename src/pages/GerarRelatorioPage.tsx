@@ -588,6 +588,12 @@ export function GerarRelatorioPage() {
     }
   }
 
+  // Enhanced UI & Mode States
+  const [viewTab, setViewTab] = useState<'texto' | 'a4'>('texto')
+  const [textFormatStyle, setTextFormatStyle] = useState<'completo' | 'executivo' | 'ocorrencias'>('completo')
+  const [showSignatures, setShowSignatures] = useState(true)
+  const [companyHeaderName, setCompanyHeaderName] = useState('7LOCAR GESTÃO DE EQUIPES OPERACIONAIS')
+
   // Generate formatted WhatsApp report text with emojis & markdown formatting
   const generateWhatsAppText = useMemo(() => {
     const currentTeam = equipes.find(eq => eq.id === selectedTeamId)
@@ -596,13 +602,72 @@ export function GerarRelatorioPage() {
 
     let lines: string[] = []
 
-    // Header
+    // 1) FORMATO EXECUTIVO RÁPIDO
+    if (textFormatStyle === 'executivo') {
+      lines.push(`📊 *RESUMO EXECUTIVO OPERACIONAL*`)
+      lines.push(`🏢 *Empresa:* ${companyHeaderName}`)
+      lines.push(`👥 *Equipe:* ${teamName}`)
+      lines.push(`📅 *Data:* ${dateFormatted}`)
+      lines.push(``)
+      lines.push(`📈 *INDICADORES DE DESEMPENHO:*`)
+      lines.push(`• *Efetivo Total:* ${stats.total} colaboradores`)
+      lines.push(`• ✅ *Presentes:* ${stats.present} (${stats.rate}%)`)
+      lines.push(`• ❌ *Ausentes/Ocorrências:* ${stats.absent}`)
+      lines.push(`• 📌 *Setores Ativos:* ${Object.keys(membersBySector).length}`)
+      lines.push(``)
+      lines.push(`📌 *DISTRIBUIÇÃO POR SETOR:*`)
+      Object.entries(membersBySector).forEach(([sector, funcs]) => {
+        const presentInSector = funcs.filter(m => {
+          const st = getMemberAttendanceStatus(m.id).label
+          return st === 'Presente' || st === 'Sem Registro'
+        }).length
+        lines.push(`• *${sector.toUpperCase()}:* ${presentInSector}/${funcs.length} presentes`)
+      })
+      lines.push(``)
+      lines.push(`📱 _Gerado via 7Locar - Gestão de Equipes_`)
+      return lines.join('\n')
+    }
+
+    // 2) FORMATO OCORRÊNCIAS / AUSÊNCIAS
+    if (textFormatStyle === 'ocorrencias') {
+      lines.push(`⚠️ *RELATÓRIO DE AUSÊNCIAS E OCORRÊNCIAS*`)
+      lines.push(`👥 *Equipe:* ${teamName} | 📅 *Data:* ${dateFormatted}`)
+      lines.push(``)
+      const absentMembers = filteredMembros.filter(m => {
+        const st = getMemberAttendanceStatus(m.id).label
+        return st !== 'Presente' && st !== 'Sem Registro'
+      })
+      if (absentMembers.length === 0) {
+        lines.push(`✅ *NENHUMA AUSÊNCIA OU DIVERGÊNCIA REGISTRADA.*`)
+        lines.push(`Efetivo 100% presente no dia.`)
+      } else {
+        lines.push(`📍 *LISTA DE OCORRÊNCIAS (${absentMembers.length}):*`)
+        absentMembers.forEach((m, idx) => {
+          const st = getMemberAttendanceStatus(m.id)
+          const obs = observations[m.id]
+          let icon = '❌'
+          if (st.label === 'Folga') icon = '🏖️'
+          else if (st.label === 'Atestado') icon = '🏥'
+          else if (st.label === 'Férias') icon = '✈️'
+
+          let line = `${idx + 1}. ${icon} *${m.nome}*`
+          if (m.cargo) line += ` _(${m.cargo})_`
+          line += ` — *[${st.label.toUpperCase()}]*`
+          lines.push(line)
+          if (obs) lines.push(`   📝 _Obs: ${obs}_`)
+        })
+      }
+      lines.push(``)
+      lines.push(`📱 _Gerado via 7Locar - Gestão de Equipes_`)
+      return lines.join('\n')
+    }
+
+    // 3) FORMATO COMPLETO OPERACIONAL (DEFAULT)
     lines.push(`📋 *${(reportTitle || 'RELATÓRIO DIÁRIO OPERACIONAL').toUpperCase()}*`)
-    lines.push(`📅 *Data:* ${dateFormatted}`)
-    lines.push(`👥 *Equipe:* ${teamName}`)
+    lines.push(`🏢 *Empresa:* ${companyHeaderName}`)
+    lines.push(`📅 *Data:* ${dateFormatted} | 👥 *Equipe:* ${teamName}`)
     lines.push(``)
 
-    // Metrics (if showMetrics enabled)
     if (showMetrics) {
       lines.push(`📊 *RESUMO DE PRESENÇA*`)
       lines.push(`• *Efetivo Total:* ${stats.total} colaboradores`)
@@ -613,7 +678,6 @@ export function GerarRelatorioPage() {
 
     lines.push(`─────────────────────────────`)
 
-    // Sectors & Members
     Object.entries(membersBySector).forEach(([sector, funcs]) => {
       let sectorEmoji = '🧹'
       const sLower = sector.toLowerCase()
@@ -623,7 +687,7 @@ export function GerarRelatorioPage() {
       else if (sLower.includes('capin') || sLower.includes('roçad')) sectorEmoji = '🌾'
 
       lines.push(``)
-      lines.push(`${sectorEmoji} *${sector.toUpperCase()}*`)
+      lines.push(`${sectorEmoji} *${sector.toUpperCase()}* (${funcs.length})`)
 
       funcs.forEach(m => {
         const statusInfo = getMemberAttendanceStatus(m.id)
@@ -637,7 +701,7 @@ export function GerarRelatorioPage() {
         else if (statusInfo.label === 'Férias') statusIcon = '✈️'
         else if (statusInfo.label === 'Sem Registro') statusIcon = '⚪'
 
-        let memberLine = `${statusIcon} *${m.apelido || m.nome}*`
+        let memberLine = `${statusIcon} *${m.nome}*`
 
         if (showRoles && m.cargo) {
           memberLine += ` _(${m.cargo})_`
@@ -659,7 +723,6 @@ export function GerarRelatorioPage() {
       })
     })
 
-    // Divergences / Absences Summary Section
     const absentMembers = filteredMembros.filter(m => {
       const st = getMemberAttendanceStatus(m.id).label
       return st !== 'Presente' && st !== 'Sem Registro'
@@ -675,7 +738,7 @@ export function GerarRelatorioPage() {
         if (st.label === 'Folga') icon = '🏖️'
         else if (st.label === 'Atestado') icon = '🏥'
         else if (st.label === 'Férias') icon = '✈️'
-        lines.push(`${icon} *${m.apelido || m.nome}* — *${st.label.toUpperCase()}*`)
+        lines.push(`${icon} *${m.nome}* — *${st.label.toUpperCase()}*`)
       })
     }
 
@@ -683,7 +746,7 @@ export function GerarRelatorioPage() {
     lines.push(`📱 _Gerado via 7Locar - Gestão de Equipes_`)
 
     return lines.join('\n')
-  }, [selectedTeamId, selectedDate, reportTitle, showMetrics, showLocalities, showObservations, showRoles, stats, membersBySector, filteredMembros, equipes, escalas, observations, frequencias])
+  }, [selectedTeamId, selectedDate, reportTitle, showMetrics, showLocalities, showObservations, showRoles, stats, membersBySector, filteredMembros, equipes, escalas, observations, frequencias, textFormatStyle, companyHeaderName])
 
   const handleCopyWhatsAppText = () => {
     navigator.clipboard.writeText(generateWhatsAppText)
@@ -712,8 +775,52 @@ export function GerarRelatorioPage() {
     <div className="space-y-6 animate-fade-in pb-32">
       <TopHeader 
         title="Gerar Relatório de Equipe" 
-        subtitle="Exportação e configuração de dossiê operacional" 
+        subtitle="Dossiê Operacional, Formato Texto WhatsApp e Impressão Folha A4" 
       />
+
+      {/* DUAL MODE SELECTOR TAB BAR */}
+      <div className="px-4">
+        <div className="bg-card/90 backdrop-blur-2xl border border-border/60 rounded-3xl p-3 shadow-md flex flex-wrap items-center justify-between gap-4">
+          
+          <div className="flex items-center gap-2 p-1.5 bg-muted/60 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => setViewTab('texto')}
+              className={cn(
+                "flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer",
+                viewTab === 'texto'
+                  ? "bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 text-white shadow-md shadow-emerald-500/20"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <MessageSquare className="w-4 h-4" /> 📱 Formato Texto (WhatsApp / Copiar)
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewTab('a4')}
+              className={cn(
+                "flex items-center gap-2 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer",
+                viewTab === 'a4'
+                  ? "bg-gradient-to-r from-primary via-indigo-600 to-primary text-white shadow-md shadow-primary/20"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Printer className="w-4 h-4" /> 📄 Formato Folha A4 (Imprimir / PDF)
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3 px-3">
+            <span className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-primary" /> Total Efetivo:
+              <strong className="text-foreground font-black">{stats.total}</strong>
+            </span>
+            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              • {stats.present} Presentes ({stats.rate}%)
+            </span>
+          </div>
+
+        </div>
+      </div>
 
       <div className="px-4 grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         
@@ -723,13 +830,13 @@ export function GerarRelatorioPage() {
           {/* TEAM & DATE SELECTOR CARD */}
           <div className="bg-card/80 backdrop-blur-xl border border-border/50 rounded-[2rem] p-6 shadow-sm space-y-4">
             <h3 className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-2">
-              <Users className="w-4 h-4" /> Seleção de Escopo
+              <Users className="w-4 h-4" /> Escopo e Organização
             </h3>
             
             <div className="space-y-3">
               <div>
                 <label className="text-[10px] font-black uppercase text-muted-foreground tracking-wider block mb-1">
-                  Equipe
+                  Equipe Operacional
                 </label>
                 <select
                   value={selectedTeamId}
@@ -749,78 +856,80 @@ export function GerarRelatorioPage() {
                 <label className="text-[10px] font-black uppercase text-muted-foreground tracking-wider block mb-1">
                   Data do Relatório
                 </label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={e => setSelectedDate(e.target.value)}
-                    className="w-full pl-11 pr-4 h-12 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold focus:ring-0 focus:border-primary/30 outline-none"
-                  />
-                </div>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={e => setSelectedDate(e.target.value)}
+                  className="w-full h-12 px-4 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold focus:ring-0 focus:border-primary/30 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-muted-foreground tracking-wider block mb-1">
+                  Nome / Cabeçalho da Empresa
+                </label>
+                <input
+                  type="text"
+                  value={companyHeaderName}
+                  onChange={e => setCompanyHeaderName(e.target.value)}
+                  placeholder="EX: 7LOCAR GESTÃO OPERACIONAL"
+                  className="w-full h-12 px-4 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold focus:ring-0 focus:border-primary/30 outline-none uppercase"
+                />
               </div>
             </div>
           </div>
 
-          {/* TEMPLATE PERSISTENCE CARD */}
+          {/* TEMPLATES CARD */}
           <div className="bg-card/80 backdrop-blur-xl border border-border/50 rounded-[2rem] p-6 shadow-sm space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-2">
-              <Save className="w-4 h-4" /> Modelos de Relatório
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-2">
+                <FileText className="w-4 h-4" /> Modelos Salvos
+              </h3>
+              {currentTemplateId && (
+                <span className="text-[10px] font-black text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                  Modelo Ativo
+                </span>
+              )}
+            </div>
 
             <div className="space-y-3">
               {templates.length === 0 ? (
-                <div className="text-center py-6 border border-dashed border-border/50 rounded-2xl text-muted-foreground/60 text-xs font-bold">
-                  Nenhum modelo salvo para esta equipe.
-                </div>
+                <p className="text-xs text-muted-foreground italic">Nenhum modelo personalizado salvo para esta equipe.</p>
               ) : (
-                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                   {templates.map(t => {
                     const isActive = currentTemplateId === t.id
                     const isModified = isActive && isTemplateModified
+
                     return (
                       <div
                         key={t.id}
-                        onClick={() => isActive ? setCurrentTemplateId('') : handleApplyTemplate(t.id)}
+                        onClick={() => handleApplyTemplate(t.id)}
                         className={cn(
-                          "group p-3 rounded-2xl border transition-all duration-300 cursor-pointer flex items-center justify-between",
+                          "p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group",
                           isActive
-                            ? "bg-primary/10 border-primary text-primary shadow-sm shadow-primary/10"
-                            : "bg-muted/45 border-border/30 text-foreground hover:bg-muted/65 hover:border-border/50"
+                            ? "bg-primary/10 border-primary/40 text-primary shadow-xs"
+                            : "bg-muted/30 border-border/40 hover:bg-muted/60 text-foreground"
                         )}
                       >
-                        <div className="flex-1 min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-black truncate">{t.nome}</span>
+                            <span className="text-xs font-black uppercase truncate">{t.nome}</span>
                             {isModified && (
-                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Alterações pendentes" />
+                              <span className="text-[9px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                                Editado
+                              </span>
                             )}
                           </div>
-                          <span className="text-[9px] text-muted-foreground font-bold tracking-tight block truncate">
+                          <span className="text-[10px] text-muted-foreground block truncate mt-0.5">
                             {t.report_title}
                           </span>
                         </div>
 
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {isActive && isModified && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleSaveTemplate(false)
-                              }}
-                              className="p-1.5 hover:bg-primary/20 rounded-lg text-primary transition-all"
-                              title="Salvar alterações"
-                            >
-                              <Save className="w-3.5 h-3.5" />
-                            </button>
-                          )}
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeleteTemplate(t.id)
-                            }}
-                            className="p-1.5 hover:bg-rose-500/20 rounded-lg text-rose-500 transition-all"
-                            title="Excluir modelo"
+                            onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(t.id) }}
+                            className="p-1.5 hover:bg-rose-500/20 rounded-lg text-rose-500"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -830,39 +939,6 @@ export function GerarRelatorioPage() {
                   })}
                 </div>
               )}
-
-              <div className="flex gap-2 pt-2">
-                {currentTemplateId ? (
-                  <>
-                    <Button
-                      onClick={() => handleSaveTemplate(false)}
-                      loading={isSavingTemplate}
-                      className={cn(
-                        "flex-1 h-11 rounded-2xl font-black uppercase text-[10px] tracking-wider transition-all",
-                        isTemplateModified
-                          ? "bg-amber-500 hover:bg-amber-600 text-white animate-pulse"
-                          : "bg-primary text-white hover:bg-primary/95"
-                      )}
-                    >
-                      Salvar no Modelo
-                    </Button>
-                    <Button
-                      onClick={() => handleApplyTemplate('')}
-                      className="h-11 px-3 rounded-2xl bg-muted text-foreground hover:bg-muted/80 font-black uppercase text-[10px] tracking-wider font-bold"
-                      title="Restaurar padrões de layout"
-                    >
-                      Limpar
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    onClick={() => setSaveModalOpen(true)}
-                    className="flex-1 h-11 rounded-2xl bg-primary text-white font-black uppercase text-[10px] tracking-wider"
-                  >
-                    Novo Modelo
-                  </Button>
-                )}
-              </div>
             </div>
           </div>
 
@@ -875,14 +951,14 @@ export function GerarRelatorioPage() {
             <div className="space-y-3">
               <div>
                 <label className="text-[10px] font-black uppercase text-muted-foreground tracking-wider block mb-1">
-                  Título do Cabeçalho
+                  Título do Relatório
                 </label>
                 <input
                   type="text"
                   value={reportTitle}
                   onChange={e => setReportTitle(e.target.value)}
                   placeholder="EX: RELATÓRIO DIÁRIO OPERACIONAL"
-                  className="w-full px-4 h-12 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold focus:ring-0 focus:border-primary/30 outline-none"
+                  className="w-full px-4 h-12 bg-muted/50 border border-border/50 rounded-2xl text-sm font-bold focus:ring-0 focus:border-primary/30 outline-none uppercase"
                 />
               </div>
 
@@ -891,62 +967,50 @@ export function GerarRelatorioPage() {
               <div className="space-y-2">
                 <button
                   onClick={() => setShowMetrics(!showMetrics)}
-                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all"
+                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all cursor-pointer"
                 >
                   <span className="text-xs font-bold text-foreground">Exibir Métricas da Equipe</span>
-                  {showMetrics ? (
-                    <Eye className="w-4 h-4 text-primary" />
-                  ) : (
-                    <EyeOff className="w-4 h-4 text-muted-foreground" />
-                  )}
+                  {showMetrics ? <Eye className="w-4 h-4 text-primary" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
                 </button>
 
                 <button
                   onClick={() => setShowLocalities(!showLocalities)}
-                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all"
+                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all cursor-pointer"
                 >
                   <span className="text-xs font-bold text-foreground">Exibir Localidades (Alocações)</span>
-                  {showLocalities ? (
-                    <Eye className="w-4 h-4 text-primary" />
-                  ) : (
-                    <EyeOff className="w-4 h-4 text-muted-foreground" />
-                  )}
+                  {showLocalities ? <Eye className="w-4 h-4 text-primary" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
                 </button>
 
                 <button
                   onClick={() => setShowObservations(!showObservations)}
-                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all"
+                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all cursor-pointer"
                 >
                   <span className="text-xs font-bold text-foreground">Exibir Observações</span>
-                  {showObservations ? (
-                    <Eye className="w-4 h-4 text-primary" />
-                  ) : (
-                    <EyeOff className="w-4 h-4 text-muted-foreground" />
-                  )}
+                  {showObservations ? <Eye className="w-4 h-4 text-primary" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
                 </button>
 
                 <button
                   onClick={() => setShowRoles(!showRoles)}
-                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all"
+                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all cursor-pointer"
                 >
                   <span className="text-xs font-bold text-foreground">Exibir Cargos</span>
-                  {showRoles ? (
-                    <Eye className="w-4 h-4 text-primary" />
-                  ) : (
-                    <EyeOff className="w-4 h-4 text-muted-foreground" />
-                  )}
+                  {showRoles ? <Eye className="w-4 h-4 text-primary" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
                 </button>
 
                 <button
                   onClick={() => setShowInactives(!showInactives)}
-                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all"
+                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all cursor-pointer"
                 >
                   <span className="text-xs font-bold text-foreground">Exibir Funcionários Inativos</span>
-                  {showInactives ? (
-                    <Eye className="w-4 h-4 text-primary" />
-                  ) : (
-                    <EyeOff className="w-4 h-4 text-muted-foreground" />
-                  )}
+                  {showInactives ? <Eye className="w-4 h-4 text-primary" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
+                </button>
+
+                <button
+                  onClick={() => setShowSignatures(!showSignatures)}
+                  className="flex items-center justify-between w-full p-2 hover:bg-muted/30 rounded-xl transition-all cursor-pointer"
+                >
+                  <span className="text-xs font-bold text-foreground">Exibir Assinaturas (Folha A4)</span>
+                  {showSignatures ? <Eye className="w-4 h-4 text-primary" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
                 </button>
               </div>
             </div>
@@ -954,259 +1018,353 @@ export function GerarRelatorioPage() {
 
         </div>
 
-        {/* PREVIEW & EXPORT ACTIONS - xl:col-span-8 */}
+        {/* MAIN PANEL CONTENT - xl:col-span-8 */}
         <div className="xl:col-span-8 space-y-6">
-          
-          {/* EXPORT OPTIONS HEADER */}
-          <div className="flex flex-wrap items-center justify-between gap-4 bg-card/85 backdrop-blur-xl border border-border/50 rounded-3xl p-4 shadow-sm">
-            <span className="text-xs font-black uppercase tracking-wider text-muted-foreground px-2">
-              Visualização e Exportação
-            </span>
 
-            <div className="flex flex-wrap gap-2">
-              {currentTemplateId ? (
-                <button
-                  type="button"
-                  onClick={() => handleSaveTemplate(false)}
-                  disabled={isSavingTemplate}
-                  className="h-10 px-4 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center gap-1.5 shadow-sm"
-                >
-                  <Save className="w-3.5 h-3.5" /> Salvar por Cima do Modelo
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setSaveModalOpen(true)}
-                  className="h-10 px-4 rounded-xl border border-border/50 text-xs font-black uppercase tracking-wider text-foreground hover:bg-muted transition-all flex items-center gap-1.5"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Salvar como Novo Modelo
-                </button>
-              )}
-              {/* WhatsApp Text Buttons */}
-              <button
-                type="button"
-                onClick={() => setWhatsappModalOpen(true)}
-                className="h-10 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-500/20 transition-all flex items-center gap-1.5"
-              >
-                <MessageSquare className="w-3.5 h-3.5" /> Texto WhatsApp
-              </button>
+          {/* TAB 1: 📱 FORMATO TEXTO (WHATSAPP / COPIAR) */}
+          {viewTab === 'texto' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              
+              {/* ACTION BAR FOR TEXT REPORT */}
+              <div className="bg-card/85 backdrop-blur-xl border border-border/50 rounded-3xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                
+                {/* Sub-Format Selector */}
+                <div className="flex items-center gap-1.5 p-1 bg-muted/50 rounded-2xl">
+                  <button
+                    type="button"
+                    onClick={() => setTextFormatStyle('completo')}
+                    className={cn(
+                      "px-3.5 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all cursor-pointer",
+                      textFormatStyle === 'completo'
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    📋 Completo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTextFormatStyle('executivo')}
+                    className={cn(
+                      "px-3.5 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all cursor-pointer",
+                      textFormatStyle === 'executivo'
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    📊 Executivo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTextFormatStyle('ocorrencias')}
+                    className={cn(
+                      "px-3.5 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all cursor-pointer",
+                      textFormatStyle === 'ocorrencias'
+                        ? "bg-rose-600 text-white shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    ⚠️ Ocorrências
+                  </button>
+                </div>
 
-              <button
-                type="button"
-                onClick={handleCopyWhatsAppText}
-                className="h-10 px-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5"
-                title="Copiar texto com emojis para WhatsApp"
-              >
-                {copiedText ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedText ? 'Copiado!' : 'Copiar Texto'}
-              </button>
+                {/* Primary Copy & Share Action Buttons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyWhatsAppText}
+                    className="h-11 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-500/20 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    {copiedText ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    {copiedText ? 'Texto Copiado!' : 'Copiar Texto'}
+                  </button>
 
-              {typeof navigator !== 'undefined' && typeof navigator.share === 'function' ? (
-                <button
-                  onClick={() => handleExport('share')}
-                  disabled={isExporting}
-                  className="h-10 px-5 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-wider hover:bg-primary-hover shadow-md transition-all flex items-center gap-1.5 animate-fade-in"
-                >
-                  <Share2 className="w-3.5 h-3.5" /> Compartilhar PNG
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleExport('download')}
-                  disabled={isExporting}
-                  className="h-10 px-5 rounded-xl bg-primary text-white text-xs font-black uppercase tracking-wider hover:bg-primary-hover shadow-md transition-all flex items-center gap-1.5 animate-fade-in"
-                >
-                  <Download className="w-3.5 h-3.5" /> Baixar PNG
-                </button>
-              )}
-            </div>
-          </div>
+                  <button
+                    type="button"
+                    onClick={handleSendWhatsApp}
+                    className="h-11 px-5 rounded-2xl bg-[#25D366] hover:bg-[#20ba5a] text-white text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-600/25 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <MessageSquare className="w-4 h-4" /> Enviar no WhatsApp
+                  </button>
+                </div>
 
-          {/* THE CORE REPORT DOCUMENT PREVIEW CONTAINER */}
-          <div 
-            ref={shareSquareRef} 
-            id="report-print-area"
-            className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 border border-slate-200 dark:border-zinc-800 shadow-xl rounded-[2.5rem] p-10 space-y-8 max-w-full overflow-hidden"
-            style={{ fontFamily: "'Inter', sans-serif" }}
-          >
-            {/* Header section */}
-            <div className="flex justify-between items-start border-b border-slate-100 dark:border-zinc-800 pb-6 gap-6">
-              <div className="space-y-1 flex-1">
-                <h1 className="text-2xl font-black uppercase tracking-tight text-slate-800 dark:text-zinc-100">
-                  {reportTitle || 'RELATÓRIO DIÁRIO OPERACIONAL'}
-                </h1>
-                <p className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5" /> 
-                  {format(parseISO(selectedDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                </p>
               </div>
-              <div className="text-right flex-shrink-0">
-                <span className="inline-block px-3 py-1 bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 rounded-xl text-xs font-black uppercase tracking-widest">
-                  {equipes.find(eq => eq.id === selectedTeamId)?.nome || 'Sem Equipe'}
+
+              {/* TEXT DISPLAY PREVIEW CONTAINER */}
+              <div className="bg-card/90 backdrop-blur-2xl border border-border/60 rounded-[2.5rem] p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between px-2">
+                  <span className="text-xs font-black uppercase tracking-widest text-emerald-500 flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4" /> Pré-visualização do Texto Formatado
+                  </span>
+                  <span className="text-[10px] font-bold text-muted-foreground">
+                    Formatado com nomes completos, markdown (*bold*) e emojis
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <textarea
+                    readOnly
+                    value={generateWhatsAppText}
+                    className="w-full h-[520px] p-6 rounded-2xl bg-zinc-950 text-emerald-400 font-mono text-xs leading-relaxed border border-zinc-800 focus:outline-none scrollbar-thin resize-none selection:bg-emerald-500/30 selection:text-white shadow-inner"
+                  />
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 2: 📄 FORMATO FOLHA A4 (IMPRIMIR / PDF) */}
+          {viewTab === 'a4' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              
+              {/* EXPORT & PRINT ACTIONS HEADER */}
+              <div className="flex flex-wrap items-center justify-between gap-4 bg-card/85 backdrop-blur-xl border border-border/50 rounded-3xl p-4 shadow-sm">
+                <span className="text-xs font-black uppercase tracking-wider text-muted-foreground px-2 flex items-center gap-2">
+                  <Printer className="w-4 h-4 text-primary" /> Visualização de Documento A4
                 </span>
-              </div>
-            </div>
 
-            {/* Attendance metrics panel */}
-            {showMetrics && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50 dark:bg-zinc-900/40 border border-slate-100 dark:border-zinc-800 rounded-[1.75rem] p-5 print-metrics-grid">
-                <div className="space-y-0.5">
-                  <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Efetivo Ativo</span>
-                  <div className="text-lg font-black text-slate-800 dark:text-zinc-100">{stats.total}</div>
-                </div>
-                <div className="space-y-0.5">
-                  <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Presenças</span>
-                  <div className="text-lg font-black text-emerald-600">{stats.present}</div>
-                </div>
-                <div className="space-y-0.5">
-                  <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Ausências</span>
-                  <div className="text-lg font-black text-rose-600">{stats.absent}</div>
-                </div>
-                <div className="space-y-0.5">
-                  <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Taxa de Presença</span>
-                  <div className="text-lg font-black text-primary">{stats.rate}%</div>
-                </div>
-              </div>
-            )}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="h-10 px-4 rounded-xl bg-gradient-to-r from-primary via-indigo-600 to-primary text-white text-xs font-black uppercase tracking-wider shadow-md shadow-primary/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" /> Imprimir / PDF (A4)
+                  </button>
 
-            {/* Staff breakdown grouped by sectors */}
-            {Object.keys(membersBySector).length === 0 ? (
-              <div className="text-center py-12 text-slate-400 dark:text-zinc-500 italic text-sm">
-                Nenhum colaborador carregado para esta equipe.
+                  <button
+                    type="button"
+                    onClick={() => handleExport('download')}
+                    disabled={isExporting}
+                    className="h-10 px-4 rounded-xl border border-border/60 text-xs font-black uppercase tracking-wider text-foreground hover:bg-muted transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Baixar Imagem PNG
+                  </button>
+
+                  {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                    <button
+                      type="button"
+                      onClick={() => handleExport('share')}
+                      disabled={isExporting}
+                      className="h-10 px-4 rounded-xl border border-primary/30 bg-primary/10 text-primary text-xs font-black uppercase tracking-wider hover:bg-primary/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Share2 className="w-3.5 h-3.5" /> Compartilhar
+                    </button>
+                  )}
+                </div>
               </div>
-            ) : (
-              <div className="space-y-6">
-                {Object.entries(membersBySector).map(([sector, funcs]) => {
-                  const Icon = getSectorIcon(sector)
-                  const colors = getSectorColors(sector)
-                  
-                  return (
-                    <div key={sector} className="space-y-3 print-sector-group">
+
+              {/* THE CORE REPORT DOCUMENT PREVIEW CONTAINER (FORMATTED AS OFFICIAL A4 SHEET) */}
+              <div 
+                ref={shareSquareRef} 
+                id="report-print-area"
+                className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 border border-slate-200 dark:border-zinc-800 shadow-xl rounded-[2.5rem] p-10 space-y-8 max-w-full overflow-hidden"
+                style={{ fontFamily: "'Inter', sans-serif" }}
+              >
+                {/* Official Corporate Header section */}
+                <div className="flex justify-between items-start border-b-2 border-slate-900/10 dark:border-zinc-800 pb-6 gap-6">
+                  <div className="space-y-1 flex-1">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary block">
+                      {companyHeaderName || '7LOCAR GESTÃO OPERACIONAL'}
+                    </span>
+                    <h1 className="text-2xl font-black uppercase tracking-tight text-slate-800 dark:text-zinc-100">
+                      {reportTitle || 'RELATÓRIO DIÁRIO OPERACIONAL'}
+                    </h1>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 flex items-center gap-1.5 mt-1">
+                      <Calendar className="w-3.5 h-3.5 text-primary" /> 
+                      Emissão: {format(parseISO(selectedDate), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0 space-y-1">
+                    <span className="inline-block px-3 py-1 bg-slate-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-xl text-xs font-black uppercase tracking-widest shadow-xs">
+                      {equipes.find(eq => eq.id === selectedTeamId)?.nome || 'Sem Equipe'}
+                    </span>
+                    <span className="text-[9px] font-bold text-slate-400 dark:text-zinc-500 uppercase block tracking-wider">
+                      Protocolo: #{selectedDate.replace(/-/g, '')}-{selectedTeamId.substring(0, 4).toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Attendance metrics panel */}
+                {showMetrics && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50 dark:bg-zinc-900/40 border border-slate-200 dark:border-zinc-800 rounded-[1.75rem] p-5 print-metrics-grid">
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Efetivo Ativo</span>
+                      <div className="text-xl font-black text-slate-800 dark:text-zinc-100">{stats.total}</div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Presenças</span>
+                      <div className="text-xl font-black text-emerald-600">{stats.present}</div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Ausências</span>
+                      <div className="text-xl font-black text-rose-600">{stats.absent}</div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Taxa de Presença</span>
+                      <div className="text-xl font-black text-primary">{stats.rate}%</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Staff breakdown grouped by sectors */}
+                {Object.keys(membersBySector).length === 0 ? (
+                  <div className="text-center py-12 text-slate-400 dark:text-zinc-500 italic text-sm">
+                    Nenhum colaborador carregado para esta equipe.
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {Object.entries(membersBySector).map(([sector, funcs]) => {
+                      const Icon = getSectorIcon(sector)
+                      const colors = getSectorColors(sector)
                       
-                      {/* Sector title bar */}
-                      <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100 dark:border-zinc-800 print-sector-header">
-                        <div 
-                          className="w-7 h-7 rounded-lg flex items-center justify-center"
-                          style={{ backgroundColor: colors.bg, color: colors.text }}
-                        >
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-zinc-300">
-                          Setor: {sector} ({funcs.length})
-                        </h4>
-                      </div>
+                      return (
+                        <div key={sector} className="space-y-3 print-sector-group">
+                          
+                          {/* Sector title bar */}
+                          <div className="flex items-center gap-2 pb-1.5 border-b border-slate-200 dark:border-zinc-800 print-sector-header">
+                            <div 
+                              className="w-7 h-7 rounded-lg flex items-center justify-center"
+                              style={{ backgroundColor: colors.bg, color: colors.text }}
+                            >
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                              Setor: {sector} ({funcs.length} Colaboradores)
+                            </h4>
+                          </div>
 
-                      {/* Employees List under this sector styled like Excel spreadsheet */}
-                      <div className="overflow-x-auto border border-slate-200 dark:border-zinc-800 rounded-2xl shadow-sm">
-                        <table className="w-full border-collapse text-left text-xs">
-                          <thead>
-                            <tr className="bg-slate-50 dark:bg-zinc-900/50">
-                              <th className="p-3 border border-slate-200 dark:border-zinc-800 font-black uppercase text-slate-600 dark:text-zinc-400 w-[30%]">Colaborador</th>
-                              {showRoles && (
-                                <th className="p-3 border border-slate-200 dark:border-zinc-800 font-black uppercase text-slate-600 dark:text-zinc-400 w-[15%]">Cargo</th>
-                              )}
-                              {showLocalities && (
-                                <th className="p-3 border border-slate-200 dark:border-zinc-800 font-black uppercase text-slate-600 dark:text-zinc-400 w-[20%]">Localidade</th>
-                              )}
-                              <th className="p-3 border border-slate-200 dark:border-zinc-800 font-black uppercase text-slate-600 dark:text-zinc-400 w-[15%]">Status</th>
-                              {showObservations && (
-                                <th className="p-3 border border-slate-200 dark:border-zinc-800 font-black uppercase text-slate-600 dark:text-zinc-400 w-[20%]">Observações</th>
-                              )}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {funcs.map((f: any) => {
-                              const att = getMemberAttendanceStatus(f.id)
-                              const todayScale = escalas.find(e => e.funcionario_id === f.id)
-                              const obsValue = observations[f.id] || ''
-
-                              return (
-                                <tr 
-                                  key={f.id} 
-                                  className="hover:bg-slate-50/30 dark:hover:bg-zinc-900/10 transition-colors print-employee-row"
-                                >
-                                  {/* Colaborador */}
-                                  <td className="p-3 border border-slate-200 dark:border-zinc-800 font-bold text-slate-800 dark:text-zinc-200">
-                                    <div className="flex flex-wrap items-baseline gap-1">
-                                      <span className="uppercase text-[13px] tracking-tight">{f.nome}</span>
-                                      {f.apelido && (
-                                        <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-normal">({f.apelido})</span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  
-                                  {/* Cargo */}
+                          {/* Employees List under this sector styled like Excel spreadsheet */}
+                          <div className="overflow-x-auto border border-slate-300 dark:border-zinc-800 rounded-2xl shadow-xs">
+                            <table className="w-full border-collapse text-left text-xs">
+                              <thead>
+                                <tr className="bg-slate-100 dark:bg-zinc-900/60">
+                                  <th className="p-3 border border-slate-300 dark:border-zinc-800 font-black uppercase text-slate-700 dark:text-zinc-300 w-[35%]">Colaborador (Nome Completo)</th>
                                   {showRoles && (
-                                    <td className="p-3 border border-slate-200 dark:border-zinc-800 text-slate-500 dark:text-zinc-400 font-medium">
-                                      {f.cargo || '-'}
-                                    </td>
+                                    <th className="p-3 border border-slate-300 dark:border-zinc-800 font-black uppercase text-slate-700 dark:text-zinc-300 w-[15%]">Cargo</th>
                                   )}
-
-                                  {/* Localidade */}
                                   {showLocalities && (
-                                    <td className="p-3 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300">
-                                      {todayScale?.localidade ? (
-                                        <span className="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-zinc-400">
-                                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {todayScale.localidade}
-                                        </span>
-                                      ) : '-'}
-                                    </td>
+                                    <th className="p-3 border border-slate-300 dark:border-zinc-800 font-black uppercase text-slate-700 dark:text-zinc-300 w-[20%]">Localidade</th>
                                   )}
-
-                                  {/* Status */}
-                                  <td className="p-3 border border-slate-200 dark:border-zinc-800">
-                                    <span className={cn("px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border border-transparent inline-block text-center min-w-[75px] shadow-sm", att.color)}>
-                                      {att.label}
-                                    </span>
-                                  </td>
-
-                                  {/* Observações */}
+                                  <th className="p-3 border border-slate-300 dark:border-zinc-800 font-black uppercase text-slate-700 dark:text-zinc-300 w-[15%]">Status</th>
                                   {showObservations && (
-                                    <td className="p-1 border border-slate-200 dark:border-zinc-800">
-                                      {isExporting ? (
-                                        <div className="px-2 py-1.5 text-slate-600 dark:text-zinc-400 italic">
-                                          {obsValue || ''}
-                                        </div>
-                                      ) : (
-                                        <>
-                                          <div className="relative print:hidden">
-                                            <input
-                                              type="text"
-                                              value={obsValue}
-                                              onChange={e => handleObsChange(f.id, e.target.value)}
-                                              onBlur={() => handleSaveObs(f.id, obsValue)}
-                                              placeholder="Adicionar obs..."
-                                              className="w-full px-2 h-8 bg-transparent border-0 rounded text-xs text-slate-700 dark:text-zinc-300 focus:ring-1 focus:ring-primary/20 outline-none"
-                                            />
-                                          </div>
-                                          {obsValue && (
-                                            <div className="hidden print:block px-2 py-1 text-slate-600 italic print-obs-static">
-                                              {obsValue}
-                                            </div>
-                                          )}
-                                        </>
-                                      )}
-                                    </td>
+                                    <th className="p-3 border border-slate-300 dark:border-zinc-800 font-black uppercase text-slate-700 dark:text-zinc-300 w-[15%]">Observações</th>
                                   )}
                                 </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                              </thead>
+                              <tbody>
+                                {funcs.map((f: any) => {
+                                  const att = getMemberAttendanceStatus(f.id)
+                                  const todayScale = escalas.find(e => e.funcionario_id === f.id)
+                                  const obsValue = observations[f.id] || ''
 
+                                  return (
+                                    <tr 
+                                      key={f.id} 
+                                      className="hover:bg-slate-50/50 dark:hover:bg-zinc-900/20 transition-colors print-employee-row"
+                                    >
+                                      {/* Colaborador */}
+                                      <td className="p-3 border border-slate-200 dark:border-zinc-800 font-bold text-slate-900 dark:text-zinc-100">
+                                        <span className="uppercase text-[13px] tracking-tight">{f.nome}</span>
+                                      </td>
+                                      
+                                      {/* Cargo */}
+                                      {showRoles && (
+                                        <td className="p-3 border border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-400 font-medium">
+                                          {f.cargo || '-'}
+                                        </td>
+                                      )}
+
+                                      {/* Localidade */}
+                                      {showLocalities && (
+                                        <td className="p-3 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300">
+                                          {todayScale?.localidade ? (
+                                            <span className="inline-flex items-center gap-1 font-semibold text-slate-700 dark:text-zinc-300">
+                                              <MapPin className="w-3.5 h-3.5 text-primary shrink-0" /> {todayScale.localidade}
+                                            </span>
+                                          ) : '-'}
+                                        </td>
+                                      )}
+
+                                      {/* Status */}
+                                      <td className="p-3 border border-slate-200 dark:border-zinc-800">
+                                        <span className={cn("px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border inline-block text-center min-w-[75px] shadow-2xs", att.color)}>
+                                          {att.label}
+                                        </span>
+                                      </td>
+
+                                      {/* Observações */}
+                                      {showObservations && (
+                                        <td className="p-1.5 border border-slate-200 dark:border-zinc-800">
+                                          {isExporting ? (
+                                            <div className="px-2 py-1 text-slate-600 dark:text-zinc-400 italic">
+                                              {obsValue || '-'}
+                                            </div>
+                                          ) : (
+                                            <>
+                                              <div className="relative print:hidden">
+                                                <input
+                                                  type="text"
+                                                  value={obsValue}
+                                                  onChange={e => handleObsChange(f.id, e.target.value)}
+                                                  onBlur={() => handleSaveObs(f.id, obsValue)}
+                                                  placeholder="Add obs..."
+                                                  className="w-full px-2 h-7 bg-transparent border-0 rounded text-xs text-slate-700 dark:text-zinc-300 focus:ring-1 focus:ring-primary/20 outline-none"
+                                                />
+                                              </div>
+                                              {obsValue && (
+                                                <div className="hidden print:block px-2 py-1 text-slate-700 italic print-obs-static">
+                                                  {obsValue}
+                                                </div>
+                                              )}
+                                            </>
+                                          )}
+                                        </td>
+                                      )}
+                                    </tr>
+                                  )
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* FORMAL SIGNATURES SECTION (FOR PRINTING / A4 PDF) */}
+                {showSignatures && (
+                  <div className="pt-8 border-t border-slate-200 dark:border-zinc-800 grid grid-cols-2 gap-12 print-signatures">
+                    <div className="text-center space-y-2">
+                      <div className="border-b-2 border-slate-400 dark:border-zinc-600 w-3/4 mx-auto pt-6" />
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                        Encarregado / Liderança Operacional
+                      </p>
+                      <p className="text-[9px] text-slate-400 uppercase">Visto & Assinatura</p>
                     </div>
-                  )
-                })}
+
+                    <div className="text-center space-y-2">
+                      <div className="border-b-2 border-slate-400 dark:border-zinc-600 w-3/4 mx-auto pt-6" />
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-zinc-300">
+                        Supervisão / Gerência de Operações
+                      </p>
+                      <p className="text-[9px] text-slate-400 uppercase">Aprovação Final</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer metadata */}
+                <div className="flex justify-between items-center pt-6 border-t border-slate-100 dark:border-zinc-800 text-[9px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
+                  <span>Documento Operacional Oficial • 7Locar Gestão</span>
+                  <span>Gerado em {format(new Date(), "dd/MM/yyyy HH:mm")}</span>
+                </div>
+
               </div>
-            )}
 
-            {/* Footer metadata */}
-            <div className="flex justify-between items-center pt-6 border-t border-slate-100 dark:border-zinc-800 text-[9px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-widest">
-              <span>Gerado por Rogerio Administrador</span>
-              <span>7Boss Operacional</span>
             </div>
-
-          </div>
+          )}
 
         </div>
 
@@ -1256,59 +1414,11 @@ export function GerarRelatorioPage() {
         </div>
       </Modal>
 
-      {/* Modal de Texto com Emojis para WhatsApp */}
-      <Modal
-        open={whatsappModalOpen}
-        onClose={() => setWhatsappModalOpen(false)}
-        title="Relatório Formatado para WhatsApp"
-        size="lg"
-      >
-        <div className="flex flex-col space-y-5 py-2 animate-scale-in">
-          {/* Header info */}
-          <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
-                <MessageSquare className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-black uppercase text-foreground">Texto Formatado com Emojis</h4>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Pronto para copiar e enviar pelo WhatsApp</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCopyWhatsAppText}
-                className="h-10 px-4 rounded-xl bg-card hover:bg-muted text-foreground font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 border border-border/40 shadow-sm"
-              >
-                {copiedText ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                {copiedText ? 'Copiado!' : 'Copiar Texto'}
-              </button>
-              <button
-                type="button"
-                onClick={handleSendWhatsApp}
-                className="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
-              >
-                <Share2 className="w-3.5 h-3.5" /> Enviar no WhatsApp
-              </button>
-            </div>
-          </div>
-
-          {/* Pre-formatted text area container */}
-          <div className="relative">
-            <textarea
-              readOnly
-              value={generateWhatsAppText}
-              className="w-full h-[450px] p-5 rounded-2xl bg-zinc-950 text-emerald-400 font-mono text-xs leading-relaxed border border-zinc-800 focus:outline-none scrollbar-thin resize-none selection:bg-emerald-500/30 selection:text-white"
-            />
-          </div>
-        </div>
-      </Modal>
-
+      {/* PRINT MEDIA STYLING */}
       <style dangerouslySetInnerHTML={{ __html: `
         @page {
           size: A4 portrait;
-          margin: 15mm !important;
+          margin: 12mm !important;
         }
         @media print {
           html, body {
@@ -1349,7 +1459,6 @@ export function GerarRelatorioPage() {
             visibility: visible !important;
           }
           
-          /* Dark mode text/bg resets for printing */
           #report-print-area h1,
           #report-print-area h2,
           #report-print-area h3,
@@ -1360,69 +1469,41 @@ export function GerarRelatorioPage() {
             color: #0f172a !important;
           }
 
-          /* Excel spreadsheet print layouts */
           #report-print-area table {
             border-collapse: collapse !important;
             width: 100% !important;
-            margin-bottom: 20px !important;
+            margin-bottom: 16px !important;
           }
           #report-print-area th, 
           #report-print-area td {
-            border: 1px solid #94a3b8 !important; /* solid, clean spreadsheet lines */
+            border: 1px solid #64748b !important;
             padding: 6px 10px !important;
             color: #0f172a !important;
           }
           #report-print-area th {
-            background-color: #f1f5f9 !important; /* shaded column header like Excel */
+            background-color: #e2e8f0 !important;
             font-weight: bold !important;
           }
           #report-print-area tbody tr:nth-child(even) {
             background-color: #f8fafc !important;
           }
           
-          /* Metrics layout grid override */
           .print-metrics-grid {
             background-color: #f8fafc !important;
-            border: 1px solid #cbd5e1 !important;
+            border: 1px solid #94a3b8 !important;
             display: grid !important;
             grid-template-columns: repeat(4, 1fr) !important;
             gap: 16px !important;
             padding: 16px !important;
             border-radius: 12px !important;
           }
-          
-          /* Preserve badge colors specifically using print-color-adjust */
-          .print-badge-presente {
-            background-color: #ecfdf5 !important;
-            color: #047857 !important;
-          }
-          .print-badge-falta {
-            background-color: #fef2f2 !important;
-            color: #b91c1c !important;
-          }
-          .print-badge-folga {
-            background-color: #eff6ff !important;
-            color: #1d4ed8 !important;
-          }
-          .print-badge-atestado {
-            background-color: #faf5ff !important;
-            color: #7e22ce !important;
-          }
-          .print-badge-ferias {
-            background-color: #fffbeb !important;
-            color: #b45309 !important;
-          }
-          .print-badge-default {
-            background-color: #f1f5f9 !important;
-            color: #475569 !important;
-          }
-          .print-badge-location {
-            background-color: #f1f5f9 !important;
-            color: #334155 !important;
-            border: 1px solid #cbd5e1 !important;
+
+          .print-signatures {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            margin-top: 30px !important;
           }
           
-          /* Prevent items from splitting awkwardly across pages */
           .print-sector-group {
             page-break-inside: avoid !important;
             break-inside: avoid !important;

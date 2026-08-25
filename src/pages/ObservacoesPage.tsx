@@ -21,6 +21,7 @@ import { useUserTeam } from '../hooks/useUserTeam'
 import { useConfiguracao, useUpdateConfiguracao } from '../hooks/useConfiguracoes'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
+import { batchUpsert } from '../lib/batchUtils'
 
 import { DEFAULT_TIPOS_ESCALA, type TipoEscala } from './admin/AdminDashboard'
 
@@ -1000,7 +1001,7 @@ export function ObservacoesPage() {
             observacoes: `[SUSPENSÃO] ${recordForm.motivo}`,
             updated_at: new Date().toISOString()
           }))
-          await supabase.from('frequencia').upsert(freqUpserts, { onConflict: 'funcionario_id,data' })
+          await batchUpsert('frequencia', freqUpserts, { onConflict: 'funcionario_id,data', chunkSize: 35 })
 
           for (const dStr of newDays) {
             const { data: existing } = await supabase
@@ -1134,7 +1135,7 @@ export function ObservacoesPage() {
         title="Controle Disciplinar" 
         subtitle="Gestão de observações, advertências e suspensões integradas à escala"
       />
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-28 sm:pt-32 pb-32">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-32">
         {/* KPI Panel Widgets */}
         <div className="flex lg:grid lg:grid-cols-5 overflow-x-auto lg:overflow-x-visible pb-4 lg:pb-0 gap-4 mb-8 snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[

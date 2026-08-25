@@ -612,7 +612,7 @@ export default function DemandasPage() {
                       return (
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setIsInputFocused(false)} />
-                          <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-card border border-border/50 rounded-2xl shadow-xl z-[9999] divide-y divide-border/10 py-1">
+                          <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-card border border-border/50 rounded-2xl shadow-xl z-40 divide-y divide-border/10 py-1">
                             {matches.map(d => (
                               <button
                                 key={d.id}
@@ -1003,7 +1003,7 @@ export default function DemandasPage() {
 
       {/* Completion Modal Attribution Popup */}
       {completionModalDem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
           <div className="bg-card border border-border/50 rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl space-y-6 animate-scale-in">
             <div className="flex justify-between items-center">
               <h3 className="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-2">

@@ -159,6 +159,7 @@ export const SYSTEM_PAGES = [
   'sst_solicitacao_epi',
   'sst_almoxarifado_epi',
   'organizacao_varricao',
+  'folgas',
 ] as const
 
 export type SystemPage = typeof SYSTEM_PAGES[number]
@@ -216,6 +217,7 @@ export const DEFAULT_MENU_CONFIG: MenuConfig = {
       { id: 'organizacao_varricao', label: 'Mapeamento', rota: '/escala/mapeamento', icone: 'Map', ordem: 6.7 },
       { id: 'demandas', label: 'Demandas', rota: '/escala/demandas', icone: 'FileText', ordem: 6.8 },
       { id: 'frequencia', label: 'Chamada', rota: '/frequencia', icone: 'Clock', ordem: 7 },
+      { id: 'folgas', label: 'Gestão de Folgas', rota: '/folgas', icone: 'CalendarDays', ordem: 7.5 },
       { id: 'observacoes', label: 'Observações', rota: '/observacoes', icone: 'FileText', ordem: 8 },
     ]},
     { id: 'pessoal', label: 'Pessoal', icon: 'Users', ordem: 3, paginas: [
@@ -224,6 +226,7 @@ export const DEFAULT_MENU_CONFIG: MenuConfig = {
       { id: 'equipes', label: 'Equipes', rota: '/equipes', icone: 'Network', ordem: 3 },
       { id: 'gerar_relatorio', label: 'Gerar Relatório', rota: '/equipes/gerar-relatorio', icone: 'FileText', ordem: 4 },
       { id: 'escala', label: 'Escala', rota: '/escala', icone: 'CalendarDays', ordem: 5 },
+      { id: 'folgas', label: 'Gestão de Folgas', rota: '/folgas', icone: 'CalendarDays', ordem: 5.5 },
       { id: 'atestados', label: 'Atestados', rota: '/atestados', icone: 'Activity', ordem: 6 },
     ]},
     { id: 'seguranca', label: 'Saúde e Segurança', icon: 'HeartPulse', ordem: 4, paginas: [
@@ -302,6 +305,7 @@ export const DEFAULT_PAINEIS_PAGINAS: Record<SystemPage, string[]> = {
   sst_solicitacao_epi: ['seguranca'],
   sst_almoxarifado_epi: ['seguranca'],
   organizacao_varricao: ['producao', 'administrativo'],
+  folgas: ['producao', 'pessoal', 'administrativo'],
 }
 
 export const PAGE_LABELS: Record<SystemPage, string> = {
@@ -317,6 +321,7 @@ export const PAGE_LABELS: Record<SystemPage, string> = {
   demandas: 'Demandas',
   atestados: 'Atestados',
   observacoes: 'Observações',
+  folgas: 'Gestão de Folgas',
   rendimento: 'Rendimento',
   notificacoes: 'Notificações',
   admin: 'Painel de Controle',

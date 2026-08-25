@@ -28,6 +28,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { DEFAULT_TIPOS_ESCALA, type TipoEscala } from './admin/AdminDashboard'
 import { cn } from '../lib/utils'
 import { supabase } from '../lib/supabase'
+import { batchUpsert } from '../lib/batchUtils'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -59,6 +60,7 @@ export function EscalaPage() {
   // Excel Bulk Selection Mode
   const [bulkMode, setBulkMode] = useState(false)
   const [selectedCells, setSelectedCells] = useState<Record<string, { funcId: string; dateStr: string }>>({})
+  const [isBulkOptionsOpen, setIsBulkOptionsOpen] = useState(false)
 
   // Share Modal States
   const [shareModalOpen, setShareModalOpen] = useState(false)
@@ -1015,7 +1017,7 @@ export function EscalaPage() {
           status: freqStatus,
           updated_at: new Date().toISOString()
         }))
-        await supabase.from('frequencia').upsert(freqUpserts, { onConflict: 'funcionario_id,data' })
+        await batchUpsert('frequencia', freqUpserts, { onConflict: 'funcionario_id,data', chunkSize: 35 })
 
         // Sincronizar cache
         queryClient.invalidateQueries({ queryKey: ['escalas'] })
@@ -1787,39 +1789,114 @@ export function EscalaPage() {
           </div>
         </div>
 
-        {/* Lote Selection Floating Notification Bar */}
-        {bulkMode && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-card dark:bg-card border border-amber-500/30 px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-6 animate-in slide-in-from-bottom duration-300 max-w-xl w-11/12 border-t-4 border-t-amber-500">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                <CheckSquare className="w-4 h-4" /> Seleção em Lote Ativada
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-0.5 font-bold truncate">
-                {Object.keys(selectedCells).length} células selecionadas da grade do Excel
-              </p>
+        {/* COMPACT FLOATING BATCH SELECTION BALLOON AT THE BOTTOM (PORTAL TO BODY) */}
+        {bulkMode && createPortal(
+          <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-card/98 dark:bg-card/95 backdrop-blur-3xl border-2 border-amber-500/80 p-2.5 sm:p-3 rounded-2xl sm:rounded-3xl shadow-[0_25px_60px_rgba(0,0,0,0.5)] flex flex-col gap-2 animate-in slide-in-from-bottom duration-300 max-w-xl w-[92vw] print:hidden">
+            {/* Compact Header Bar */}
+            <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-1.5 px-0.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
+                <p className="text-[11px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1 truncate">
+                  <CheckSquare className="w-3.5 h-3.5 shrink-0" /> Lote
+                </p>
+                <span className="text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30 shrink-0">
+                  {Object.keys(selectedCells).length} Célula(s)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button 
+                  type="button"
+                  onClick={selectAllVisibleCells}
+                  className="px-2 py-1 bg-muted hover:bg-card text-foreground text-[9px] font-black uppercase tracking-wider rounded-lg transition-all border border-border/40 cursor-pointer"
+                  title="Selecionar tudo"
+                >
+                  Tudo
+                </button>
+                <button 
+                  type="button"
+                  onClick={clearSelection}
+                  className="px-2 py-1 bg-muted/60 hover:bg-muted text-muted-foreground text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer"
+                  title="Limpar seleção"
+                >
+                  Limpar
+                </button>
+                
+                {/* BOTÃO DEFINIR STATUS — TOGGLES THE STATUS OPTIONS */}
+                <button 
+                  type="button"
+                  disabled={Object.keys(selectedCells).length === 0}
+                  onClick={() => setIsBulkOptionsOpen(prev => !prev)}
+                  className={cn(
+                    "px-3 py-1 text-white text-[9px] font-black uppercase tracking-wider rounded-lg transition-all shadow-md flex items-center gap-1 cursor-pointer disabled:opacity-40 disabled:pointer-events-none",
+                    isBulkOptionsOpen 
+                      ? "bg-amber-600 ring-2 ring-amber-400" 
+                      : "bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-95"
+                  )}
+                  title="Definir status das células selecionadas"
+                >
+                  <Grid className="w-3 h-3" />
+                  <span>{isBulkOptionsOpen ? "Ocultar Status" : "Definir Status"}</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setBulkMode(false)
+                    setSelectedCells({})
+                    setIsBulkOptionsOpen(false)
+                  }}
+                  className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full transition-colors cursor-pointer ml-0.5"
+                  title="Sair do modo lote"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button 
-                onClick={selectAllVisibleCells}
-                className="px-3 py-2 bg-muted/60 hover:bg-card text-muted-foreground hover:text-foreground text-[9px] font-black uppercase tracking-wider rounded-xl transition-all border border-border/40"
-              >
-                Tudo
-              </button>
-              <button 
-                onClick={clearSelection}
-                className="px-3 py-2 hover:bg-muted text-muted-foreground text-[9px] font-black uppercase tracking-wider rounded-xl transition-all"
-              >
-                Limpar
-              </button>
-              <button 
-                onClick={() => setBulkStatusModal(true)}
-                disabled={Object.keys(selectedCells).length === 0}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md shadow-amber-500/10 disabled:opacity-40"
-              >
-                Definir Status
-              </button>
-            </div>
-          </div>
+
+            {/* Direct Status Options Compact Grid — SHOWN ONLY WHEN ISBULKOPTIONSOPEN IS TRUE */}
+            {isBulkOptionsOpen && (
+              <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto scrollbar-thin p-1.5 bg-muted/40 rounded-xl border border-amber-500/30 animate-in fade-in zoom-in-95 duration-200">
+                {(tiposEscala || DEFAULT_TIPOS_ESCALA).map(t => {
+                  const mapped = STATUS_MAP[t.id] || t
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      disabled={Object.keys(selectedCells).length === 0}
+                      onClick={() => {
+                        applyBulkStatus(t.id)
+                        setIsBulkOptionsOpen(false)
+                      }}
+                      className={cn(
+                        "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all hover:scale-105 active:scale-95 shadow-xs border border-black/5 disabled:opacity-30 disabled:pointer-events-none cursor-pointer shrink-0",
+                        mapped.bg, mapped.text
+                      )}
+                      title={`Aplicar ${mapped.nome}`}
+                    >
+                      <span className="font-black">{mapped.letra}</span>
+                      <span className="opacity-90">{mapped.nome}</span>
+                    </button>
+                  )
+                })}
+                
+                <button
+                  type="button"
+                  disabled={Object.keys(selectedCells).length === 0}
+                  onClick={() => {
+                    applyBulkStatus(null)
+                    setIsBulkOptionsOpen(false)
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all hover:scale-105 active:scale-95 shadow-xs disabled:opacity-30 disabled:pointer-events-none cursor-pointer shrink-0"
+                  title="Limpar escalas das células selecionadas"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Limpar Status</span>
+                </button>
+              </div>
+            )}
+          </div>,
+          document.body
         )}
 
 

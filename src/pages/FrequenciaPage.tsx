@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
   format, 
@@ -225,13 +226,20 @@ export function FrequenciaPage() {
     localStorage.setItem('7boss_frequencia_status_filter', statusFilter)
   }, [statusFilter])
 
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 120)
+      const scrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0
+      setIsScrolled(scrollY > 15)
     }
-    window.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('scroll', handleScroll, { passive: true, capture: true })
+    document.addEventListener('scroll', handleScroll, { passive: true, capture: true })
     handleScroll()
-    return () => window.removeEventListener('scroll', handleScroll)
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      document.removeEventListener('scroll', handleScroll)
+    }
   }, [])
 
   const clearSearch = useCallback(() => {
@@ -687,7 +695,7 @@ export function FrequenciaPage() {
         subtitle={format(currentDate, "EEEE, dd 'de' MMMM", { locale: ptBR })} 
       />
 
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-28 sm:pt-32 pb-32 relative">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 pt-16 sm:pt-20 pb-32 relative">
         {/* Headers Wrapper (Scrolls with content) */}
         <div className="space-y-4 mb-10">
           {/* Card de Filtros e Configurações */}
@@ -711,7 +719,7 @@ export function FrequenciaPage() {
                   <div className={cn(
                     "transition-all duration-300",
                     isScrolled 
-                      ? "fixed top-20 left-1/2 -translate-x-1/2 w-[92%] max-w-md md:w-80 z-[9999] scale-105"
+                      ? "fixed top-20 left-1/2 -translate-x-1/2 w-[92%] max-w-md md:w-80 z-40 scale-105"
                       : "relative w-full"
                   )}>
                     <div className={cn(
@@ -741,7 +749,7 @@ export function FrequenciaPage() {
 
                     {/* Suggestions Panel */}
                     {searchTerm && suggestions.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-2 w-full bg-card dark:bg-card/95 border border-border/80 rounded-2xl shadow-2xl overflow-hidden z-[9999] flex flex-col divide-y divide-border/20 backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="absolute top-full left-0 right-0 mt-2 w-full bg-card dark:bg-card/95 border border-border/80 rounded-2xl shadow-2xl overflow-hidden z-40 flex flex-col divide-y divide-border/20 backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-200">
                         <div className="p-3 bg-muted/20 text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
                           <span>Sugestões</span>
                           <span className="text-primary">{suggestions.length} encontrados</span>
@@ -1564,10 +1572,10 @@ export function FrequenciaPage() {
           </div>
         )}
       </Modal>
-      {/* FLOATING BALLOON SEARCH BAR ON SCROLL */}
-      {isScrolled && (
-        <div className="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center print:hidden animate-in fade-in slide-in-from-top-4 duration-300 gap-3 w-[92vw] max-w-xl">
-          <div className="flex items-center gap-3 p-3.5 px-6 bg-card/95 dark:bg-card/90 backdrop-blur-2xl border-2 border-primary/50 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.3)] transition-all duration-300 w-full">
+      {/* FLOATING BALLOON SEARCH BAR (FIXED FLOATING ON SCREEN VIA PORTAL) */}
+      {(isScrolled || Boolean(searchTerm)) && createPortal(
+        <div className="fixed top-18 sm:top-20 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center print:hidden animate-in fade-in slide-in-from-top-4 duration-300 gap-3 w-[92vw] max-w-xl">
+          <div className="flex items-center gap-3 p-3 sm:p-3.5 px-5 bg-card/98 dark:bg-card/95 backdrop-blur-3xl border-2 border-primary rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.4)] transition-all duration-300 w-full">
             <Search className="w-5 h-5 text-primary shrink-0 animate-pulse" />
             <input
               type="text"
@@ -1576,26 +1584,22 @@ export function FrequenciaPage() {
               onChange={e => setSearchTerm(e.target.value)}
               className="flex-1 bg-transparent border-none outline-none text-xs sm:text-sm font-black text-foreground placeholder:text-muted-foreground/60 uppercase tracking-wider"
             />
-            {searchTerm ? (
+            {searchTerm && (
               <button
                 type="button"
                 onClick={clearSearch}
-                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-full transition-colors shrink-0 cursor-pointer"
+                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-lg transition-colors shrink-0 cursor-pointer"
                 title="Limpar busca"
               >
                 <X className="w-4.5 h-4.5" />
               </button>
-            ) : (
-              <span className="text-[9px] font-black uppercase text-primary bg-primary/10 px-2.5 py-1 rounded-full shrink-0 border border-primary/20">
-                Chamada
-              </span>
             )}
           </div>
 
           {/* Suggestions Dropdown */}
           {searchTerm && suggestions.length > 0 && (
-            <div className="w-full bg-card/95 backdrop-blur-2xl border border-border/60 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in duration-200 divide-y divide-border/30 max-h-72 overflow-y-auto scrollbar-thin z-[9999]">
-              <div className="p-3.5 px-6 bg-muted/40 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
+            <div className="w-full bg-card/98 dark:bg-card/95 backdrop-blur-3xl border-2 border-border/80 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in duration-200 divide-y divide-border/30 max-h-72 overflow-y-auto scrollbar-thin z-[200]">
+              <div className="p-3.5 px-6 bg-muted/50 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center justify-between">
                 <span>Sugestões Encontradas</span>
                 <span className="text-primary">{suggestions.length} resultado(s)</span>
               </div>
@@ -1604,17 +1608,18 @@ export function FrequenciaPage() {
                   key={f.id}
                   type="button"
                   onClick={() => scrollToEmployee(f.id)}
-                  className="w-full flex items-center justify-between p-3.5 px-6 hover:bg-muted/50 transition-colors text-left border-none bg-transparent cursor-pointer"
+                  className="w-full flex items-center justify-between p-3.5 px-6 hover:bg-muted/60 transition-colors text-left border-none bg-transparent cursor-pointer"
                 >
                   <FuncionarioName nome={f.nome} apelido={f.apelido} uppercase size="xs" />
-                  <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20">
+                  <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/30">
                     Ir até colaborador
                   </span>
                 </button>
               ))}
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

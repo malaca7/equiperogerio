@@ -245,14 +245,14 @@ export function Sidebar() {
       {isMobileMenuOpen && (
         <div 
           onClick={() => setIsMobileMenuOpen(false)}
-          className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-[51] md:hidden transition-all duration-300 animate-fade-in"
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-[10000000] md:hidden transition-all duration-300 animate-fade-in"
         />
       )}
 
       {/* Sidebar Panel Container */}
       <aside 
         className={cn(
-          "fixed top-0 bottom-0 left-0 z-[52] flex flex-col print:hidden transition-all duration-300 ease-out",
+          "fixed top-0 bottom-0 left-0 z-[10000001] flex flex-col print:hidden transition-all duration-300 ease-out",
           "bg-card/95 backdrop-blur-2xl border-r border-border/60 shadow-2xl",
           (isSidebarCollapsed && isDesktop) ? "w-20" : "w-64 max-w-[85vw]",
           isMobileMenuOpen ? "translate-x-0 shadow-2xl" : "max-md:-translate-x-full"
@@ -262,7 +262,7 @@ export function Sidebar() {
         <button
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           className={cn(
-            "hidden md:flex absolute top-6 -right-3.5 z-[55] w-7 h-7 rounded-full bg-card border border-border/80 shadow-md",
+            "hidden md:flex absolute top-6 -right-3.5 z-[10000002] w-7 h-7 rounded-full bg-card border border-border/80 shadow-md",
             "items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 active:scale-90 transition-all cursor-pointer"
           )}
           title={isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}

@@ -33,7 +33,7 @@ export function BottomSheetModal({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center p-0 md:p-4">
+    <div className="fixed inset-0 z-[1000000] flex items-end justify-center md:items-center p-0 md:p-4">
       {/* Backdrop */}
       <div
         onClick={onClose}
