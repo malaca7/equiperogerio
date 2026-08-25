@@ -5,6 +5,7 @@ import { ptBR } from 'date-fns/locale'
 import { 
   CalendarDays, 
   Plus, 
+  Minus,
   Trash2, 
   Save, 
   Play, 
@@ -189,6 +190,16 @@ export function ModelosEscalaPage() {
     return list
   }, [funcionariosOrig, teamInfo])
 
+  // Discover all active sectors
+  const availableSectors = useMemo(() => {
+    const set = new Set<string>()
+    dbSetores.forEach(s => set.add(s))
+    funcionarios.forEach(f => {
+      if (f.setor) set.add(f.setor)
+    })
+    return Array.from(set).filter(Boolean).sort()
+  }, [dbSetores, funcionarios])
+
   // Compute Sunday Work Stats per employee for Fair Rotation Ranking
   const sundayStatsMap = useMemo(() => {
     const stats = new Map<string, { count: number; lastSundayStr: string | null }>()
@@ -243,8 +254,33 @@ export function ModelosEscalaPage() {
 
   // Encarregado Interactive Wizard Options State
   const [aiTargetDate, setAiTargetDate] = useState<string>(getNextSundayDate())
-  const [aiWorkersPerSector, setAiWorkersPerSector] = useState<number>(1)
   const [aiCompensationStrategy, setAiCompensationStrategy] = useState<'folga' | 'hora_extra'>('folga')
+
+  // Per-Sector Desired Employee Quantity Mapping
+  const [aiSectorCounts, setAiSectorCounts] = useState<Record<string, number>>({})
+
+  const getSectorCount = useCallback((sectorName: string) => {
+    return aiSectorCounts[sectorName] ?? 1 // Default 1 per sector
+  }, [aiSectorCounts])
+
+  const setSectorCount = (sectorName: string, count: number) => {
+    setAiSectorCounts(prev => ({
+      ...prev,
+      [sectorName]: Math.max(0, count)
+    }))
+  }
+
+  const setAllSectorCounts = (count: number) => {
+    const next: Record<string, number> = {}
+    availableSectors.forEach(sec => {
+      next[sec] = Math.max(0, count)
+    })
+    setAiSectorCounts(next)
+  }
+
+  const totalTargetWorkers = useMemo(() => {
+    return availableSectors.reduce((sum, sec) => sum + getSectorCount(sec), 0)
+  }, [availableSectors, getSectorCount])
 
   // Preferred 2 Folgas Configuration
   const [prefCompensadoAnterior, setPrefCompensadoAnterior] = useState<string>('auto') // 'auto' or 'quarta', 'terca', etc.
@@ -271,10 +307,16 @@ export function ModelosEscalaPage() {
   const [msg, setMsg] = useState('')
   const [msgType, setMsgType] = useState<'success' | 'error'>('success')
 
-  // Generate AI Schedule Proposal with 2-Folgas Rule
+  // Generate AI Schedule Proposal with 2-Folgas Rule & Per-Sector Employee Quantity
   const handleGenerateAISchedule = () => {
     if (!aiTargetDate) {
       setMsg('Selecione a data do domingo ou feriado!')
+      setMsgType('error')
+      return
+    }
+
+    if (totalTargetWorkers === 0) {
+      setMsg('Defina a quantidade de colaboradores para pelo menos 1 setor!')
       setMsgType('error')
       return
     }
@@ -299,8 +341,13 @@ export function ModelosEscalaPage() {
       const repCycle = ['terca', 'quarta', 'quinta', 'segunda', 'sexta']
       let cycleIdx = 0
 
-      sectorGroups.forEach((sectorFuncs, sectorName) => {
-        const selected = sectorFuncs.slice(0, Math.max(1, aiWorkersPerSector))
+      // Iterate through each sector with its exact configured worker count
+      availableSectors.forEach((sectorName) => {
+        const targetCount = getSectorCount(sectorName)
+        if (targetCount <= 0) return
+
+        const sectorFuncs = sectorGroups.get(sectorName) || []
+        const selected = sectorFuncs.slice(0, targetCount)
 
         selected.forEach(f => {
           const stats = sundayStatsMap.get(f.id)
@@ -350,7 +397,7 @@ export function ModelosEscalaPage() {
       setAiProposal(proposal)
       setIsGeneratingAI(false)
       setShowAIProposalModal(true)
-      setMsg('Sugestão de Escala com 2 Folgas gerada com sucesso!')
+      setMsg(`Sugestão gerada com sucesso (${proposal.length} colaboradores)!`)
       setMsgType('success')
     }, 400)
   }
@@ -458,7 +505,7 @@ export function ModelosEscalaPage() {
       await queryClient.invalidateQueries({ queryKey: ['dashboard'] })
 
       setShowAIProposalModal(false)
-      setMsg(`Escala do Domingo ${format(targetDateObj, 'dd/MM/yyyy')} com 2 Folgas aplicada com sucesso!`)
+      setMsg(`Escala do Domingo ${format(targetDateObj, 'dd/MM/yyyy')} aplicada com sucesso!`)
       setMsgType('success')
     } catch (err: any) {
       console.error('Erro ao aplicar escala de IA:', err)
@@ -469,7 +516,7 @@ export function ModelosEscalaPage() {
     }
   }
 
-  // Generate WhatsApp Share Text Report with 2 Folgas Details
+  // Generate WhatsApp Share Text Report with Per-Sector Grouping & 2 Folgas Details
   const handleOpenShareReport = () => {
     if (!aiTargetDate) return
     const targetDateObj = parseISO(aiTargetDate)
@@ -477,21 +524,34 @@ export function ModelosEscalaPage() {
 
     let text = `📅 *ESCALA DE DOMINGO E FERIADO*\n`
     text += `📆 *Data do Domingo:* ${formattedDate}\n`
-    text += `🤖 *Gerado por Assistente de IA (Regra de 2 Folgas)*\n`
+    text += `🤖 *Gerado por Assistente de IA (Rodízio por Setor & 2 Folgas)*\n`
     text += `─────────────────────────\n\n`
 
     const folgaList = aiProposal.filter(i => i.modalidade === 'folga')
     const heList = aiProposal.filter(i => i.modalidade === 'hora_extra')
 
+    // Group by Sector
+    const sectorsMap = new Map<string, AIProposalItem[]>()
+    folgaList.forEach(item => {
+      const existing = sectorsMap.get(item.setor) || []
+      existing.push(item)
+      sectorsMap.set(item.setor, existing)
+    })
+
     if (folgaList.length > 0) {
       text += `👷 *TRABALHAM POR 2 FOLGAS COMPENSATÓRIAS (${folgaList.length}):*\n\n`
-      folgaList.forEach(i => {
-        const compDateFmt = format(parseISO(i.dataCompensadoAnteriorStr), 'dd/MM')
-        const repDateFmt = format(parseISO(i.dataRepousoPosteriorStr), 'dd/MM')
 
-        text += `• *${i.funcionarioNome}* (${i.setor})\n`
-        text += `  - ⏪ *Folga 1 (Compensado Ant.):* ${labelDia(i.diaCompensadoAnterior)} (${compDateFmt})\n`
-        text += `  - ⏩ *Folga 2 (Repouso Post.):* ${labelDia(i.diaRepousoPosterior)} (${repDateFmt})\n\n`
+      sectorsMap.forEach((items, sectorName) => {
+        text += `🔹 *SETOR: ${sectorName.toUpperCase()}* (${items.length})\n`
+        items.forEach(i => {
+          const compDateFmt = format(parseISO(i.dataCompensadoAnteriorStr), 'dd/MM')
+          const repDateFmt = format(parseISO(i.dataRepousoPosteriorStr), 'dd/MM')
+
+          text += `• *${i.funcionarioNome}*\n`
+          text += `  - ⏪ *Folga 1 (Compensado Ant.):* ${labelDia(i.diaCompensadoAnterior)} (${compDateFmt})\n`
+          text += `  - ⏩ *Folga 2 (Repouso Post.):* ${labelDia(i.diaRepousoPosterior)} (${repDateFmt})\n`
+        })
+        text += `\n`
       })
     }
 
@@ -517,7 +577,7 @@ export function ModelosEscalaPage() {
     <div className="min-h-screen bg-background pb-32 cyber-grid">
       <TopHeader 
         title="Escala de Domingos & Feriados" 
-        subtitle="Gerador guiado do encarregado, rodízio justo e regra das 2 folgas" 
+        subtitle="Gerador guiado por quantidade de setor, rodízio justo e regra das 2 folgas" 
       />
 
       <div className="max-w-[1500px] mx-auto px-4 sm:px-6 pt-28 sm:pt-32">
@@ -557,7 +617,7 @@ export function ModelosEscalaPage() {
                 )}
               >
                 <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
-                Assistente de IA & 2 Folgas
+                Assistente de IA & Setores
               </button>
 
               <button
@@ -589,7 +649,7 @@ export function ModelosEscalaPage() {
           </div>
         )}
 
-        {/* TAB 1: ASSISTENTE DE IA DE ESCALA (PASSO A PASSO DO ENCARREGADO COM REGRA DE 2 FOLGAS) */}
+        {/* TAB 1: ASSISTENTE DE IA COM ESPECIFICAÇÃO DE QUANTIDADE POR SETOR */}
         {!editando && activeTab === 'ia' && (
           <div className="space-y-8 animate-fade-in">
             {/* Banner do Assistente de IA */}
@@ -601,13 +661,13 @@ export function ModelosEscalaPage() {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-black uppercase tracking-wider text-foreground">Assistente de Escala de Domingos & Feriados</h2>
+                      <h2 className="text-lg font-black uppercase tracking-wider text-foreground">Assistente de Escala por Setor</h2>
                       <span className="bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border border-amber-500/30">
-                        Regra das 2 Folgas Ativa
+                        {totalTargetWorkers} Colaboradores Solicitados
                       </span>
                     </div>
                     <p className="text-xs font-bold text-muted-foreground mt-1 max-w-2xl leading-relaxed">
-                      Gerador guiado para o encarregado. Toda atribuição inclui **2 Folgas**: Folga 1 (Compensado na semana anterior) + Folga 2 (Repouso na semana posterior).
+                      Especifique a quantidade exata de trabalhadores para cada setor. A IA seleciona os colaboradores prioritários da fila do rodízio dominical e atribui as 2 folgas.
                     </p>
                   </div>
                 </div>
@@ -620,120 +680,162 @@ export function ModelosEscalaPage() {
                     className="flex-1 lg:flex-none flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-500/25 hover:scale-[1.02] transition-all cursor-pointer border border-amber-400/30 active:scale-95"
                   >
                     <Sparkles className={cn("w-4 h-4", isGeneratingAI && "animate-spin")} />
-                    {isGeneratingAI ? 'Analisando Rodízio...' : '⚡ Gerar Sugestão de Escala'}
+                    {isGeneratingAI ? 'Analisando Setores...' : `⚡ Gerar Sugestão (${totalTargetWorkers} Vagas)`}
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* FLUXO GUIADO EM ETAPAS PARA O ENCARREGADO */}
-            <div className="bg-card/80 backdrop-blur-xl border border-border/50 rounded-3xl p-6 sm:p-8 shadow-md space-y-8">
-              <div className="flex items-center justify-between border-b border-border/20 pb-4">
-                <h3 className="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-primary" /> Passo a Passo de Opções do Encarregado
-                </h3>
-                <span className="text-[9.5px] font-black uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
-                  Configuração Detalhada
-                </span>
+            {/* SELEÇÃO DE QUANTIDADE POR SETOR INDIVIDUAL */}
+            <div className="bg-card/80 backdrop-blur-xl border border-border/50 rounded-3xl p-6 sm:p-8 shadow-md space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/20 pb-4">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-primary" /> Definir Efetivo por Setor Especificado
+                  </h3>
+                  <p className="text-[10px] font-bold text-muted-foreground mt-0.5">
+                    Ajuste a quantidade exata de vagas que deseja preencher em cada setor neste domingo.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAllSectorCounts(0)}
+                    className="px-3 py-1.5 rounded-xl bg-muted/60 hover:bg-muted text-[9px] font-black uppercase text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+                  >
+                    Zerar Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllSectorCounts(1)}
+                    className="px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-[9px] font-black uppercase text-primary transition-all cursor-pointer"
+                  >
+                    1 para Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllSectorCounts(2)}
+                    className="px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-[9px] font-black uppercase text-primary transition-all cursor-pointer"
+                  >
+                    2 para Todos
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* ETAPA 1: DATA E EFETIVO */}
-                <div className="space-y-4 bg-muted/30 border border-border/30 rounded-2xl p-5 relative">
-                  <div className="flex items-center gap-2 text-primary font-black text-xs uppercase tracking-wider">
-                    <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-[10px]">1</span>
-                    Data & Efetivo
-                  </div>
+              {/* Grid dos Setores com Contadores Individualizados */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {availableSectors.map((sectorName) => {
+                  const count = getSectorCount(sectorName)
+                  const eligibleCount = funcionarios.filter(f => (f.setor || 'Geral') === sectorName && f.cargo?.toLowerCase() !== 'encarregado' && f.status === 'ativo').length
 
-                  <div className="space-y-3 pt-2">
-                    <div>
-                      <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground block mb-1">
-                        Domingo ou Feriado Alvo
-                      </label>
-                      <input
-                        type="date"
-                        value={aiTargetDate}
-                        onChange={e => setAiTargetDate(e.target.value)}
-                        className="w-full bg-background border border-border/40 rounded-xl px-3.5 py-2.5 text-xs font-bold text-foreground outline-none uppercase"
-                      />
-                    </div>
+                  return (
+                    <div
+                      key={sectorName}
+                      className={cn(
+                        "p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3",
+                        count > 0 
+                          ? "bg-primary/5 border-primary/30 shadow-sm" 
+                          : "bg-muted/30 border-border/30 opacity-70"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h4 className="text-xs font-black uppercase text-foreground truncate">{sectorName}</h4>
+                          <span className="text-[9px] font-bold text-muted-foreground uppercase block mt-0.5">
+                            {eligibleCount} Elegíveis no banco
+                          </span>
+                        </div>
 
-                    <div>
-                      <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground block mb-1">
-                        Trabalhadores por Setor
-                      </label>
-                      <select
-                        value={aiWorkersPerSector}
-                        onChange={e => setAiWorkersPerSector(Number(e.target.value))}
-                        className="w-full bg-background border border-border/40 rounded-xl px-3.5 py-2.5 text-xs font-bold text-foreground outline-none uppercase"
-                      >
-                        <option value={1}>1 por Setor</option>
-                        <option value={2}>2 por Setor</option>
-                        <option value={3}>3 por Setor</option>
-                        <option value={4}>4 por Setor</option>
-                      </select>
+                        <span className={cn(
+                          "text-[9px] font-black uppercase px-2 py-0.5 rounded-full border",
+                          count > 0 ? "bg-primary text-white border-primary" : "bg-muted text-muted-foreground border-border/40"
+                        )}>
+                          {count} Vaga{count !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+
+                      {/* Controls (- / +) */}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/20">
+                        <span className="text-[9px] font-black uppercase text-muted-foreground">Efetivo:</span>
+                        <div className="flex items-center gap-1.5 bg-background border border-border/40 rounded-xl p-1">
+                          <button
+                            type="button"
+                            onClick={() => setSectorCount(sectorName, count - 1)}
+                            className="w-7 h-7 rounded-lg bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground font-black transition-all cursor-pointer"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="w-8 text-center text-xs font-black text-foreground">{count}</span>
+                          <button
+                            type="button"
+                            onClick={() => setSectorCount(sectorName, count + 1)}
+                            className="w-7 h-7 rounded-lg bg-primary text-white hover:bg-primary/90 flex items-center justify-center font-black transition-all cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* FLUXO GUIADO EM ETAPAS DE FOLGAS PARA O ENCARREGADO */}
+            <div className="bg-card/80 backdrop-blur-xl border border-border/50 rounded-3xl p-6 sm:p-8 shadow-md space-y-6">
+              <div className="flex items-center justify-between border-b border-border/20 pb-4">
+                <h3 className="text-xs font-black uppercase tracking-widest text-foreground flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-primary" /> Parâmetros Adicionais (Data e Regra das 2 Folgas)
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* ETAPA 1: DATA DO DOMINGO */}
+                <div className="space-y-3 bg-muted/30 border border-border/30 rounded-2xl p-4">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground block">
+                    Domingo ou Feriado Alvo
+                  </label>
+                  <input
+                    type="date"
+                    value={aiTargetDate}
+                    onChange={e => setAiTargetDate(e.target.value)}
+                    className="w-full bg-background border border-border/40 rounded-xl px-3.5 py-2.5 text-xs font-bold text-foreground outline-none uppercase"
+                  />
                 </div>
 
-                {/* ETAPA 2: CONFIGURAÇÃO DA FOLGA 1 (SEMANA ANTERIOR) */}
-                <div className="space-y-4 bg-muted/30 border border-border/30 rounded-2xl p-5 relative">
-                  <div className="flex items-center gap-2 text-amber-500 font-black text-xs uppercase tracking-wider">
-                    <span className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px]">2</span>
+                {/* ETAPA 2: FOLGA 1 (SEMANA ANTERIOR) */}
+                <div className="space-y-3 bg-muted/30 border border-border/30 rounded-2xl p-4">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-amber-500 block">
                     Folga 1: Compensado (Semana Anterior)
-                  </div>
-
-                  <div className="space-y-3 pt-2">
-                    <div>
-                      <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground block mb-1">
-                        Dia da Folga Anterior ao Domingo
-                      </label>
-                      <select
-                        value={prefCompensadoAnterior}
-                        onChange={e => setPrefCompensadoAnterior(e.target.value)}
-                        className="w-full bg-background border border-border/40 rounded-xl px-3.5 py-2.5 text-xs font-bold text-foreground outline-none uppercase"
-                      >
-                        <option value="auto">🤖 Equilibrar Automático pela IA</option>
-                        {COMPENSADO_SEMANA_ANTERIOR.map(d => (
-                          <option key={d.value} value={d.value}>{d.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <p className="text-[10px] text-muted-foreground font-bold leading-relaxed pt-1">
-                      Concedida na semana QUE ANTECEDE o domingo trabalhado.
-                    </p>
-                  </div>
+                  </label>
+                  <select
+                    value={prefCompensadoAnterior}
+                    onChange={e => setPrefCompensadoAnterior(e.target.value)}
+                    className="w-full bg-background border border-border/40 rounded-xl px-3.5 py-2.5 text-xs font-bold text-foreground outline-none uppercase"
+                  >
+                    <option value="auto">🤖 Equilibrar Automático pela IA</option>
+                    {COMPENSADO_SEMANA_ANTERIOR.map(d => (
+                      <option key={d.value} value={d.value}>{d.label}</option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* ETAPA 3: CONFIGURAÇÃO DA FOLGA 2 (SEMANA POSTERIOR) */}
-                <div className="space-y-4 bg-muted/30 border border-border/30 rounded-2xl p-5 relative">
-                  <div className="flex items-center gap-2 text-emerald-500 font-black text-xs uppercase tracking-wider">
-                    <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px]">3</span>
+                {/* ETAPA 3: FOLGA 2 (SEMANA POSTERIOR) */}
+                <div className="space-y-3 bg-muted/30 border border-border/30 rounded-2xl p-4">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-emerald-500 block">
                     Folga 2: Repouso (Semana Posterior)
-                  </div>
-
-                  <div className="space-y-3 pt-2">
-                    <div>
-                      <label className="text-[9px] font-black uppercase tracking-widest text-muted-foreground block mb-1">
-                        Dia do Repouso Após o Domingo
-                      </label>
-                      <select
-                        value={prefRepousoPosterior}
-                        onChange={e => setPrefRepousoPosterior(e.target.value)}
-                        className="w-full bg-background border border-border/40 rounded-xl px-3.5 py-2.5 text-xs font-bold text-foreground outline-none uppercase"
-                      >
-                        <option value="auto">🤖 Equilibrar Automático pela IA</option>
-                        {REPOUSO_SEMANA_POSTERIOR.map(d => (
-                          <option key={d.value} value={d.value}>{d.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <p className="text-[10px] text-muted-foreground font-bold leading-relaxed pt-1">
-                      Descanso semanal concedido na semana QUE SUCEDE o domingo.
-                    </p>
-                  </div>
+                  </label>
+                  <select
+                    value={prefRepousoPosterior}
+                    onChange={e => setPrefRepousoPosterior(e.target.value)}
+                    className="w-full bg-background border border-border/40 rounded-xl px-3.5 py-2.5 text-xs font-bold text-foreground outline-none uppercase"
+                  >
+                    <option value="auto">🤖 Equilibrar Automático pela IA</option>
+                    {REPOUSO_SEMANA_POSTERIOR.map(d => (
+                      <option key={d.value} value={d.value}>{d.label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
@@ -865,18 +967,20 @@ export function ModelosEscalaPage() {
           </div>
         )}
 
-        {/* MODAL PROPOSTA DA IA COM 2 FOLGAS DETALHADAS */}
+        {/* MODAL PROPOSTA DA IA COM AGRUPAMENTO POR SETOR E 2 FOLGAS */}
         {showAIProposalModal && (
           <Modal
             open={showAIProposalModal}
             onClose={() => setShowAIProposalModal(false)}
-            title="Proposta de Escala de Domingo (2 Folgas Atribuídas)"
+            title="Proposta de Escala por Setor (2 Folgas Atribuídas)"
           >
             <div className="space-y-6">
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center justify-between gap-4">
                 <div>
-                  <h4 className="text-xs font-black uppercase text-amber-600 dark:text-amber-400">Escala Gerada para o Domingo</h4>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Data Alvo: {aiTargetDate}</p>
+                  <h4 className="text-xs font-black uppercase text-amber-600 dark:text-amber-400">Escala de Domingo Gerada</h4>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">
+                    Data: {aiTargetDate} • Total: {aiProposal.length} Colaboradores
+                  </p>
                 </div>
 
                 <button
@@ -894,7 +998,7 @@ export function ModelosEscalaPage() {
                     <div className="flex items-center justify-between gap-4 border-b border-border/20 pb-3">
                       <div>
                         <h5 className="text-xs font-black uppercase text-foreground">{item.funcionarioNome}</h5>
-                        <span className="text-[9px] font-bold text-muted-foreground uppercase block">{item.setor} • {item.cargo}</span>
+                        <span className="text-[9px] font-bold text-primary uppercase block font-black">{item.setor} • {item.cargo}</span>
                       </div>
 
                       <span className="text-[8.5px] font-black text-emerald-500 uppercase bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
@@ -990,7 +1094,7 @@ export function ModelosEscalaPage() {
                   className="px-6 py-2.5 rounded-xl bg-primary text-white text-xs font-black uppercase shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all cursor-pointer flex items-center gap-2"
                 >
                   <Check className="w-4 h-4" />
-                  {aplicando ? 'Aplicando Escala com 2 Folgas...' : 'Confirmar e Gravar 2 Folgas + Domingo'}
+                  {aplicando ? 'Aplicando Escala por Setor...' : 'Confirmar e Gravar Escala no Sistema'}
                 </button>
               </div>
             </div>
