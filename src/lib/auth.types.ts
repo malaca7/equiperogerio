@@ -316,7 +316,7 @@ export const PAGE_LABELS: Record<SystemPage, string> = {
   gerar_relatorio: 'Gerar Relatório',
   frequencia: 'Frequência / Chamada',
   escala: 'Escala',
-  modelos_escala: 'Modelos de Escala Dominical',
+  modelos_escala: 'Escala de Domingos & Feriados',
   localidades: 'Meta e Rota',
   demandas: 'Demandas',
   atestados: 'Atestados',
