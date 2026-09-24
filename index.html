@@ -2,11 +2,11 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
-    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
-    <link rel="apple-touch-icon" sizes="152x152" href="./icons/icon-152.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png" />
-    <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900;1,14..32,400&display=swap" rel="stylesheet">
@@ -104,17 +104,17 @@
         }
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-xXtV6qQs.js"></script>
-    <link rel="modulepreload" crossorigin href="./assets/rolldown-runtime-S-ySWqyJ.js">
-    <link rel="modulepreload" crossorigin href="./assets/vendor-charts-BXD8uhyR.js">
-    <link rel="modulepreload" crossorigin href="./assets/vendor-libs-B9GZQdxI.js">
-    <link rel="modulepreload" crossorigin href="./assets/vendor-react-core-msLkvX_5.js">
-    <link rel="modulepreload" crossorigin href="./assets/vendor-icons-_mrVjN-8.js">
-    <link rel="modulepreload" crossorigin href="./assets/vendor-supabase-DgJpiO6t.js">
-    <link rel="modulepreload" crossorigin href="./assets/useConfiguracoes-DdG7UkzR.js">
-    <link rel="modulepreload" crossorigin href="./assets/AuthContext-DLDY9Qau.js">
-    <link rel="modulepreload" crossorigin href="./assets/utils-DvBaYiAy.js">
-    <link rel="stylesheet" crossorigin href="./assets/index-Bxi9zWjd.css">
+    <script type="module" crossorigin src="/assets/index-CH3lCxkr.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-S-ySWqyJ.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-charts-BXD8uhyR.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-libs-B9GZQdxI.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-react-core-DqrCl4HZ.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-icons-_mrVjN-8.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-supabase-DgJpiO6t.js">
+    <link rel="modulepreload" crossorigin href="/assets/useConfiguracoes-vQ8mpUuX.js">
+    <link rel="modulepreload" crossorigin href="/assets/AuthContext-CsYWcfz9.js">
+    <link rel="modulepreload" crossorigin href="/assets/utils-DvBaYiAy.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-Bxi9zWjd.css">
   </head>
   <body>
     <div id="root">
@@ -155,6 +155,16 @@
         }
       });
       observer.observe(document.getElementById('root'), { childList: true, subtree: true });
+
+      // Safety fallback: Never leave preloader blocking screen
+      setTimeout(() => {
+        const preloader = document.getElementById('app-preloader');
+        if (preloader) {
+          preloader.style.opacity = '0';
+          setTimeout(() => preloader.remove(), 400);
+          try { observer.disconnect(); } catch (e) {}
+        }
+      }, 2000);
 
       // Disable multi-touch browser pinch-to-zoom globally on mobile, except on zoomable attachments
       document.addEventListener('touchstart', function (e) {
